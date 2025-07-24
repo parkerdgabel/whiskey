@@ -26,6 +26,9 @@ class ApplicationConfig:
     debug: bool = False
     auto_discover: bool = True
     module_scan_paths: list[str] = field(default_factory=list)
+    # Component scanning
+    component_scan_packages: list[str] = field(default_factory=list)
+    component_scan_paths: list[str] = field(default_factory=list)
     # Plugin configuration
     plugins: list[str] | None = None  # None = load all discovered plugins
     exclude_plugins: list[str] = field(default_factory=list)
@@ -207,6 +210,41 @@ class Application:
             return decorator(middleware_class)
         return decorator
     
+    # Component Scanning
+    
+    async def _scan_components(self):
+        """Scan for components using autodiscovery."""
+        from whiskey.core.discovery import AutoDiscovery
+        
+        if not (self.config.component_scan_packages or self.config.component_scan_paths):
+            return
+        
+        logger.info("Auto-discovering components...")
+        discovery = AutoDiscovery(self.container)
+        
+        # Discover packages
+        for package in self.config.component_scan_packages:
+            discovery.discover_package(package)
+        
+        # Discover paths
+        for path in self.config.component_scan_paths:
+            discovery.discover_path(path)
+        
+        # Get discovered components
+        discovered = discovery._discovered
+        if discovered:
+            logger.info(f"Auto-discovered {len(discovered)} components")
+            
+            # Initialize components that implement Initializable
+            for component_type in discovered:
+                try:
+                    instance = await self.container.resolve(component_type)
+                    if isinstance(instance, Initializable):
+                        await instance.initialize()
+                        logger.debug(f"Initialized component: {component_type.__name__}")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize {component_type.__name__}: {e}")
+    
     # Module Discovery
     
     async def discover_modules(self):
@@ -233,6 +271,10 @@ class Application:
         
         # Start event bus
         await self.event_bus.start()
+        
+        # Component scanning
+        if self.config.component_scan_packages or self.config.component_scan_paths:
+            await self._scan_components()
         
         # Load plugins
         logger.info("Loading plugins...")

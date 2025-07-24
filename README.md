@@ -6,6 +6,7 @@ A next-generation dependency injection and IoC framework for Python AI applicati
 
 - **AI-First Design**: Built specifically for AI workloads with native support for model management, token tracking, and conversation contexts
 - **Zero-Config Magic**: Convention-over-configuration with intelligent defaults
+- **Autodiscovery**: Automatic component discovery based on Python conventions
 - **Type-Safe**: Full type hints and runtime validation
 - **Async-Native**: First-class support for async/await patterns
 - **Framework Agnostic**: Works with FastAPI, Django, Flask, and pure Python
