@@ -16,6 +16,13 @@ from whiskey.core.commands import Command, Query, CommandBus
 
 # AI-specific exports
 from whiskey.ai.context import AIContext, ConversationScope
+from whiskey.ai.models import (
+    ChatCompletionModel,
+    EmbeddingModel,
+    Message,
+    ChatCompletion,
+    EmbeddingResponse,
+)
 
 __all__ = [
     # Core DI
@@ -39,6 +46,11 @@ __all__ = [
     # AI
     "AIContext",
     "ConversationScope",
+    "ChatCompletionModel",
+    "EmbeddingModel",
+    "Message",
+    "ChatCompletion",
+    "EmbeddingResponse",
 ]
 
 # Configure default logger
