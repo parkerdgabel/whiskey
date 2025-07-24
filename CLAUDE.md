@@ -102,3 +102,4 @@ Event-driven architecture with:
 - Scopes use contextvars, not thread-locals, for async safety
 - Protocol classes need `@runtime_checkable` decorator
 - Always check for circular dependencies in complex service graphs
+- **Keep dependencies to a minimum** - the framework should remain lightweight and not impose unnecessary dependencies on users
