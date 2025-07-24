@@ -168,8 +168,7 @@ class Container:
 
     def resolve_sync(self, service_type: type[T], name: str | None = None) -> T:
         """Synchronously resolve a service (for non-async contexts)."""
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(self.resolve(service_type, name))
+        return asyncio.run(self.resolve(service_type, name))
 
     async def resolve_all(self, service_type: type[T]) -> list[T]:
         """Resolve all services of a given type."""

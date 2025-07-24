@@ -132,6 +132,13 @@ def is_optional_type(tp: type) -> bool:
     if origin is Union:
         args = get_args(tp)
         return type(None) in args
+    # Handle Python 3.10+ union syntax (X | None)
+    if hasattr(tp, "__class__") and hasattr(tp.__class__, "__name__"):
+        if tp.__class__.__name__ == "UnionType":
+            import types
+            if isinstance(tp, types.UnionType):
+                args = get_args(tp)
+                return type(None) in args
     return False
 
 

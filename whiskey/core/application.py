@@ -298,4 +298,5 @@ class Application:
 
 
 # Global app instance for convenience
-app = Application()
+# Commented out to avoid creating instance on import
+# app = Application()
