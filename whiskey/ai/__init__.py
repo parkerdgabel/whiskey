@@ -1,0 +1,1 @@
+"""AI-specific features for Whiskey framework."""
