@@ -24,7 +24,14 @@ from .observability import (
     AIStreamChunkReceived,
     AIStreamCompleted,
 )
+from .prompts import (
+    PromptRegistry,
+    PromptTemplate,
+    PromptVariable,
+    Validator,
+)
 from .resources import AIResourceManager, TokenBucket, TokenLease
+from .streaming import StreamProcessor
 
 __all__ = [
     # Context
@@ -57,4 +64,11 @@ __all__ = [
     "AIStreamChunkReceived",
     "AIStreamCompleted",
     "AIMetricsCollector",
+    # Prompts
+    "PromptTemplate",
+    "PromptVariable",
+    "PromptRegistry",
+    "Validator",
+    # Streaming
+    "StreamProcessor",
 ]
