@@ -10,7 +10,13 @@ dependencies = [
     "rich>=13.7.0",
     "loguru>=0.7.0",
     "pyyaml>=6.0.0",
+    "importlib-metadata>=4.0.0; python_version < '3.10'",
 ]
+
+[project.optional-dependencies]
+ai = ["whiskey-ai"]
+# For development, we can install the local package with:
+# pip install -e ./whiskey-ai
 
 [tool.uv]
 dev-dependencies = [
@@ -28,6 +34,9 @@ target-version = "py39"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF"]
 ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"whiskey/plugins/base.py" = ["B027"]
 
 [tool.ruff.format]
 quote-style = "double"

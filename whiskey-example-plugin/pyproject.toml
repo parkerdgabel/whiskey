@@ -1,0 +1,12 @@
+[project]
+name = "whiskey-example"
+version = "0.1.0"
+description = "Example plugin demonstrating Whiskey plugin development"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "whiskey>=0.1.0",
+]
+
+[project.entry-points."whiskey.plugins"]
+example = "whiskey_example.plugin:ExamplePlugin"

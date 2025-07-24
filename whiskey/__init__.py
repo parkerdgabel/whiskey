@@ -14,15 +14,8 @@ from whiskey.core.application import Application, ApplicationConfig
 from whiskey.core.events import Event, EventBus
 from whiskey.core.commands import Command, Query, CommandBus
 
-# AI-specific exports
-from whiskey.ai.context import AIContext, ConversationScope
-from whiskey.ai.models import (
-    ChatCompletionModel,
-    EmbeddingModel,
-    Message,
-    ChatCompletion,
-    EmbeddingResponse,
-)
+# Plugin exports
+from whiskey.plugins import WhiskeyPlugin, BasePlugin
 
 __all__ = [
     # Core DI
@@ -43,14 +36,9 @@ __all__ = [
     "Query",
     "CommandBus",
     
-    # AI
-    "AIContext",
-    "ConversationScope",
-    "ChatCompletionModel",
-    "EmbeddingModel",
-    "Message",
-    "ChatCompletion",
-    "EmbeddingResponse",
+    # Plugins
+    "WhiskeyPlugin",
+    "BasePlugin",
 ]
 
 # Configure default logger
