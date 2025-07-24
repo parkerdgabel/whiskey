@@ -5,9 +5,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable, List, Optional
 
-from whiskey.ai.context import AIContext
-from whiskey.ai.models import ChatCompletionChunk
-from whiskey.ai.observability import AIStreamChunkReceived, AIStreamCompleted
+from ..context import AIContext
+from ..models.types import ChatCompletionChunk
+from ..observability.events import AIStreamChunkReceived, AIStreamCompleted
 from whiskey.core.decorators import provide
 from whiskey.core.events import EventBus
 

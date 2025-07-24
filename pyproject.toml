@@ -15,8 +15,6 @@ dependencies = [
 
 [project.optional-dependencies]
 ai = ["whiskey-ai"]
-# For development, we can install the local package with:
-# pip install -e ./whiskey-ai
 
 [tool.uv]
 dev-dependencies = [
@@ -26,6 +24,12 @@ dev-dependencies = [
     "pytest-cov>=4.1.0",
     "mypy>=1.7.0",
 ]
+
+[tool.uv.workspace]
+members = ["whiskey-*"]
+
+[tool.uv.sources]
+whiskey-ai = { workspace = true }
 
 [tool.ruff]
 line-length = 100

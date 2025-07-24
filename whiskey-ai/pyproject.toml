@@ -11,5 +11,8 @@ dependencies = [
 [project.entry-points."whiskey.plugins"]
 ai = "whiskey_ai.plugin:AIPlugin"
 
+[tool.uv.sources]
+whiskey = { workspace = true }
+
 [tool.setuptools.packages.find]
 include = ["whiskey_ai*"]

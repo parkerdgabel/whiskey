@@ -10,3 +10,6 @@ dependencies = [
 
 [project.entry-points."whiskey.plugins"]
 example = "whiskey_example.plugin:ExamplePlugin"
+
+[tool.uv.sources]
+whiskey = { workspace = true }
