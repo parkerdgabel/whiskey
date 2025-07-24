@@ -9,6 +9,7 @@ dependencies = [
     "aiofiles>=23.2.0",
     "rich>=13.7.0",
     "loguru>=0.7.0",
+    "pyyaml>=6.0.0",
 ]
 
 [tool.uv]
