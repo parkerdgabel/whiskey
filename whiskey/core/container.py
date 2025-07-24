@@ -288,3 +288,65 @@ class Container:
         """String representation of the container."""
         service_count = len(self._services)
         return f"<Container services={service_count} parent={bool(self._parent)}>"
+    
+    # Syntactic Sugar Methods
+    
+    def get(self, service_type: type[T], default: T | None = None, name: str | None = None) -> T | None:
+        """Get a service synchronously, returning default if not found."""
+        try:
+            return self.resolve_sync(service_type, name)
+        except Exception:
+            return default
+    
+    async def aget(self, service_type: type[T], default: T | None = None, name: str | None = None) -> T | None:
+        """Get a service asynchronously, returning default if not found."""
+        try:
+            return await self.resolve(service_type, name)
+        except Exception:
+            return default
+    
+    def __getitem__(self, service_type: type[T]) -> T:
+        """Allow dict-like access to services."""
+        return self.resolve_sync(service_type)
+    
+    def __contains__(self, service_type: type[T] | tuple[type[T], str]) -> bool:
+        """Check if a service is registered using 'in' operator."""
+        if isinstance(service_type, tuple):
+            return self.has_service(service_type[0], service_type[1])
+        return self.has_service(service_type)
+    
+    async def __aenter__(self) -> Container:
+        """Async context manager support."""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Cleanup on context exit."""
+        await self.dispose()
+    
+    def __enter__(self) -> Container:
+        """Sync context manager support."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Cleanup on context exit."""
+        asyncio.run(self.dispose())
+    
+    def __len__(self) -> int:
+        """Return the number of registered services."""
+        return len(self.get_all_services())
+    
+    def __iter__(self):
+        """Iterate over service keys."""
+        return iter(self.get_all_services().keys())
+    
+    def items(self):
+        """Get all services as key-value pairs."""
+        return self.get_all_services().items()
+    
+    def keys(self):
+        """Get all service keys."""
+        return self.get_all_services().keys()
+    
+    def values(self):
+        """Get all service descriptors."""
+        return self.get_all_services().values()

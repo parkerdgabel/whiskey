@@ -45,6 +45,38 @@ result = await handle_request("Hello AI!")
 
 ## Core Concepts
 
+### Container Syntactic Sugar
+
+Whiskey's container provides Pythonic shortcuts for common operations:
+
+```python
+from whiskey import Container, singleton
+
+container = Container()
+
+# Dict-like access
+service = container[MyService]  # Same as container.resolve_sync(MyService)
+
+# Safe access with defaults
+service = container.get(MyService, default=None)  # Returns None if not found
+
+# Check if registered
+if MyService in container:
+    service = container[MyService]
+
+# Context manager for automatic cleanup
+with Container() as temp_container:
+    temp_container.register_singleton(Database, Database)
+    # Container is disposed when exiting context
+
+# Iteration and dict methods
+for service_type in container:
+    print(service_type)
+
+for key, descriptor in container.items():
+    print(f"{key}: {descriptor.scope}")
+```
+
 ### Scopes
 
 Whiskey provides several built-in scopes:
