@@ -14,6 +14,7 @@ from whiskey.core.container import Container
 from whiskey.core.decorators import get_default_container, set_default_container
 from whiskey.core.events import EventBus
 from whiskey.core.types import Disposable, Initializable
+from whiskey.plugins import initialize_plugins, load_plugins
 
 
 @dataclass
@@ -25,6 +26,9 @@ class ApplicationConfig:
     debug: bool = False
     auto_discover: bool = True
     module_scan_paths: list[str] = field(default_factory=list)
+    # Plugin configuration
+    plugins: list[str] | None = None  # None = load all discovered plugins
+    exclude_plugins: list[str] = field(default_factory=list)
     
 
 class Application:
@@ -229,6 +233,17 @@ class Application:
         
         # Start event bus
         await self.event_bus.start()
+        
+        # Load plugins
+        logger.info("Loading plugins...")
+        load_plugins(
+            self.container,
+            plugins=self.config.plugins,
+            exclude=self.config.exclude_plugins,
+        )
+        
+        # Initialize plugins
+        initialize_plugins(self)
         
         # Discover modules
         await self.discover_modules()

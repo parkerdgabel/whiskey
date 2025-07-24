@@ -13,7 +13,10 @@ import json
 from typing import AsyncIterator
 
 from whiskey import Application, inject
-from whiskey.ai import (
+
+# Note: This example requires the AI plugin to be installed:
+# pip install whiskey[ai]
+from whiskey_ai import (
     AIContext,
     AIMetricsCollector,
     AIResourceManager,
@@ -24,8 +27,8 @@ from whiskey.ai import (
     PromptVariable,
     StreamProcessor,
 )
-from whiskey.ai.prompts import LengthValidator, TypeValidator
-from whiskey.ai.resources.manager import ResourceConfig
+from whiskey_ai.prompts import LengthValidator, TypeValidator
+from whiskey_ai.resources.manager import ResourceConfig
 
 
 # Create the application
@@ -96,7 +99,7 @@ class ChatAssistant:
         
         try:
             # Create messages for the model
-            from whiskey.ai import Message
+            from whiskey_ai import Message
             messages = [
                 Message(role="system", content="You are a helpful assistant."),
                 Message(role="user", content=prompt)
