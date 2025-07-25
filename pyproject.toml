@@ -25,6 +25,13 @@ dev-dependencies = [
     "mypy>=1.7.0",
 ]
 
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.uv.workspace]
 members = ["whiskey_*"]
 
@@ -42,7 +49,7 @@ select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF"]
 ignore = ["E501", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
-"whiskey/plugins/base.py" = ["B027"]
+"src/whiskey/plugins/base.py" = ["B027"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -58,7 +65,7 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = [
     "-v",
     "--strict-markers",
-    "--cov=whiskey",
+    "--cov=src/whiskey",
     "--cov-report=html",
     "--cov-report=term-missing",
     "--cov-fail-under=80"
