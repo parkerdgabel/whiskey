@@ -96,4 +96,30 @@ class ScopeType:
     """Core scope types as simple string constants."""
     SINGLETON = "singleton"
     TRANSIENT = "transient"
-    REQUEST = "request"
+
+
+class ScopeManager:
+    """Context manager for entering/exiting scopes in a container."""
+    
+    def __init__(self, container: Any, scope_name: str):
+        self.container = container
+        self.scope_name = scope_name
+        self.scope_instance = None
+        
+    def __enter__(self):
+        """Enter the scope."""
+        self.scope_instance = self.container.enter_scope(self.scope_name)
+        return self.scope_instance
+        
+    def __exit__(self, *args):
+        """Exit the scope."""
+        self.container.exit_scope(self.scope_name)
+        
+    async def __aenter__(self):
+        """Async enter."""
+        self.scope_instance = self.container.enter_scope(self.scope_name)
+        return self.scope_instance
+        
+    async def __aexit__(self, *args):
+        """Async exit."""
+        self.container.exit_scope(self.scope_name)
