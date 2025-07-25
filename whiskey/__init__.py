@@ -3,7 +3,7 @@
 __version__ = "0.1.0"
 
 # Core exports
-from whiskey.core.application import Application, ApplicationConfig
+from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
 from whiskey.core.container import Container
 from whiskey.core.decorators import factory, inject, provide, scoped, singleton
 from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
@@ -24,6 +24,7 @@ __all__ = [
     # Application
     "Application",
     "ApplicationConfig",
+    "ComponentMetadata",
     # Types
     "Initializable",
     "Disposable",

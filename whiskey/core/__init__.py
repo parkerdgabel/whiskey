@@ -1,6 +1,6 @@
 """Core Whiskey dependency injection framework."""
 
-from whiskey.core.application import Application, ApplicationConfig
+from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
 from whiskey.core.container import Container
 from whiskey.core.decorators import (
     factory,
@@ -28,6 +28,7 @@ __all__ = [
     # Application
     "Application",
     "ApplicationConfig",
+    "ComponentMetadata",
     # Scopes
     "Scope",
     "ContextVarScope",

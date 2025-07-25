@@ -46,13 +46,16 @@ Simple decorators that work with the default container:
 - `@inject` → Auto-resolve parameters from container
 - `@scoped` → Register with custom scope
 
-### Application (Optional)
+### Application (Rich IoC Container)
 
-The `Application` class (`core/application.py`) adds lifecycle management:
-1. Services registered via `@app.service` 
-2. Startup hooks run `Initializable` services
-3. Shutdown hooks run `Disposable` services  
-4. Background tasks via `@app.task`
+The `Application` class (`core/application.py`) provides rich IoC features:
+1. Components registered via `@app.component` (or `provider`, `managed`, `system`)
+2. Rich lifecycle phases: configure → register → before_startup → startup → after_startup → ready
+3. Built-in event emitter with wildcard support
+4. Component metadata (priority, requires, provides, critical)
+5. Extension hooks for adding new decorators and lifecycle phases
+6. Background tasks via `@app.task`
+7. Error handling via `@app.on_error`
 
 ### Extensions
 
