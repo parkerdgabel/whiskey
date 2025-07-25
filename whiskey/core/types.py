@@ -26,17 +26,11 @@ ServiceProvider: TypeAlias = Callable[..., Any]
 
 
 class ScopeType(str, Enum):
-    """Built-in scope types."""
+    """Core scope types. Additional scopes can be registered as strings."""
 
     SINGLETON = "singleton"
     TRANSIENT = "transient"
     REQUEST = "request"
-    SESSION = "session"
-    # AI-specific scopes
-    CONVERSATION = "conversation"
-    AI_CONTEXT = "ai_context"
-    BATCH = "batch"
-    STREAM = "stream"
 
 
 @dataclass
@@ -47,7 +41,7 @@ class ServiceDescriptor:
     implementation: type[Any] | None = None
     factory: ServiceFactory | None = None
     instance: Any | None = None
-    scope: ScopeType = ScopeType.TRANSIENT
+    scope: ScopeType | str = ScopeType.TRANSIENT
     name: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     dependencies: list[ServiceKey] = field(default_factory=list)

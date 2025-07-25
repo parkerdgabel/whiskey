@@ -7,7 +7,7 @@ __version__ = "0.1.0"
 # Core exports
 from whiskey.core.container import Container
 from whiskey.core.decorators import inject, provide, singleton, factory
-from whiskey.core.scopes import Scope, ScopeType
+from whiskey.core.scopes import Scope, ScopeType, ContextVarScope
 from whiskey.core.discovery import autodiscover, discoverable, scope
 
 # IoC exports
@@ -27,6 +27,7 @@ __all__ = [
     "factory",
     "Scope",
     "ScopeType",
+    "ContextVarScope",
     
     # Discovery
     "autodiscover",

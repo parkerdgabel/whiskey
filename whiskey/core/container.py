@@ -74,7 +74,7 @@ class Container:
             implementation=implementation,
             factory=factory,
             instance=instance,
-            scope=scope if isinstance(scope, ScopeType) else ScopeType(scope),
+            scope=scope,  # Keep as-is, can be ScopeType or string
             name=name,
             metadata=metadata,
         )
@@ -220,6 +220,15 @@ class Container:
                     services[key] = descriptor
         
         return services
+    
+    def register_scope(self, name: str, scope: Any) -> None:
+        """Register a custom scope.
+        
+        Args:
+            name: The name of the scope
+            scope: The scope instance (must inherit from Scope)
+        """
+        self._scope_manager.register_scope(name, scope)
 
     # Container Management Methods
 

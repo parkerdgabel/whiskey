@@ -221,15 +221,10 @@ class ScopeManager:
         self._initialize_default_scopes()
 
     def _initialize_default_scopes(self):
-        """Initialize default scopes."""
+        """Initialize core scopes only."""
         self._scopes[ScopeType.SINGLETON] = SingletonScope()
         self._scopes[ScopeType.TRANSIENT] = TransientScope()
         self._scopes[ScopeType.REQUEST] = RequestScope()
-        self._scopes[ScopeType.SESSION] = SessionScope()
-        self._scopes[ScopeType.CONVERSATION] = ConversationScope()
-        self._scopes[ScopeType.AI_CONTEXT] = AIContextScope()
-        self._scopes[ScopeType.BATCH] = BatchScope()
-        self._scopes[ScopeType.STREAM] = StreamScope()
 
     def get_scope(self, scope_type: ScopeType | str) -> Scope:
         """Get a scope by type."""
