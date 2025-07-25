@@ -523,6 +523,26 @@ class Application:
         """Add a hook that's called before resolving components."""
         self._resolver_hooks.append(hook)
     
+    # Scope management
+    
+    def add_scope(self, name: str, scope_class: type) -> None:
+        """Add a custom scope to the container.
+        
+        Example:
+            from whiskey.core.scopes import Scope
+            
+            class ConversationScope(Scope):
+                def __init__(self):
+                    super().__init__("conversation")
+            
+            app.add_scope("conversation", ConversationScope)
+        """
+        self.container.register_scope(name, scope_class)
+    
+    def get_scope(self, name: str) -> Any:
+        """Get a registered scope instance."""
+        return self.container.get_scope(name)
+    
     def get_metadata(self, component_type: type) -> ComponentMetadata | None:
         """Get metadata for a component."""
         return self._component_metadata.get(component_type)

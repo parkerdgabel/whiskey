@@ -559,8 +559,8 @@ def asgi_extension(app: Application) -> None:
         def __init__(self):
             super().__init__("session")
     
-    app.container.register_scope("request", RequestScope)
-    app.container.register_scope("session", SessionScope)
+    app.add_scope("request", RequestScope)
+    app.add_scope("session", SessionScope)
     
     # Create route decorators
     def create_route_decorator(methods: List[str]):

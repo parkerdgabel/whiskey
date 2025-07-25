@@ -4,11 +4,7 @@ version = "0.1.0"
 description = "Simple, Pythonic dependency injection for AI applications"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = [
-    "whiskey-ai",
-    "whiskey-asgi",
-    "whiskey-cli",
-]
+dependencies = []
 
 [project.optional-dependencies]
 ai = ["whiskey-ai"]

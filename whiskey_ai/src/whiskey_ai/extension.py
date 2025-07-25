@@ -323,7 +323,7 @@ def ai_extension(app: Application) -> None:
     app.agent_manager = agent_manager
     
     # Add conversation scope
-    app.container.register_scope("conversation", ConversationScope)
+    app.add_scope("conversation", ConversationScope)
     
     # Register managers as services
     app.container[ModelManager] = model_manager
