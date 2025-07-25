@@ -1,4 +1,14 @@
-"""Component discovery and introspection utilities."""
+"""Component discovery and introspection for automatic registration.
+
+This module provides utilities for discovering components in modules
+and packages, enabling automatic registration and reducing boilerplate.
+
+Key features:
+    - Module and package scanning
+    - Filtering by predicate or decorator
+    - Automatic registration
+    - Introspection and debugging tools
+"""
 
 from __future__ import annotations
 
@@ -14,24 +24,82 @@ T = TypeVar("T")
 
 
 class ComponentDiscoverer:
-    """Discovers components in modules and packages."""
+    """Discovers and optionally registers components in modules and packages.
+    
+    The ComponentDiscoverer scans Python modules for classes that match
+    specified criteria and can automatically register them with a container.
+    
+    Examples:
+        Basic discovery:
+        
+        >>> discoverer = ComponentDiscoverer(container)
+        >>> components = discoverer.discover_module("myapp.services")
+        >>> print(f"Found {len(components)} components")
+        
+        With auto-registration:
+        
+        >>> # Register all classes ending with 'Service'
+        >>> discoverer.discover_package(
+        ...     "myapp",
+        ...     predicate=lambda cls: cls.__name__.endswith("Service"),
+        ...     auto_register=True
+        ... )
+        
+        By decorator:
+        
+        >>> # Find all classes with @entity decorator
+        >>> entities = discoverer.discover_module(
+        ...     "myapp.models",
+        ...     decorator_name="_entity"
+        ... )
+    
+    Attributes:
+        container: The Container to register components with
+        _discovered: Set tracking already discovered types
+    """
     
     def __init__(self, container: Container):
+        """Initialize discoverer with a container.
+        
+        Args:
+            container: Container instance for registration
+        """
         self.container = container
         self._discovered: set[type] = set()
     
     def discover_module(self, module_name: str, *, 
                        predicate: Callable[[type], bool] | None = None,
                        decorator_name: str | None = None) -> set[type]:
-        """Discover components in a module.
+        """Discover components in a single module.
+        
+        Scans a module for classes that match the given criteria.
+        Only classes defined in the module (not imported) are considered.
         
         Args:
-            module_name: Module to scan
-            predicate: Optional filter function
-            decorator_name: Optional decorator attribute to check for
+            module_name: Fully qualified module name (e.g., "myapp.services")
+            predicate: Optional function to filter classes.
+                      Should return True for classes to include.
+            decorator_name: Optional attribute name to check for.
+                          Classes must have this attribute to be included.
             
         Returns:
             Set of discovered component types
+            
+        Examples:
+            >>> # Find all classes in a module
+            >>> all_classes = discoverer.discover_module("myapp.models")
+            
+            >>> # Find classes matching a pattern
+            >>> services = discoverer.discover_module(
+            ...     "myapp.services",
+            ...     predicate=lambda cls: cls.__name__.endswith("Service")
+            ... )
+            
+            >>> # Find decorated classes
+            >>> entities = discoverer.discover_module(
+            ...     "myapp.models", 
+            ...     decorator_name="_is_entity"
+            ... )
         """
         try:
             module = importlib.import_module(module_name)
@@ -131,9 +199,44 @@ class ComponentDiscoverer:
 
 
 class ContainerInspector:
-    """Provides introspection capabilities for containers."""
+    """Provides introspection and debugging capabilities for containers.
+    
+    The ContainerInspector allows you to examine the state of a container,
+    understand dependencies, and debug resolution issues.
+    
+    Examples:
+        Basic inspection:
+        
+        >>> inspector = container.inspect()
+        >>> 
+        >>> # List all services
+        >>> services = inspector.list_services()
+        >>> print(f"Registered: {[s.__name__ for s in services]}")
+        >>> 
+        >>> # Check if a service can be resolved
+        >>> if inspector.can_resolve(MyService):
+        ...     service = await container.resolve(MyService)
+        
+        Debugging resolution:
+        
+        >>> # Get detailed resolution report
+        >>> report = inspector.resolution_report(ComplexService)
+        >>> if not report["can_resolve"]:
+        ...     print("Missing dependencies:")
+        ...     for dep, info in report["dependencies"].items():
+        ...         if not info["registered"]:
+        ...             print(f"  - {dep}: {info['type']}")
+    
+    Attributes:
+        container: The Container instance to inspect
+    """
     
     def __init__(self, container: Container):
+        """Initialize inspector with a container.
+        
+        Args:
+            container: Container instance to inspect
+        """
         self.container = container
     
     def list_services(self, *, 
@@ -143,12 +246,25 @@ class ContainerInspector:
         """List registered services with optional filters.
         
         Args:
-            interface: Filter by interface/base class
-            scope: Filter by scope
-            tags: Filter by tags (if metadata available)
+            interface: Only include services that inherit from this type
+            scope: Only include services with this scope ("singleton", "transient", etc.)
+            tags: Only include services with these tags (requires metadata)
             
         Returns:
             List of matching service types
+            
+        Examples:
+            >>> # All singletons
+            >>> singletons = inspector.list_services(scope="singleton")
+            >>> 
+            >>> # All implementations of Repository
+            >>> repos = inspector.list_services(interface=Repository)
+            >>> 
+            >>> # Combine filters
+            >>> singleton_repos = inspector.list_services(
+            ...     interface=Repository,
+            ...     scope="singleton"
+            ... )
         """
         services = []
         

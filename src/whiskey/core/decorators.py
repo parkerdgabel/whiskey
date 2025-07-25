@@ -49,7 +49,18 @@ class Inject:
 
 
 def get_default_container() -> Container:
-    """Get or create the default container."""
+    """Get or create the default container.
+    
+    The default container is a global instance used by decorators when
+    no explicit container is provided. It's created on first access.
+    
+    Returns:
+        The global default Container instance
+        
+    Note:
+        In applications, prefer using Application.container or explicitly
+        passing containers rather than relying on the global default.
+    """
     global _default_container
     if _default_container is None:
         _default_container = Container()
@@ -57,27 +68,98 @@ def get_default_container() -> Container:
 
 
 def set_default_container(container: Container) -> None:
-    """Set the default container."""
+    """Set the default container.
+    
+    Args:
+        container: The Container instance to use as the global default
+        
+    Note:
+        This affects all decorators that don't have access to a current container.
+    """
     global _default_container
     _default_container = container
 
 
 def provide(cls: type[T]) -> type[T]:
-    """Register a class with the current or default container."""
+    """Register a class with the current or default container.
+    
+    This decorator registers a class for dependency injection with transient scope
+    (new instance created for each resolution).
+    
+    Args:
+        cls: The class to register
+        
+    Returns:
+        The original class (unchanged)
+        
+    Examples:
+        >>> @provide
+        ... class EmailService:
+        ...     def send(self, to: str, message: str):
+        ...         # Send email
+        ...         pass
+        
+        >>> # Now EmailService can be injected
+        >>> @inject
+        ... async def notify(email: Annotated[EmailService, Inject()]):
+        ...     await email.send("user@example.com", "Hello!")
+    """
     container = get_current_container() or get_default_container()
     container[cls] = cls
     return cls
 
 
 def singleton(cls: type[T]) -> type[T]:
-    """Register a class as a singleton."""
+    """Register a class as a singleton.
+    
+    This decorator registers a class with singleton scope - only one instance
+    will be created and shared across all resolutions.
+    
+    Args:
+        cls: The class to register as a singleton
+        
+    Returns:
+        The original class (unchanged)
+        
+    Examples:
+        >>> @singleton
+        ... class Configuration:
+        ...     def __init__(self):
+        ...         self.settings = load_settings()  # Expensive operation
+        
+        >>> # Same instance returned every time
+        >>> config1 = await container.resolve(Configuration)
+        >>> config2 = await container.resolve(Configuration) 
+        >>> assert config1 is config2  # True
+    """
     container = get_current_container() or get_default_container()
     container.register(cls, scope="singleton")
     return cls
 
 
 def factory(service_type: type[T]) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """Register a factory function for a service type."""
+    """Register a factory function for a service type.
+    
+    This decorator allows you to register a function that creates instances
+    of a service type. Useful when construction logic is complex or when
+    you need to return different implementations based on configuration.
+    
+    Args:
+        service_type: The type that the factory creates
+        
+    Returns:
+        A decorator that registers the factory function
+        
+    Examples:
+        >>> @factory(Database)
+        ... def create_database() -> Database:
+        ...     if os.getenv("TEST"):
+        ...         return TestDatabase()
+        ...     return PostgresDatabase(os.getenv("DATABASE_URL"))
+        
+        >>> # Database will be created by the factory
+        >>> db = await container.resolve(Database)
+    """
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         container = get_current_container() or get_default_container()
         container.register_factory(service_type, func)
@@ -86,16 +168,46 @@ def factory(service_type: type[T]) -> Callable[[Callable[..., T]], Callable[...,
 
 
 def inject(func: F) -> F:
-    """Inject dependencies into a function.
+    """Decorator that automatically injects dependencies into functions.
     
-    This decorator automatically resolves and injects dependencies based on
-    the function's type annotations.
+    This decorator analyzes function parameters and automatically resolves
+    dependencies from the container for parameters marked with Inject().
     
-    Example:
-        @inject
-        async def process_user(user_service: UserService, db: Database):
-            user = await user_service.get_user(123)
-            await db.save(user)
+    Args:
+        func: The function to decorate
+        
+    Returns:
+        The decorated function with automatic dependency injection
+        
+    Examples:
+        Basic usage:
+        
+        >>> @inject
+        ... async def process_user(
+        ...     user_id: int,
+        ...     db: Annotated[Database, Inject()]
+        ... ):
+        ...     return await db.get_user(user_id)
+        
+        With multiple dependencies:
+        
+        >>> @inject  
+        ... async def send_notification(
+        ...     message: str,
+        ...     email_svc: Annotated[EmailService, Inject()],
+        ...     sms_svc: Annotated[SMSService, Inject()],
+        ...     user_pref: Annotated[UserPreferences, Inject()]
+        ... ):
+        ...     if user_pref.email_enabled:
+        ...         await email_svc.send(message)
+        ...     if user_pref.sms_enabled:
+        ...         await sms_svc.send(message)
+    
+    Note:
+        - Only parameters with Annotated[T, Inject()] are injected
+        - Parameters with defaults that are callables (like Setting()) are not injected
+        - Works with both sync and async functions
+        - Maintains the original function signature for IDE support
     """
     sig = inspect.signature(func)
     is_async = asyncio.iscoroutinefunction(func)

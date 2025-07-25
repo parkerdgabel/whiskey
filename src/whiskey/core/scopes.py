@@ -1,4 +1,13 @@
-"""Simple scope implementations using context managers."""
+"""Scope management for controlling service lifecycles.
+
+This module provides the scope system for Whiskey's dependency injection,
+allowing fine-grained control over when instances are created and destroyed.
+
+Built-in scopes:
+    - singleton: One instance for the entire application lifetime
+    - transient: New instance for each resolution (default)
+    - Custom scopes can be created by extending the Scope class
+"""
 
 from __future__ import annotations
 
@@ -9,13 +18,35 @@ T = TypeVar("T")
 
 
 class Scope:
-    """Base scope using context managers for lifecycle management.
+    """Base class for dependency injection scopes.
     
-    Example:
-        with Scope("request") as scope:
-            # Services created in this scope
-            db = await container.resolve(Database)
-            # Automatically cleaned up when scope ends
+    A scope controls the lifecycle of service instances. When a service is
+    resolved within a scope, the same instance is returned for all resolutions
+    within that scope's lifetime.
+    
+    Scopes use context managers to define their boundaries and automatically
+    clean up resources when the scope ends.
+    
+    Examples:
+        Creating a custom scope:
+        
+        >>> class RequestScope(Scope):
+        ...     def __init__(self):
+        ...         super().__init__("request")
+        ...         self.request_id = generate_id()
+        
+        Using a scope:
+        
+        >>> with container.scope("request") as scope:
+        ...     # All resolutions within this block share instances
+        ...     service1 = await container.resolve(RequestService)
+        ...     service2 = await container.resolve(RequestService)
+        ...     assert service1 is service2  # Same instance
+        ... # Resources cleaned up here
+    
+    Attributes:
+        name: The scope identifier
+        _instances: Cache of instances created in this scope
     """
     
     def __init__(self, name: str):
@@ -23,15 +54,36 @@ class Scope:
         self._instances: dict[type, Any] = {}
         
     def get(self, service_type: type[T]) -> T | None:
-        """Get a scoped instance if it exists."""
+        """Get a scoped instance if it exists.
+        
+        Args:
+            service_type: The type to look up
+            
+        Returns:
+            The cached instance or None if not found
+        """
         return self._instances.get(service_type)
         
     def set(self, service_type: type[T], instance: T) -> None:
-        """Store a scoped instance."""
+        """Store a scoped instance.
+        
+        Args:
+            service_type: The type to cache the instance under
+            instance: The instance to cache
+        """
         self._instances[service_type] = instance
         
     def clear(self) -> None:
-        """Clear all instances and run disposal."""
+        """Clear all instances and run disposal.
+        
+        This method is called when the scope ends. It:
+        1. Calls dispose() on any instances that have it
+        2. Clears the instance cache
+        
+        Note:
+            If an instance has a dispose() method, it will be called
+            to allow proper cleanup (closing connections, etc.)
+        """
         for instance in self._instances.values():
             # Call dispose if available
             if hasattr(instance, 'dispose'):

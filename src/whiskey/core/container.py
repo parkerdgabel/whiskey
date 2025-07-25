@@ -1,4 +1,8 @@
-"""Simple, Pythonic dependency injection container."""
+"""Core dependency injection container for Whiskey.
+
+This module provides the foundation of Whiskey's IoC system with a simple,
+dict-like container that manages service registration and resolution.
+"""
 
 from __future__ import annotations
 
@@ -22,25 +26,61 @@ _active_scopes: ContextVar[dict[str, Any]] = ContextVar(
 
 
 class Container:
-    """A simple dependency injection container with dict-like interface.
+    """A dependency injection container with dict-like interface.
+    
+    The Container is the heart of Whiskey's dependency injection system. It manages
+    service registration, resolution, and scoping with a simple, Pythonic API.
+    
+    Features:
+        - Dict-like syntax for registration and retrieval
+        - Automatic dependency resolution with cycle detection
+        - Scope management (singleton, transient, custom scopes)
+        - Async and sync resolution support
+        - Factory functions and lazy instantiation
+        - Component discovery and introspection
     
     Examples:
-        container = Container()
+        Basic usage:
         
-        # Register services
-        container[Database] = Database("connection_string")  # Instance
-        container[UserService] = UserService  # Class (auto-instantiated)
-        container[EmailService] = lambda: EmailService()  # Factory
+        >>> container = Container()
+        >>> 
+        >>> # Register services
+        >>> container[Database] = Database("postgresql://...")  # Instance
+        >>> container[UserService] = UserService  # Class (lazy)
+        >>> container[EmailService] = lambda: EmailService()  # Factory
+        >>> 
+        >>> # Resolve services
+        >>> db = await container.resolve(Database)
+        >>> user_svc = await container.resolve(UserService)  # Auto-injects Database
+        >>> 
+        >>> # Check registration
+        >>> if Database in container:
+        ...     print("Database is registered")
         
-        # Resolve services
-        db = await container.resolve(Database)
+        With scopes:
         
-        # Check registration
-        if Database in container:
-            print("Database is registered")
+        >>> # Register with scope
+        >>> container.register(RequestContext, scope="request")
+        >>> 
+        >>> # Use scope
+        >>> async with container.scope("request"):
+        ...     ctx = await container.resolve(RequestContext)
+        ...     # Same instance within scope
+    
+    Attributes:
+        _services: Registry of service types to their implementations
+        _factories: Registry of factory functions for services
+        _singletons: Cache of singleton instances
+        _scopes: Registry of available scopes
+        _service_scopes: Mapping of service types to their scope names
     """
     
     def __init__(self):
+        """Initialize a new Container.
+        
+        Creates registries for services, factories, singletons, and scopes.
+        Automatically registers built-in scopes (singleton, transient).
+        """
         self._services: dict[type, Any] = {}
         self._factories: dict[type, Callable] = {}
         self._singletons: dict[type, Any] = {}
@@ -51,7 +91,22 @@ class Container:
         # Note: singleton and transient are handled specially, not as scope instances
         
     def __setitem__(self, service_type: type[T], value: T | type[T] | Callable[..., T]) -> None:
-        """Register a service, class, or factory."""
+        """Register a service, class, or factory.
+        
+        This method provides dict-like syntax for service registration.
+        
+        Args:
+            service_type: The type to register (used as the key for resolution)
+            value: Can be:
+                - An instance: Registered as-is
+                - A class: Will be instantiated on first resolve
+                - A callable/factory: Will be called to create instances
+        
+        Examples:
+            >>> container[Database] = Database("postgresql://...")  # Instance
+            >>> container[Logger] = Logger  # Class 
+            >>> container[Cache] = lambda: RedisCache(host="localhost")  # Factory
+        """
         if callable(value) and not isinstance(value, type):
             # It's a factory function
             self._factories[service_type] = value
@@ -60,11 +115,32 @@ class Container:
             self._services[service_type] = value
             
     def __getitem__(self, service_type: type[T]) -> T:
-        """Get a service synchronously (for backwards compatibility)."""
+        """Get a service synchronously (for backwards compatibility).
+        
+        Args:
+            service_type: The type to resolve
+            
+        Returns:
+            The resolved service instance
+            
+        Note:
+            Prefer using resolve() or resolve_sync() for explicit async/sync behavior.
+        """
         return self.resolve_sync(service_type)
         
     def __contains__(self, service_type: type) -> bool:
-        """Check if a service is registered."""
+        """Check if a service is registered.
+        
+        Args:
+            service_type: The type to check
+            
+        Returns:
+            True if the service is registered in any form (service, factory, or singleton)
+            
+        Examples:
+            >>> if Database in container:
+            ...     db = container[Database]
+        """
         return (
             service_type in self._services
             or service_type in self._factories
@@ -72,7 +148,16 @@ class Container:
         )
         
     def __delitem__(self, service_type: type) -> None:
-        """Remove a service registration."""
+        """Remove a service registration.
+        
+        Removes the service from all registries (services, factories, singletons).
+        
+        Args:
+            service_type: The type to unregister
+            
+        Note:
+            This does not affect already resolved instances held by other services.
+        """
         self._services.pop(service_type, None)
         self._factories.pop(service_type, None)
         self._singletons.pop(service_type, None)

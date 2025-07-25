@@ -1,4 +1,9 @@
-"""Rich IoC application container with lifecycle management."""
+"""Application framework with full IoC container and lifecycle management.
+
+This module provides the Application class, which extends the basic Container
+with rich features for building complete applications including lifecycle
+management, event handling, component metadata, and extension support.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +22,13 @@ from whiskey.core.types import Disposable, Initializable
 
 @dataclass
 class ApplicationConfig:
-    """Application configuration."""
+    """Configuration for Application instances.
+    
+    Attributes:
+        name: Display name for the application
+        extensions: List of extension functions to apply
+        debug: Enable debug mode for additional logging
+    """
     name: str = "Whiskey Application"
     extensions: list[Callable[[Application], None]] = field(default_factory=list)
     debug: bool = False
@@ -25,7 +36,22 @@ class ApplicationConfig:
 
 @dataclass 
 class ComponentMetadata:
-    """Metadata for registered components."""
+    """Metadata for registered components.
+    
+    This class stores additional information about components beyond
+    their type and implementation, enabling advanced features like
+    dependency ordering, health checks, and filtering.
+    
+    Attributes:
+        component_type: The component class type
+        name: Optional component name for identification
+        priority: Initialization priority (higher = earlier)
+        requires: Set of types this component depends on
+        provides: Set of capability strings this component provides
+        tags: Set of tags for categorization and filtering
+        critical: If True, application fails if component fails
+        health_check: Optional async function to check component health
+    """
     component_type: type
     name: str | None = None
     priority: int = 0
@@ -37,17 +63,56 @@ class ComponentMetadata:
 
 
 class Application:
-    """Rich IoC container for building any Python application.
+    """Rich IoC container for building Python applications.
+    
+    The Application class provides a complete framework for building
+    applications with dependency injection, lifecycle management,
+    event handling, and extensibility.
     
     Features:
-    - Rich lifecycle phases with hooks
-    - Built-in event emitter
-    - Component metadata and decorators
-    - Extension system
-    - Background task management
+        - Full lifecycle management with customizable phases
+        - Event system with wildcard support
+        - Component metadata and priority ordering
+        - Extension system for adding functionality
+        - Background task management
+        - Health checking and monitoring
+        - Component discovery and auto-registration
     
-    Example:
-        app = Application()
+    Examples:
+        Basic application:
+        
+        >>> app = Application()
+        >>> 
+        >>> @app.component
+        ... class Database:
+        ...     async def connect(self):
+        ...         print("Connected to database")
+        >>> 
+        >>> @app.on_startup
+        ... async def startup():
+        ...     db = await app.container.resolve(Database)
+        ...     await db.connect()
+        >>> 
+        >>> app.run()
+        
+        With events:
+        
+        >>> @app.on("user.created")
+        ... async def handle_user(data):
+        ...     print(f"New user: {data['name']}")
+        >>> 
+        >>> await app.emit("user.created", {"name": "Alice"})
+    
+    Attributes:
+        container: The underlying Container instance
+        config: Application configuration
+        _components: Registry of component metadata
+        _lifecycle_phases: Ordered list of lifecycle phase names
+        _lifecycle_hooks: Handlers for each lifecycle phase
+        _event_handlers: Event handlers by event name/pattern
+        _error_handlers: Error handling functions
+        _background_tasks: Set of running background tasks
+    """
         
         @app.component
         @app.priority(10)
