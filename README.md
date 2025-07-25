@@ -1,16 +1,16 @@
-# Whiskey >C
+# Whiskey 🥃
 
-A next-generation dependency injection and IoC framework for Python AI applications.
+A simple, Pythonic dependency injection framework for AI applications.
 
 ## Features
 
-- **AI-First Design**: Built specifically for AI workloads with native support for model management, token tracking, and conversation contexts
-- **Simple Extensions**: Extend functionality with plain Python functions - no complex plugin system
-- **Zero-Config Magic**: Convention-over-configuration with intelligent defaults
-- **Autodiscovery**: Automatic component discovery based on Python conventions
-- **Type-Safe**: Full type hints and runtime validation
-- **Async-Native**: First-class support for async/await patterns
-- **Framework Agnostic**: Works with FastAPI, Django, Flask, and pure Python
+- **Simple API**: Dict-like container interface that feels natural
+- **Async-First**: Built for modern async Python applications
+- **Minimal Core**: Under 500 lines of code with zero required dependencies
+- **Type-Safe**: Full type hints and IDE support
+- **Flexible Scopes**: Singleton, transient, and custom scopes
+- **Easy Extensions**: Extend with simple functions, not complex plugins
+- **AI-Ready**: Perfect for LLM apps with conversation and session scopes
 
 ## Quick Start
 
@@ -47,46 +47,41 @@ async with app.lifespan():
 
 ## Core Concepts
 
-### Container Syntactic Sugar
+### Simple Container API
 
-Whiskey's container provides Pythonic shortcuts for common operations:
+Whiskey's container works like a Python dict:
 
 ```python
-from whiskey import Container, singleton
+from whiskey import Container
 
 container = Container()
 
-# Dict-like access
-service = container[MyService]  # Same as container.resolve_sync(MyService)
+# Register services
+container[Database] = Database("postgresql://...")
+container[EmailService] = EmailService
+container[Cache] = lambda: RedisCache("localhost")
 
-# Safe access with defaults
-service = container.get(MyService, default=None)  # Returns None if not found
+# Resolve services
+db = await container.resolve(Database)
 
-# Check if registered
-if MyService in container:
-    service = container[MyService]
+# Dict-like operations
+if Database in container:
+    db = await container.resolve(Database)
 
-# Context manager for automatic cleanup
-with Container() as temp_container:
-    temp_container.register_singleton(Database, Database)
-    # Container is disposed when exiting context
-
-# Iteration and dict methods
-for service_type in container:
-    print(service_type)
-
-for key, descriptor in container.items():
-    print(f"{key}: {descriptor.scope}")
+# Context manager for scoping
+with container:
+    service = await container.resolve(MyService)
 ```
 
 ### Scopes
 
-Whiskey provides several built-in scopes:
-
+Core scopes (built-in):
 - `singleton` - One instance for the entire application
-- `transient` - New instance for each request
+- `transient` - New instance for each request (default)
 - `request` - One instance per HTTP request
-- `session` - One instance per user session
+
+AI scopes (via whiskey-ai extension):
+- `session` - One instance per user session  
 - `conversation` - One instance per AI conversation
 - `ai_context` - One instance per AI operation
 
@@ -99,28 +94,30 @@ Whiskey provides several built-in scopes:
 
 ### Extensions
 
-Whiskey uses simple functions to extend functionality:
+Extend Whiskey with simple functions:
 
 ```python
 # Create an extension
 def redis_extension(app):
-    @app.service
+    @singleton
     class RedisClient:
         async def get(self, key): ...
         async def set(self, key, value): ...
+    
+    app.container.register_singleton(RedisClient)
 
 # Use extensions
 app = Application()
 app.extend(redis_extension)
 
-# Or use multiple at once
+# Or chain multiple
 from whiskey_ai import ai_extension
 from whiskey_asgi import asgi_extension
 
 app = Application().use(
     ai_extension,    # Adds AI-specific scopes
     asgi_extension,  # Adds web framework support
-    redis_extension, # Adds Redis client
+    redis_extension, # Your custom extension
 )
 ```
 

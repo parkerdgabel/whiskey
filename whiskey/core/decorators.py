@@ -1,13 +1,13 @@
-"""Decorators for Whiskey dependency injection."""
+"""Simple decorators for dependency injection."""
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import inspect
-from typing import Any, Callable, TypeVar, overload
+from typing import Any, Callable, TypeVar
 
-from whiskey.core.container import Container
-from whiskey.core.types import ScopeType, ServiceFactory
+from whiskey.core.container import Container, get_current_container
 
 T = TypeVar("T")
 F = TypeVar("F", bound=Callable[..., Any])
@@ -30,255 +30,95 @@ def set_default_container(container: Container) -> None:
     _default_container = container
 
 
-# @provide decorator
-
-@overload
 def provide(cls: type[T]) -> type[T]:
-    """Register a class as a transient service."""
-    ...
+    """Register a class with the current or default container."""
+    container = get_current_container() or get_default_container()
+    container[cls] = cls
+    return cls
 
 
-@overload
-def provide(
-    *,
-    scope: ScopeType | str = ScopeType.TRANSIENT,
-    name: str | None = None,
-    container: Container | None = None,
-    **metadata: Any,
-) -> Callable[[type[T]], type[T]]:
-    """Register a class with specific options."""
-    ...
+def singleton(cls: type[T]) -> type[T]:
+    """Register a class as a singleton."""
+    container = get_current_container() or get_default_container()
+    container.register(cls, scope="singleton")
+    return cls
 
 
-def provide(
-    cls: type[T] | None = None,
-    *,
-    scope: ScopeType | str = ScopeType.TRANSIENT,
-    name: str | None = None,
-    container: Container | None = None,
-    **metadata: Any,
-) -> type[T] | Callable[[type[T]], type[T]]:
-    """
-    Decorator to register a class as a service provider.
-    
-    Can be used with or without parameters:
-    - @provide
-    - @provide(scope=ScopeType.SINGLETON)
-    """
-    def decorator(cls: type[T]) -> type[T]:
-        target_container = container or get_default_container()
-        target_container.register(
-            service_type=cls,
-            implementation=cls,
-            scope=scope,
-            name=name,
-            **metadata,
-        )
-        # Mark class as injectable
-        cls.__whiskey_injectable__ = True
-        return cls
-
-    if cls is not None:
-        # Called without parentheses: @provide
-        return decorator(cls)
-    else:
-        # Called with parentheses: @provide(...)
-        return decorator
+def factory(service_type: type[T]) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """Register a factory function for a service type."""
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        container = get_current_container() or get_default_container()
+        container.register_factory(service_type, func)
+        return func
+    return decorator
 
 
-# @singleton decorator
-
-def singleton(
-    cls: type[T] | None = None,
-    *,
-    name: str | None = None,
-    container: Container | None = None,
-    **metadata: Any,
-) -> type[T] | Callable[[type[T]], type[T]]:
-    """
-    Decorator to register a class as a singleton service.
-    
-    Shorthand for @provide(scope=ScopeType.SINGLETON)
-    """
-    return provide(
-        cls,
-        scope=ScopeType.SINGLETON,
-        name=name,
-        container=container,
-        **metadata,
-    )
-
-
-# @inject decorator
-
-@overload
 def inject(func: F) -> F:
-    """Inject dependencies into a function."""
-    ...
-
-
-@overload
-def inject(
-    *,
-    container: Container | None = None,
-    **overrides: Any,
-) -> Callable[[F], F]:
-    """Inject dependencies with specific container or overrides."""
-    ...
-
-
-def inject(
-    func: F | None = None,
-    *,
-    container: Container | None = None,
-    **overrides: Any,
-) -> F | Callable[[F], F]:
-    """
-    Decorator to inject dependencies into a function.
+    """Inject dependencies into a function.
     
-    Can be used with or without parameters:
-    - @inject
-    - @inject(container=my_container)
-    - @inject(service=mock_service)  # Override specific dependencies
+    This decorator automatically resolves and injects dependencies based on
+    the function's type annotations.
+    
+    Example:
+        @inject
+        async def process_user(user_service: UserService, db: Database):
+            user = await user_service.get_user(123)
+            await db.save(user)
     """
-    def decorator(func: F) -> F:
-        # Get function signature
-        sig = inspect.signature(func)
-        
+    sig = inspect.signature(func)
+    is_async = asyncio.iscoroutinefunction(func)
+    
+    if is_async:
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
-            # Get container
-            target_container = container or get_default_container()
+            # Get the current container
+            container = get_current_container() or get_default_container()
             
-            # Prepare injection context
+            # Bind provided arguments
             bound = sig.bind_partial(*args, **kwargs)
             bound.apply_defaults()
             
             # Inject missing dependencies
             for param_name, param in sig.parameters.items():
-                if param_name not in bound.arguments:
-                    # Check for override
-                    if param_name in overrides:
-                        bound.arguments[param_name] = overrides[param_name]
-                    elif param.annotation != param.empty:
-                        # Try to resolve from container
-                        try:
-                            instance = await target_container.resolve(param.annotation)
-                            bound.arguments[param_name] = instance
-                        except Exception:
-                            # Skip if optional or has default
-                            if param.default == param.empty:
-                                raise
+                if param_name not in bound.arguments and param.annotation != param.empty:
+                    try:
+                        bound.arguments[param_name] = await container.resolve(param.annotation)
+                    except KeyError:
+                        if param.default == param.empty:
+                            raise
             
-            # Call original function
-            return await func(*bound.args, **bound.kwargs)
+            return await func(**bound.arguments)
         
+        return async_wrapper  # type: ignore
+    else:
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
-            # Get container
-            target_container = container or get_default_container()
+            # Get the current container
+            container = get_current_container() or get_default_container()
             
-            # Prepare injection context
+            # Bind provided arguments
             bound = sig.bind_partial(*args, **kwargs)
             bound.apply_defaults()
             
             # Inject missing dependencies
             for param_name, param in sig.parameters.items():
-                if param_name not in bound.arguments:
-                    # Check for override
-                    if param_name in overrides:
-                        bound.arguments[param_name] = overrides[param_name]
-                    elif param.annotation != param.empty:
-                        # Try to resolve from container
-                        try:
-                            instance = target_container.resolve_sync(param.annotation)
-                            bound.arguments[param_name] = instance
-                        except Exception:
-                            # Skip if optional or has default
-                            if param.default == param.empty:
-                                raise
+                if param_name not in bound.arguments and param.annotation != param.empty:
+                    try:
+                        # Use resolve_sync for synchronous functions
+                        bound.arguments[param_name] = container.resolve_sync(param.annotation)
+                    except KeyError:
+                        if param.default == param.empty:
+                            raise
             
-            # Call original function
-            return func(*bound.args, **bound.kwargs)
+            return func(**bound.arguments)
         
-        # Return appropriate wrapper
-        if inspect.iscoroutinefunction(func):
-            return async_wrapper
-        else:
-            return sync_wrapper
-    
-    if func is not None:
-        # Called without parentheses: @inject
-        return decorator(func)
-    else:
-        # Called with parentheses: @inject(...)
-        return decorator
+        return sync_wrapper  # type: ignore
 
 
-# Factory registration helpers
-
-def factory(
-    service_type: type[T],
-    *,
-    scope: ScopeType | str = ScopeType.TRANSIENT,
-    name: str | None = None,
-    container: Container | None = None,
-    **metadata: Any,
-) -> Callable[[ServiceFactory[T]], ServiceFactory[T]]:
-    """
-    Decorator to register a factory function.
-    
-    @factory(DatabaseConnection, scope=ScopeType.SINGLETON)
-    def create_db_connection(config: Config) -> DatabaseConnection:
-        return DatabaseConnection(config.db_url)
-    """
-    def decorator(func: ServiceFactory[T]) -> ServiceFactory[T]:
-        target_container = container or get_default_container()
-        target_container.register(
-            service_type=service_type,
-            factory=func,
-            scope=scope,
-            name=name,
-            **metadata,
-        )
-        return func
-    
-    return decorator
-
-
-# Named binding helpers
-
-def named(name: str) -> Callable[[type[T]], type[T]]:
-    """
-    Helper to create named bindings.
-    
-    @provide
-    @named("primary")
-    class PrimaryDatabase(Database):
-        pass
-    """
+def scoped(scope_name: str) -> Callable[[type[T]], type[T]]:
+    """Register a class with a custom scope."""
     def decorator(cls: type[T]) -> type[T]:
-        # Store the name in class metadata
-        cls.__whiskey_name__ = name
+        container = get_current_container() or get_default_container()
+        container.register(cls, scope=scope_name)
         return cls
-    
-    return decorator
-
-
-# Scope helpers
-
-def scoped(scope: ScopeType | str) -> Callable[[type[T]], type[T]]:
-    """
-    Helper to specify scope.
-    
-    @provide
-    @scoped(ScopeType.REQUEST)
-    class RequestService:
-        pass
-    """
-    def decorator(cls: type[T]) -> type[T]:
-        # Store the scope in class metadata
-        cls.__whiskey_scope__ = scope
-        return cls
-    
     return decorator

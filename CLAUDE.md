@@ -30,76 +30,66 @@ uv run mypy whiskey
 
 ## Architecture Overview
 
-Whiskey is a dependency injection and IoC framework designed specifically for AI applications. The architecture consists of several interconnected systems:
+Whiskey is a simple, Pythonic dependency injection framework. The architecture is minimal and intuitive:
 
 ### Core DI System
 
-**Container → Resolver → Scopes**
+**Container (with integrated resolver) → Scopes**
 
-1. **Container** (`core/container.py`): Stores service registrations and manages parent-child hierarchies
-2. **Resolver** (`core/resolver.py`): Creates instances with recursive dependency resolution and circular dependency detection
-3. **Scopes** (`core/scopes.py`): Manages service lifetimes using contextvars for thread-safe isolation
+1. **Container** (`core/container.py`): Dict-like service registry with integrated dependency resolution
+2. **Scopes** (`core/scopes.py`): Simple context managers for service lifetimes
 
 ### Decorator Flow
 
-Decorators modify the default container or create metadata:
+Simple decorators that work with the default container:
 - `@provide`, `@singleton`, `@factory` → Register in default container
-- `@inject` → Wraps functions to auto-resolve parameters from container
-- `@scoped` → Creates custom scoped services
+- `@inject` → Auto-resolve parameters from container
+- `@scoped` → Register with custom scope
 
-### Application Lifecycle (IoC)
+### Application (Optional)
 
-The `Application` class (`core/application.py`) implements true IoC:
+The `Application` class (`core/application.py`) adds lifecycle management:
 1. Services registered via `@app.service` 
-2. On startup: Initialize all `Initializable` services in dependency order
-3. Background tasks started via `@app.task`
-4. Event handlers connected via `@app.on(event)`
-5. On shutdown: Dispose all `Disposable` services in reverse order
+2. Startup hooks run `Initializable` services
+3. Shutdown hooks run `Disposable` services  
+4. Background tasks via `@app.task`
 
-### AI-Specific Architecture
+### Extensions
 
-- **AIContext** (`ai/context/ai_context.py`): Tracks token usage, costs, and conversation history
-- **Conversation Scope**: Maintains state across multi-turn dialogues
-- **Context Variables**: Thread-safe context propagation using Python's contextvars
+Extensions are simple functions that configure the container:
+- `whiskey-ai`: Adds AI-specific scopes (session, conversation, ai_context)
+- `whiskey-asgi`: Adds ASGI web framework support
+- `whiskey-cli`: Adds CLI application support
 
-### Event System
+### Key Design Principles
 
-Event-driven architecture with:
-- Async queue-based processing
-- Middleware pipeline for cross-cutting concerns
-- Type-safe event definitions
+1. **Pythonic API**: 
+   - Container works like a dict: `container[Service] = instance`
+   - Natural Python patterns, no magic
+   - Type hints for IDE support
 
-### Key Interactions
+2. **Minimal Core**:
+   - Under 500 lines total
+   - No required dependencies
+   - Extensions add functionality
 
-1. **Service Resolution**: 
-   - Function decorated with `@inject` called
-   - Resolver examines type hints
-   - Recursively resolves dependencies from container
-   - Scope determines if new instance or cached
-
-2. **Scope Management**:
-   - Request comes in → Request scope created
-   - AI operation starts → AIContext scope created  
-   - Scopes nest hierarchically
-   - Disposal happens in reverse order when scope ends
-
-3. **Async Patterns**:
-   - All resolution is async (`await container.resolve()`)
-   - Sync alternatives exist (`resolve_sync()` uses `asyncio.run`)
-   - Event processing is queue-based and concurrent
+3. **Async-First**:
+   - `await container.resolve()` is the primary API
+   - Sync support where needed
+   - Modern Python patterns
 
 ## Testing Approach
 
-- Tests organized by module in `tests/core/` and `tests/ai/`
-- Fixtures in `tests/conftest.py` provide test services and containers
-- 80% coverage requirement enforced in pytest config
+- Tests organized by module in `tests/core/`
+- Simple, focused unit tests
+- No complex mocking needed
 - Use `@pytest.mark.unit` for unit tests
 
-## Development Notes
+## Development Philosophy
 
-- Place temporary test files in `/tmp`
-- The framework is async-first but provides sync alternatives
-- Scopes use contextvars, not thread-locals, for async safety
-- Protocol classes need `@runtime_checkable` decorator
-- Always check for circular dependencies in complex service graphs
-- **Keep dependencies to a minimum** - the framework should remain lightweight and not impose unnecessary dependencies on users
+- **Simple is better than complex** - Remove abstractions
+- **Explicit is better than implicit** - No hidden behavior
+- **Minimal dependencies** - Standard library only for core
+- **Async-first** - Built for modern Python
+- **Type-safe** - Full typing support
+- **Extensible** - Easy to add features via extensions
