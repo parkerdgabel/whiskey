@@ -3,7 +3,6 @@
 import asyncio
 from typing import List, Optional
 
-import click
 from whiskey import Application, inject, singleton
 from whiskey_cli import cli_extension
 
@@ -85,12 +84,12 @@ app.component(ConfigService)
 
 # CLI Commands
 @app.command()
-@click.argument("title")
+@app.argument("title")
 @inject
 async def add(title: str, task_service: TaskService):
     """Add a new task."""
     task = task_service.add(title)
-    click.echo(f"✅ Added task #{task.id}: {task.title}")
+    print(f"✅ Added task #{task.id}: {task.title}")
     
     # Emit event
     await app.emit("task.created", {"id": task.id, "title": task.title})
@@ -103,82 +102,79 @@ def list_tasks(task_service: TaskService, config: ConfigService):
     tasks = task_service.list_all()
     
     if not tasks:
-        click.echo("No tasks found. Use 'add' to create one!")
+        print("No tasks found. Use 'add' to create one!")
         return
     
-    click.echo(f"\n{config.app_name} - Tasks:\n")
+    print(f"\n{config.app_name} - Tasks:\n")
     
     pending = [t for t in tasks if not t.completed]
     completed = [t for t in tasks if t.completed]
     
     if pending:
-        click.echo("📋 Pending:")
+        print("📋 Pending:")
         for task in pending:
-            click.echo(f"  [{task.id}] {task.title}")
+            print(f"  [{task.id}] {task.title}")
     
     if completed and config.show_completed:
-        click.echo("\n✅ Completed:")
+        print("\n✅ Completed:")
         for task in completed:
-            click.echo(f"  [{task.id}] {task.title}")
+            print(f"  [{task.id}] {task.title}")
     
-    click.echo(f"\nTotal: {len(pending)} pending, {len(completed)} completed")
+    print(f"\nTotal: {len(pending)} pending, {len(completed)} completed")
 
 
 @app.command()
-@click.argument("task_id", type=int)
+@app.argument("task_id", type=int)
 @inject
 async def complete(task_id: int, task_service: TaskService):
     """Mark a task as completed."""
     if task_service.complete(task_id):
         task = task_service.get(task_id)
-        click.echo(f"✅ Completed task #{task_id}: {task.title}")
+        print(f"✅ Completed task #{task_id}: {task.title}")
         await app.emit("task.completed", {"id": task_id})
     else:
-        click.echo(f"❌ Task #{task_id} not found", err=True)
+        print(f"❌ Task #{task_id} not found")
 
 
 @app.command()
-@click.argument("task_id", type=int)
+@app.argument("task_id", type=int)
 @inject
 async def delete(task_id: int, task_service: TaskService):
     """Delete a task."""
     task = task_service.get(task_id)
     if task and task_service.delete(task_id):
-        click.echo(f"🗑️  Deleted task #{task_id}: {task.title}")
+        print(f"🗑️  Deleted task #{task_id}: {task.title}")
         await app.emit("task.deleted", {"id": task_id})
     else:
-        click.echo(f"❌ Task #{task_id} not found", err=True)
+        print(f"❌ Task #{task_id} not found")
 
 
 @app.command()
 @inject
 def config(config_service: ConfigService):
     """Show configuration."""
-    click.echo(f"App Name: {config_service.app_name}")
-    click.echo(f"Version: {config_service.version}")
-    click.echo(f"Show Completed: {config_service.show_completed}")
+    print(f"App Name: {config_service.app_name}")
+    print(f"Version: {config_service.version}")
+    print(f"Show Completed: {config_service.show_completed}")
 
 
 # Command groups example
-db_group = app.group("db")
-
-
-@db_group.command()
+@app.command(group="db")
 async def migrate():
     """Run database migrations."""
-    click.echo("Running migrations...")
+    print("Running migrations...")
     await asyncio.sleep(1)
-    click.echo("✅ Migrations complete!")
+    print("✅ Migrations complete!")
 
 
-@db_group.command()
+@app.command(group="db")
 @inject
 async def backup(task_service: TaskService):
     """Backup the database."""
     tasks = task_service.list_all()
-    click.echo(f"Backing up {len(tasks)} tasks...")
+    print(f"Backing up {len(tasks)} tasks...")
     await asyncio.sleep(0.5)
-    click.echo("✅ Backup complete!")
+    print("✅ Backup complete!")
 
 
 # Event handlers (these run during CLI commands)

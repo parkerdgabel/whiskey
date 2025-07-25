@@ -1,6 +1,6 @@
 # Whiskey CLI Extension
 
-Natural CLI creation using Whiskey's IoC system.
+Framework-agnostic CLI creation using Whiskey's IoC system.
 
 ## Installation
 
@@ -11,7 +11,6 @@ pip install whiskey-cli
 ## Quick Start
 
 ```python
-import click
 from whiskey import Application, inject
 from whiskey_cli import cli_extension
 
@@ -29,12 +28,12 @@ app.container[GreetingService] = GreetingService()
 
 # Create a CLI command with dependency injection
 @app.command()
-@click.argument("name")
+@app.argument("name")
 @inject
 def hello(name: str, greeting: GreetingService):
     """Say hello to someone."""
     message = greeting.greet(name)
-    click.echo(message)
+    print(message)
 
 # Run the CLI
 if __name__ == "__main__":
@@ -51,13 +50,30 @@ Use the `@app.command()` decorator to register CLI commands:
 @app.command()
 def status():
     """Show application status."""
-    click.echo("Status: OK")
+    print("Status: OK")
 
 # Custom command name
 @app.command(name="db-migrate")
 def migrate():
     """Run database migrations."""
-    click.echo("Running migrations...")
+    print("Running migrations...")
+```
+
+### Arguments and Options
+
+Use Whiskey's own decorators for CLI parameters:
+
+```python
+@app.command()
+@app.argument("filename")
+@app.argument("count", type=int)
+@app.option("--verbose", "-v", is_flag=True, help="Verbose output")
+@app.option("--output", "-o", default="output.txt", help="Output file")
+def process(filename: str, count: int, verbose: bool, output: str):
+    """Process a file."""
+    if verbose:
+        print(f"Processing {filename} {count} times")
+    print(f"Output will be written to {output}")
 ```
 
 ### Dependency Injection
@@ -66,11 +82,19 @@ Commands can use `@inject` to automatically resolve dependencies:
 
 ```python
 @app.command()
+@app.argument("user_id", type=int)
 @inject
-async def process(data_service: DataService, logger: Logger):
-    """Process data with injected services."""
-    await data_service.process()
-    logger.info("Processing complete")
+async def get_user(user_id: int, db: Database, cache: Cache):
+    """Get user details."""
+    # Check cache first
+    cached = await cache.get(f"user:{user_id}")
+    if cached:
+        return cached
+        
+    # Fetch from database
+    user = await db.users.find(user_id)
+    await cache.set(f"user:{user_id}", user)
+    return user
 ```
 
 ### Command Groups
@@ -78,24 +102,19 @@ async def process(data_service: DataService, logger: Logger):
 Organize related commands into groups:
 
 ```python
-# Create a group
-db_group = app.group("database")
-
-@db_group.command()
+# Using the group parameter
+@app.command(group="database")
 def migrate():
     """Run migrations."""
     pass
 
-@db_group.command()
+@app.command(group="database")
 def backup():
     """Backup database."""
     pass
 
-# Or use the group parameter
-@app.command(group="admin")
-def users():
-    """Manage users."""
-    pass
+# Or create a group explicitly
+db_group = app.group("database", "Database management commands")
 ```
 
 ### Async Commands
@@ -107,26 +126,7 @@ Both sync and async commands are supported:
 async def fetch_data():
     """Async command example."""
     await asyncio.sleep(1)
-    click.echo("Data fetched!")
-```
-
-### Click Integration
-
-All Click decorators work seamlessly:
-
-```python
-@app.command()
-@click.argument("name")
-@click.option("--count", default=1, help="Number of greetings")
-@click.option("--shout", is_flag=True, help="Shout the greeting")
-@inject
-def greet(name: str, count: int, shout: bool, service: GreetingService):
-    """Greet someone multiple times."""
-    for _ in range(count):
-        message = service.greet(name)
-        if shout:
-            message = message.upper()
-        click.echo(message)
+    print("Data fetched!")
 ```
 
 ### Application Lifespan
@@ -151,18 +151,31 @@ Commands can emit events that handlers can respond to:
 
 ```python
 @app.command()
+@app.argument("name")
 @inject
 async def create_user(name: str, user_service: UserService):
     """Create a new user."""
     user = user_service.create(name)
     await app.emit("user.created", {"id": user.id, "name": user.name})
-    click.echo(f"Created user: {user.name}")
+    print(f"Created user: {user.name}")
 
 @app.on("user.created")
 async def log_user_creation(data: dict):
     """Log user creation events."""
     print(f"User created: {data}")
 ```
+
+## Framework-Agnostic Design
+
+The CLI extension provides its own API for defining commands, arguments, and options. This keeps your code independent of any specific CLI framework:
+
+- `@app.command()` - Register a command
+- `@app.argument()` - Add positional arguments
+- `@app.option()` - Add optional flags and parameters
+- `app.group()` - Create command groups
+- `app.run_cli()` - Run the CLI application
+
+Under the hood, the extension currently uses Click, but your code doesn't need to know about it. The extension could be reimplemented with any CLI framework without changing your application code.
 
 ## Complete Example
 

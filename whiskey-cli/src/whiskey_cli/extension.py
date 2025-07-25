@@ -5,11 +5,23 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
-from typing import Any, Callable, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
 
 import click
 
 from whiskey import Application
+
+
+@dataclass
+class CommandMetadata:
+    """Metadata for a CLI command."""
+    func: Callable
+    name: str
+    description: Optional[str] = None
+    group: Optional[str] = None
+    arguments: List[Dict[str, Any]] = field(default_factory=list)
+    options: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class CLIManager:
@@ -18,100 +30,79 @@ class CLIManager:
     def __init__(self, app: Application):
         self.app = app
         self.cli_group = click.Group()
-        self.commands: Dict[str, click.Command] = {}
+        self.commands: Dict[str, CommandMetadata] = {}
         self.groups: Dict[str, click.Group] = {}
     
-    def add_command(
-        self, 
-        func: Callable,
-        name: Optional[str] = None,
-        group: Optional[str] = None,
-        **kwargs
-    ) -> None:
+    def add_command(self, metadata: CommandMetadata) -> None:
         """Add a command to the CLI."""
-        # Get command name
-        cmd_name = name or func.__name__.replace("_", "-")
+        # Build Click command from metadata
+        func = metadata.func
         
-        # Store the original function before Click wraps it
-        original_func = func
+        # Add Click decorators for arguments and options
+        for arg in reversed(metadata.arguments):
+            func = click.argument(arg["name"], **{k: v for k, v in arg.items() if k != "name"})(func)
+            
+        for opt in reversed(metadata.options):
+            opt_args = opt["name"]
+            opt_kwargs = {k: v for k, v in opt.items() if k != "name"}
+            
+            # Handle list of option names (e.g., ["-v", "--verbose"])
+            if isinstance(opt_args, list):
+                func = click.option(*opt_args, **opt_kwargs)(func)
+            else:
+                func = click.option(opt_args, **opt_kwargs)(func)
         
-        # Create click command
-        cmd = click.command(name=cmd_name, **kwargs)(func)
+        # Create Click command
+        cmd = click.command(
+            name=metadata.name,
+            help=metadata.description
+        )(func)
         
-        # Use the original function for our wrapper, not Click's wrapped version
-        original_callback = original_func
-        
-        # Check if the original function expects click context
-        sig = inspect.signature(original_callback)
-        expects_context = any(
-            param.annotation == click.Context or param.name == "ctx"
-            for param in sig.parameters.values()
-        )
-        
-        # Determine if this is an async command
+        # Wrap to handle async and DI
+        original_callback = metadata.func
         is_async = asyncio.iscoroutinefunction(original_callback)
         
         if is_async or hasattr(original_callback, "__wrapped__"):
-            # For async commands or commands with @inject, create async wrapper
+            # Async wrapper
             @functools.wraps(original_callback)
-            @click.pass_context
-            async def async_wrapped_callback(ctx: click.Context, *args, **kwargs):
+            async def async_callback(*args, **kwargs):
                 async with self.app.lifespan():
-                    # Make app available for injection
                     self.app.container[Application] = self.app
-                    
-                    # Call the command
-                    if hasattr(original_callback, "__wrapped__"):
-                        # Command uses @inject - let it handle the call
-                        return await original_callback(*args, **kwargs)
-                    else:
-                        # No injection
-                        if expects_context:
-                            return await original_callback(ctx, *args, **kwargs)
-                        else:
-                            return await original_callback(*args, **kwargs)
+                    return await original_callback(*args, **kwargs)
             
-            # Convert async to sync for Click
             @functools.wraps(original_callback)
-            @click.pass_context  
-            def wrapped_callback(ctx: click.Context, *args, **kwargs):
-                return asyncio.run(async_wrapped_callback(ctx, *args, **kwargs))
+            def wrapped_callback(*args, **kwargs):
+                return asyncio.run(async_callback(*args, **kwargs))
                 
             cmd.callback = wrapped_callback
         else:
-            # For sync commands without @inject, simpler wrapper
+            # Sync wrapper
             @functools.wraps(original_callback)
-            @click.pass_context
-            def wrapped_callback(ctx: click.Context, *args, **kwargs):
-                # Run lifespan synchronously
+            def wrapped_callback(*args, **kwargs):
+                # Setup app context
                 async def setup():
                     async with self.app.lifespan():
                         self.app.container[Application] = self.app
-                
                 asyncio.run(setup())
                 
-                # Call sync command
-                if expects_context:
-                    return original_callback(ctx, *args, **kwargs)
-                else:
-                    return original_callback(*args, **kwargs)
-                    
+                return original_callback(*args, **kwargs)
+                
             cmd.callback = wrapped_callback
         
         # Add to appropriate group
-        if group:
-            if group not in self.groups:
-                self.groups[group] = click.Group(group)
-                self.cli_group.add_command(self.groups[group])
-            self.groups[group].add_command(cmd)
+        if metadata.group:
+            if metadata.group not in self.groups:
+                self.groups[metadata.group] = click.Group(metadata.group)
+                self.cli_group.add_command(self.groups[metadata.group])
+            self.groups[metadata.group].add_command(cmd)
         else:
             self.cli_group.add_command(cmd)
             
-        self.commands[cmd_name] = cmd
+        self.commands[metadata.name] = metadata
     
-    def create_group(self, name: str, **kwargs) -> click.Group:
+    def create_group(self, name: str, description: Optional[str] = None) -> Any:
         """Create a command group."""
-        group = click.Group(name, **kwargs)
+        group = click.Group(name, help=description)
         self.groups[name] = group
         self.cli_group.add_command(group)
         return group
@@ -120,21 +111,23 @@ class CLIManager:
 def cli_extension(app: Application) -> None:
     """CLI extension that adds command-line interface capabilities.
     
-    Adds:
-    - @app.command decorator for registering CLI commands
-    - @app.group decorator for creating command groups
-    - app.cli property to access the Click group
-    - app.run_cli() method to run the CLI
+    This extension provides a framework-agnostic API for building CLIs:
+    - @app.command() decorator with argument() and option() methods
+    - @app.argument() and @app.option() for adding parameters
+    - app.group() for creating command groups
+    - app.run_cli() to run the CLI
     
     Example:
         app = Application()
         app.use(cli_extension)
         
         @app.command()
+        @app.argument("name")
+        @app.option("--greeting", default="Hello")
         @inject
-        async def hello(name: str, greeting_service: GreetingService):
-            message = await greeting_service.greet(name)
-            click.echo(message)
+        async def greet(name: str, greeting: str, service: GreetingService):
+            message = service.create_message(greeting, name)
+            print(message)
             
         app.run_cli()
     """
@@ -145,53 +138,173 @@ def cli_extension(app: Application) -> None:
     app.cli_manager = manager
     app.cli = manager.cli_group
     
-    # Add command decorator
+    # Current command being built
+    _current_command: Optional[CommandMetadata] = None
+    
+    # Track pending commands that are being built
+    _pending_commands: Dict[str, CommandMetadata] = {}
+    
     def command(
         name: Optional[str] = None,
-        group: Optional[str] = None,
-        **kwargs
+        description: Optional[str] = None,
+        group: Optional[str] = None
     ):
         """Decorator to register a CLI command.
         
         Args:
             name: Command name (defaults to function name)
+            description: Command description (defaults to docstring)
             group: Group to add command to
-            **kwargs: Additional arguments for click.command
             
         Example:
             @app.command()
-            @inject
-            async def process(data_service: DataService):
-                await data_service.process()
+            def hello():
+                print("Hello!")
                 
             @app.command(name="db-migrate", group="database")
             async def migrate():
-                click.echo("Running migrations...")
+                print("Running migrations...")
         """
         def decorator(func: Callable) -> Callable:
-            manager.add_command(func, name, group, **kwargs)
+            # Get command info
+            cmd_name = name or func.__name__.replace("_", "-")
+            cmd_description = description or func.__doc__
+            
+            # Create metadata
+            metadata = CommandMetadata(
+                func=func,
+                name=cmd_name,
+                description=cmd_description,
+                group=group
+            )
+            
+            # Store in pending for argument/option decorators
+            _pending_commands[cmd_name] = metadata
+            
+            # Register a wrapper that will finalize the command
+            def wrapper(*args, **kwargs):
+                # First time called, finalize and register
+                if cmd_name in _pending_commands:
+                    manager.add_command(_pending_commands[cmd_name])
+                    del _pending_commands[cmd_name]
+                return func(*args, **kwargs)
+            
+            # Copy attributes
+            functools.update_wrapper(wrapper, func)
+            
+            # Immediately register if no arguments/options will be added
+            # This happens after a short delay to allow decorators to be applied
+            async def delayed_register():
+                await asyncio.sleep(0.001)
+                if cmd_name in _pending_commands:
+                    manager.add_command(_pending_commands[cmd_name])
+                    del _pending_commands[cmd_name]
+            
+            try:
+                asyncio.create_task(delayed_register())
+            except RuntimeError:
+                # No event loop, register immediately
+                if cmd_name in _pending_commands:
+                    manager.add_command(_pending_commands[cmd_name])
+                    del _pending_commands[cmd_name]
+            
+            return wrapper
+            
+        return decorator
+    
+    def argument(name: str, **kwargs):
+        """Add a positional argument to a command.
+        
+        Args:
+            name: Argument name
+            **kwargs: Additional argument configuration
+            
+        Example:
+            @app.command()
+            @app.argument("filename")
+            @app.argument("count", type=int)
+            def process(filename: str, count: int):
+                pass
+        """
+        def decorator(func: Callable) -> Callable:
+            # Find the command metadata in pending commands
+            cmd_name = getattr(func, '__name__', str(func)).replace("_", "-")
+            
+            # Check if it's a wrapped function
+            if hasattr(func, '__wrapped__'):
+                cmd_name = func.__wrapped__.__name__.replace("_", "-")
+            
+            if cmd_name in _pending_commands:
+                metadata = _pending_commands[cmd_name]
+                metadata.arguments.append({"name": name, **kwargs})
+            
             return func
         return decorator
     
-    # Add group decorator
-    def group(name: str, **kwargs):
-        """Create a command group.
+    def option(name: str, **kwargs):
+        """Add an option to a command.
         
-        Example:
-            db_group = app.group("database")
+        Args:
+            name: Option name (e.g., "--verbose" or "-v/--verbose") 
+            **kwargs: Additional option configuration
             
-            @db_group.command()
-            async def migrate():
+        Example:
+            @app.command()
+            @app.option("--count", default=1, help="Number of times")
+            @app.option("-v/--verbose", is_flag=True)
+            def hello(count: int, verbose: bool):
                 pass
         """
-        return manager.create_group(name, **kwargs)
+        def decorator(func: Callable) -> Callable:
+            # Find the command metadata in pending commands
+            cmd_name = getattr(func, '__name__', str(func)).replace("_", "-")
+            
+            # Check if it's a wrapped function
+            if hasattr(func, '__wrapped__'):
+                cmd_name = func.__wrapped__.__name__.replace("_", "-")
+            
+            if cmd_name in _pending_commands:
+                metadata = _pending_commands[cmd_name]
+                
+                # Handle shorthand like "-v/--verbose"
+                if "/" in name:
+                    parts = name.split("/")
+                    opt_args = []
+                    for part in parts:
+                        opt_args.append(part)
+                    metadata.options.append({"name": opt_args, **kwargs})
+                else:
+                    metadata.options.append({"name": name, **kwargs})
+            
+            return func
+        return decorator
     
-    # Add decorators to app
+    def group(name: str, description: Optional[str] = None):
+        """Create a command group.
+        
+        Args:
+            name: Group name
+            description: Group description
+            
+        Returns:
+            A group object that can have commands added to it
+            
+        Example:
+            db = app.group("database", "Database commands")
+            
+            @app.command(group="database")
+            def migrate():
+                pass
+        """
+        return manager.create_group(name, description)
+    
+    # Add methods to app
     app.add_decorator("command", command)
-    app.add_decorator("group", group)
+    app.add_decorator("argument", argument)
+    app.add_decorator("option", option)
+    app.group = group
     
-    # Add run_cli method
-    def run_cli(args: Optional[list] = None) -> None:
+    def run_cli(args: Optional[List[str]] = None) -> None:
         """Run the CLI application.
         
         Args:
@@ -201,47 +314,32 @@ def cli_extension(app: Application) -> None:
     
     app.run_cli = run_cli
     
-    # Register built-in commands if enabled
+    # Register built-in commands
     @app.on_configure
     async def register_builtin_commands():
-        # Add a default help command that shows app info
-        @app.command(name="app-info")
-        async def app_info():
+        @app.command(name="app-info", description="Show application information")
+        def app_info():
             """Show application information."""
-            click.echo(f"Application: {app.config.name}")
-            click.echo(f"Debug mode: {app.config.debug}")
+            print(f"Application: {app.config.name}")
+            print(f"Debug mode: {app.config.debug}")
             
-            # Show registered components
+            # Show components
             components = list(app._component_metadata.keys())
             if components:
-                click.echo(f"\nComponents ({len(components)}):")
+                print(f"\nComponents ({len(components)}):")
                 for comp in components:
-                    metadata = app._component_metadata[comp]
-                    click.echo(f"  - {comp.__name__}")
-                    if metadata.provides:
-                        click.echo(f"    Provides: {', '.join(metadata.provides)}")
-                    if metadata.critical:
-                        click.echo(f"    Critical: Yes")
-            
-            # Show event handlers
-            if app._event_handlers:
-                click.echo(f"\nEvent handlers:")
-                for event, handlers in app._event_handlers.items():
-                    click.echo(f"  - {event}: {len(handlers)} handler(s)")
+                    print(f"  - {comp.__name__}")
     
-    # Support running the CLI from app.run() if no main function
+    # Enhanced run method
     original_run = app.run
     
     def enhanced_run(main: Optional[Callable] = None) -> None:
         """Enhanced run that can run CLI if no main provided."""
         if main is None and hasattr(app, '_main_func'):
-            # Use registered main
             original_run()
         elif main is None and hasattr(app, 'cli_manager'):
-            # Run as CLI app
             app.run_cli()
         else:
-            # Normal run
             original_run(main)
     
     app.run = enhanced_run
