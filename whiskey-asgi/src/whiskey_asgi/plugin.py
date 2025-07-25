@@ -19,8 +19,11 @@ class ASGIPlugin(BasePlugin):
 
     def register(self, container: Container) -> None:
         """Register ASGI services with the container."""
-        # Register ASGIApp as a singleton
-        container.register_singleton(ASGIApp, ASGIApp)
+        # Register ASGIApp as a factory that gets the Application instance
+        def create_asgi_app(app: Application) -> ASGIApp:
+            return ASGIApp(app)
+        
+        container.register_singleton(ASGIApp, factory=create_asgi_app)
 
     def initialize(self, app: Application) -> None:
         """Initialize the plugin with the application."""

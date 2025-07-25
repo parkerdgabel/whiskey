@@ -1,10 +1,7 @@
-"""Basic ASGI application example using Whiskey."""
+"""ASGI application example using the builder pattern."""
 
-import asyncio
-from typing import Dict
-
-from whiskey import Application, ApplicationConfig, inject, singleton
-from whiskey_asgi import ASGIApp, Request, Response, middleware
+from whiskey import inject, singleton
+from whiskey_asgi import asgi, Request, Response, middleware
 
 
 # Service definitions
@@ -20,22 +17,16 @@ class GreetingService:
         return f"Hello, {name}! (Request #{self._counter})"
 
 
-# Create the Whiskey application with ASGI plugin
-app = Application(ApplicationConfig(
-    name="WhiskeyASGIExample",
-    plugins=["whiskey-asgi"],  # Load the ASGI plugin
-))
-
-# Get the ASGI app from the container
-async def get_asgi():
-    return await app.container.resolve(ASGIApp)
-
-# For module-level usage, we need to run async code
-asgi = asyncio.run(get_asgi())
+# Build the ASGI application
+app = (
+    asgi()
+    .configure(lambda c: setattr(c, "name", "WhiskeyASGIExample"))
+    .service(GreetingService, implementation=GreetingService)
+)
 
 
-# Define routes
-@asgi.get("/")
+# Define routes using decorators
+@app.get("/")
 async def index(request: Request, response: Response) -> None:
     """Home page."""
     await response.html("""
@@ -49,14 +40,14 @@ async def index(request: Request, response: Response) -> None:
     """)
 
 
-@asgi.get("/hello/{name}")
+@app.get("/hello/{name}")
 async def hello(request: Request, response: Response) -> None:
     """Greet a user by name."""
     name = request.route_params.get("name", "Anonymous")  # type: ignore
     await response.text(f"Hello, {name}!")
 
 
-@asgi.get("/api/data")
+@app.get("/api/data")
 async def api_data(request: Request, response: Response) -> None:
     """Return JSON data."""
     data = {
@@ -68,8 +59,7 @@ async def api_data(request: Request, response: Response) -> None:
     await response.json(data)
 
 
-# Example with dependency injection
-@asgi.get("/inject")
+@app.get("/inject")
 @inject
 async def injected_handler(
     request: Request,
@@ -93,13 +83,29 @@ def logging_middleware(handler):
     return wrapper
 
 
-asgi.add_middleware(logging_middleware)
+# Add startup/shutdown handlers
+async def startup():
+    print("🚀 Application starting up...")
+
+
+async def shutdown():
+    print("👋 Application shutting down...")
+
+
+# Build the final ASGI application
+asgi_app = (
+    app
+    .middleware(logging_middleware)
+    .on_startup(startup)
+    .on_shutdown(shutdown)
+    .build()
+)
 
 
 # Run with uvicorn
 if __name__ == "__main__":
     # To run this example:
     # pip install uvicorn
-    # python basic_app.py
+    # python builder_example.py
     import uvicorn
-    uvicorn.run(asgi, host="127.0.0.1", port=8000)
+    uvicorn.run(asgi_app, host="127.0.0.1", port=8000)

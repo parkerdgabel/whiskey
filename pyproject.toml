@@ -16,7 +16,8 @@ dependencies = [
 [project.optional-dependencies]
 ai = ["whiskey-ai"]
 web = ["whiskey-asgi"]
-all = ["whiskey-ai", "whiskey-asgi"]
+cli = ["whiskey-cli"]
+all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli"]
 
 [tool.uv]
 dev-dependencies = [
@@ -33,6 +34,7 @@ members = ["whiskey-*"]
 [tool.uv.sources]
 whiskey-ai = { workspace = true }
 whiskey-asgi = { workspace = true }
+whiskey-cli = { workspace = true }
 
 [tool.ruff]
 line-length = 100

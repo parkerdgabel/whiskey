@@ -1,0 +1,20 @@
+[project]
+name = "whiskey-cli"
+version = "0.1.0"
+description = "CLI framework plugin for Whiskey"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "whiskey>=0.1.0",
+    "click>=8.0",
+]
+
+[project.entry-points."whiskey.plugins"]
+cli = "whiskey_cli.plugin:CLIPlugin"
+
+[tool.uv.sources]
+whiskey = { workspace = true }
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"

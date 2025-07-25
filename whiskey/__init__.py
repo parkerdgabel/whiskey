@@ -14,6 +14,7 @@ from whiskey.core.discovery import autodiscover, discoverable, scope
 from whiskey.core.application import Application, ApplicationConfig
 from whiskey.core.events import Event, EventBus
 from whiskey.core.commands import Command, Query, CommandBus
+from whiskey.core.bootstrap import ApplicationBuilder, standalone
 
 # Plugin exports
 from whiskey.plugins import WhiskeyPlugin, BasePlugin
@@ -37,6 +38,8 @@ __all__ = [
     # IoC
     "Application",
     "ApplicationConfig",
+    "ApplicationBuilder",
+    "standalone",
     "Event",
     "EventBus",
     "Command",
