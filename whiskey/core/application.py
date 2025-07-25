@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import signal
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -267,6 +268,38 @@ class Application:
         def decorator(func: Callable) -> Callable:
             self._event_handlers[event].append(func)
             return func
+        return decorator
+    
+    def emits(self, event: str):
+        """Decorator that emits an event with the function's return value.
+        
+        Example:
+            @app.emits("user.created")
+            async def create_user(name: str) -> dict:
+                user = await db.create_user(name)
+                return {"id": user.id, "name": user.name}
+                # Automatically emits "user.created" with the returned dict
+        """
+        def decorator(func: Callable) -> Callable:
+            if asyncio.iscoroutinefunction(func):
+                @functools.wraps(func)
+                async def async_wrapper(*args, **kwargs):
+                    result = await func(*args, **kwargs)
+                    if result is not None:
+                        await self.emit(event, result)
+                    return result
+                return async_wrapper
+            else:
+                @functools.wraps(func)
+                def sync_wrapper(*args, **kwargs):
+                    result = func(*args, **kwargs)
+                    if result is not None:
+                        # We need to emit asynchronously but we're in a sync context
+                        # Create a task to emit the event
+                        loop = asyncio.get_event_loop()
+                        loop.create_task(self.emit(event, result))
+                    return result
+                return sync_wrapper
         return decorator
     
     async def emit(self, event: str, data: Any = None) -> None:
