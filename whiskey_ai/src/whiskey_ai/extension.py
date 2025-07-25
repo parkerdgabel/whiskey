@@ -259,11 +259,11 @@ class AgentManager:
 
 
 # Conversation scope
-from whiskey.core.scopes import Scope
+from whiskey.core.scopes import ContextVarScope
 
 
-class ConversationScope(Scope):
-    """Scope for conversation/chat sessions."""
+class ConversationScope(ContextVarScope):
+    """Scope for conversation/chat sessions - isolated per async context."""
     
     def __init__(self):
         super().__init__("conversation")

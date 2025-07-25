@@ -547,15 +547,15 @@ def asgi_extension(app: Application) -> None:
     app.asgi = manager.create_asgi_handler()
     
     # Add request and session scopes to container
-    from whiskey.core.scopes import Scope
+    from whiskey.core.scopes import ContextVarScope
     
-    class RequestScope(Scope):
-        """Scope for HTTP requests."""
+    class RequestScope(ContextVarScope):
+        """Scope for HTTP requests - isolated per async context."""
         def __init__(self):
             super().__init__("request")
     
-    class SessionScope(Scope):
-        """Scope for HTTP sessions."""
+    class SessionScope(ContextVarScope):
+        """Scope for HTTP sessions - isolated per async context."""
         def __init__(self):
             super().__init__("session")
     

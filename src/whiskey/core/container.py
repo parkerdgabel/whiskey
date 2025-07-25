@@ -15,6 +15,11 @@ _current_container: ContextVar[Container | None] = ContextVar(
     "current_container", default=None
 )
 
+# Active scopes context
+_active_scopes: ContextVar[dict[str, Any]] = ContextVar(
+    "active_scopes", default={}
+)
+
 
 class Container:
     """A simple dependency injection container with dict-like interface.
@@ -40,6 +45,10 @@ class Container:
         self._factories: dict[type, Callable] = {}
         self._singletons: dict[type, Any] = {}
         self._scopes: dict[str, Any] = {}
+        self._service_scopes: dict[type, str] = {}  # Maps service type to scope name
+        
+        # Register built-in scopes
+        # Note: singleton and transient are handled specially, not as scope instances
         
     def __setitem__(self, service_type: type[T], value: T | type[T] | Callable[..., T]) -> None:
         """Register a service, class, or factory."""
@@ -84,22 +93,47 @@ class Container:
         # Check singletons first
         if service_type in self._singletons:
             return cast(T, self._singletons[service_type])
+        
+        # Check if service has a scope
+        scope_name = self._service_scopes.get(service_type)
+        if scope_name and scope_name != "transient":
+            # Get active scopes
+            active_scopes = _active_scopes.get()
             
+            # Handle singleton scope specially
+            if scope_name == "singleton":
+                if service_type not in self._singletons:
+                    instance = await self._create_or_resolve_instance(service_type)
+                    self._singletons[service_type] = instance
+                return cast(T, self._singletons[service_type])
+            
+            # Check if scope is active
+            if scope_name in active_scopes:
+                scope = active_scopes[scope_name]
+                # Check if instance exists in scope
+                instance = scope.get(service_type)
+                if instance is not None:
+                    return cast(T, instance)
+                
+                # Create instance and store in scope
+                instance = await self._create_or_resolve_instance(service_type)
+                scope.set(service_type, instance)
+                return cast(T, instance)
+            else:
+                # Scope not active, fall through to transient behavior
+                pass
+        
+        # Default transient behavior or no scope
+        return await self._create_or_resolve_instance(service_type)
+    
+    async def _create_or_resolve_instance(self, service_type: type[T]) -> T:
+        """Create or resolve an instance without scope management."""
         # Check registered instances/classes
         if service_type in self._services:
             value = self._services[service_type]
             if isinstance(value, type):
-                # Check if it's marked as singleton
-                if hasattr(value, "_singleton") and value._singleton:
-                    # Check if we already have an instance
-                    if service_type not in self._singletons:
-                        # Create and cache the singleton
-                        instance = await self._create_instance(value)
-                        self._singletons[service_type] = instance
-                    return cast(T, self._singletons[service_type])
-                else:
-                    # It's a class, instantiate it
-                    return await self._create_instance(value)
+                # It's a class, instantiate it
+                return await self._create_instance(value)
             return cast(T, value)
             
         # Check factories
@@ -150,6 +184,9 @@ class Container:
             name: Optional name for named services
             factory: Optional factory function
         """
+        # Store scope information
+        self._service_scopes[service_type] = scope
+        
         # For now, ignore name - we'll add named services later if needed
         if factory is not None:
             self._factories[service_type] = factory
@@ -157,12 +194,9 @@ class Container:
             if implementation is None:
                 # Mark class for lazy singleton
                 self._services[service_type] = service_type
-                if inspect.isclass(service_type):
-                    service_type._singleton = True
             elif isinstance(implementation, type):
                 # Mark class for lazy singleton
                 self._services[service_type] = implementation
-                implementation._singleton = True
             else:
                 # Register existing instance as singleton
                 self._singletons[service_type] = implementation
@@ -331,6 +365,58 @@ class Container:
     def get_scope(self, name: str) -> Any:
         """Get a registered scope."""
         return self._scopes.get(name)
+    
+    def enter_scope(self, name: str) -> Any:
+        """Enter a scope, making it active.
+        
+        Returns the scope instance for use in with statements.
+        """
+        # Get or create scope instance
+        if name not in self._scopes:
+            raise KeyError(f"Scope '{name}' not registered")
+        
+        scope_class = self._scopes[name]
+        if inspect.isclass(scope_class):
+            # Check if it needs a name parameter
+            sig = inspect.signature(scope_class)
+            if 'name' in sig.parameters:
+                scope_instance = scope_class(name)
+            else:
+                scope_instance = scope_class()
+        else:
+            scope_instance = scope_class
+        
+        # Add to active scopes
+        active_scopes = _active_scopes.get().copy()
+        active_scopes[name] = scope_instance
+        _active_scopes.set(active_scopes)
+        
+        return scope_instance
+    
+    def exit_scope(self, name: str) -> None:
+        """Exit a scope, removing it from active scopes."""
+        active_scopes = _active_scopes.get()
+        if name in active_scopes:
+            # Get the scope and clear it
+            scope = active_scopes[name]
+            if hasattr(scope, 'clear'):
+                scope.clear()
+            
+            # Remove from active scopes
+            new_scopes = active_scopes.copy()
+            del new_scopes[name]
+            _active_scopes.set(new_scopes)
+    
+    def scope(self, name: str):
+        """Create a scope context manager.
+        
+        Example:
+            async with container.scope("request"):
+                # All services resolved here will be request-scoped
+                service = await container.resolve(MyService)
+        """
+        from whiskey.core.scopes import ScopeManager
+        return ScopeManager(self, name)
 
 
 def get_current_container() -> Container | None:
