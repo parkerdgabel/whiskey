@@ -1,14 +1,10 @@
 """Basic ASGI application example using Whiskey."""
 
-import asyncio
-from typing import Dict
-
-from whiskey import Application, ApplicationConfig, inject, singleton
-from whiskey_asgi import ASGIApp, Request, Response, middleware
+from whiskey import Application, inject
+from whiskey_asgi import asgi_extension, Request
 
 
 # Service definitions
-@singleton
 class GreetingService:
     """A simple service that generates greetings."""
     
@@ -20,26 +16,19 @@ class GreetingService:
         return f"Hello, {name}! (Request #{self._counter})"
 
 
-# Create the Whiskey application and extend with ASGI
-from whiskey_asgi import asgi_extension
+# Create the Whiskey application with ASGI extension
+app = Application()
+app.use(asgi_extension)
 
-app = Application(ApplicationConfig(
-    name="WhiskeyASGIExample",
-)).extend(asgi_extension)
-
-# Get the ASGI app from the container
-async def get_asgi():
-    return await app.container.resolve(ASGIApp)
-
-# For module-level usage, we need to run async code
-asgi = asyncio.run(get_asgi())
+# Register service as singleton
+app.container[GreetingService] = GreetingService()
 
 
 # Define routes
-@asgi.get("/")
-async def index(request: Request, response: Response) -> None:
+@app.get("/")
+async def index():
     """Home page."""
-    await response.html("""
+    html = """
     <h1>Whiskey ASGI Example</h1>
     <p>Welcome to the Whiskey ASGI framework!</p>
     <ul>
@@ -47,54 +36,54 @@ async def index(request: Request, response: Response) -> None:
         <li><a href="/api/data">JSON API</a></li>
         <li><a href="/inject">Dependency injection example</a></li>
     </ul>
-    """)
+    """
+    return html, 200  # Can return HTML with status
 
 
-@asgi.get("/hello/{name}")
-async def hello(request: Request, response: Response) -> None:
+@app.get("/hello/{name}")
+async def hello(name: str):
     """Greet a user by name."""
-    name = request.route_params.get("name", "Anonymous")  # type: ignore
-    await response.text(f"Hello, {name}!")
+    return f"Hello, {name}!"
 
 
-@asgi.get("/api/data")
-async def api_data(request: Request, response: Response) -> None:
+@app.get("/api/data")
+@inject
+async def api_data(request: Request):
     """Return JSON data."""
-    data = {
+    return {
         "message": "This is JSON data",
         "method": request.method,
         "path": request.path,
-        "query_params": dict(request.query_params),
+        "headers": dict(request.headers),
     }
-    await response.json(data)
 
 
 # Example with dependency injection
-@asgi.get("/inject")
+@app.get("/inject")
 @inject
-async def injected_handler(
-    request: Request,
-    response: Response,
-    greeting_service: GreetingService,
-) -> None:
+async def injected_handler(request: Request, greeting_service: GreetingService):
     """Handler that uses dependency injection."""
-    name = request.query_param("name", "Whiskey User")
+    # Get name from query string
+    name = "Whiskey User"
+    if request.query_string:
+        params = {}
+        for item in request.query_string.decode().split("&"):
+            if "=" in item:
+                k, v = item.split("=", 1)
+                params[k] = v
+        name = params.get("name", name)
+    
     greeting = greeting_service.greet(name)
-    await response.text(greeting)
+    return {"greeting": greeting}
 
 
 # Add middleware
-@middleware
-def logging_middleware(handler):
+@app.middleware()
+async def logging_middleware(request: Request, call_next):
     """Simple logging middleware."""
-    async def wrapper(request: Request, response: Response):
-        print(f"[{request.method}] {request.path}")
-        await handler(request, response)
-        print(f"[{response.status}] Response sent")
-    return wrapper
-
-
-asgi.add_middleware(logging_middleware)
+    print(f"[{request.method}] {request.path}")
+    response = await call_next(request)
+    return response
 
 
 # Run with uvicorn
@@ -102,5 +91,4 @@ if __name__ == "__main__":
     # To run this example:
     # pip install uvicorn
     # python basic_app.py
-    import uvicorn
-    uvicorn.run(asgi, host="127.0.0.1", port=8000)
+    app.run_asgi(host="127.0.0.1", port=8000)

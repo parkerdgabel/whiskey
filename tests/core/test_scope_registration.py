@@ -3,7 +3,7 @@
 import pytest
 
 from whiskey import Container, ContextVarScope
-from whiskey.core.exceptions import ScopeError
+# ScopeError exception was removed
 
 
 class TestDynamicScopeRegistration:
@@ -58,7 +58,7 @@ class TestDynamicScopeRegistration:
         container.register_scope("duplicate", CustomScope())
         
         # Try to register again
-        with pytest.raises(ScopeError, match="already registered"):
+        with pytest.raises(ValueError, match="already registered"):
             container.register_scope("duplicate", CustomScope())
     
     def test_extension_scope_registration(self):

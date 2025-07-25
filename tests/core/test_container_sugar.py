@@ -4,7 +4,6 @@ import asyncio
 import pytest
 
 from whiskey import Container, singleton, provide
-from whiskey.core.exceptions import ServiceNotFoundError
 
 
 class SampleService:
@@ -39,7 +38,7 @@ class TestContainerSyntacticSugar:
     
     def test_getitem_not_found(self, container):
         """Test [] access raises for missing service."""
-        with pytest.raises(ServiceNotFoundError):
+        with pytest.raises(KeyError):
             _ = container[str]
     
     def test_get_method(self, container):
