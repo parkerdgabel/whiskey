@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
-from typing import Any, Callable, TypeVar, get_args, get_origin
+from typing import Any, Callable, TypeVar
 
+from whiskey.core.conditions import Condition, evaluate_condition
 from whiskey.core.container import Container, get_current_container
 
 T = TypeVar("T")
@@ -80,17 +81,19 @@ def set_default_container(container: Container) -> None:
     _default_container = container
 
 
-def provide(cls: type[T]) -> type[T]:
+def provide(cls: type[T] | None = None, *, name: str | None = None, condition: Condition | bool | None = None) -> type[T] | Callable[[type[T]], type[T]]:
     """Register a class with the current or default container.
     
     This decorator registers a class for dependency injection with transient scope
     (new instance created for each resolution).
     
     Args:
-        cls: The class to register
+        cls: The class to register (when used without parentheses)
+        name: Optional name for named dependencies
+        condition: Optional condition for registration
         
     Returns:
-        The original class (unchanged)
+        The original class (unchanged) or decorator function
         
     Examples:
         >>> @provide
@@ -99,27 +102,51 @@ def provide(cls: type[T]) -> type[T]:
         ...         # Send email
         ...         pass
         
+        >>> @provide(name="smtp")
+        ... class SMTPEmailService:
+        ...     def send(self, to: str, message: str):
+        ...         # Send via SMTP
+        ...         pass
+        
+        >>> @provide(condition=lambda: os.getenv("ENV") == "dev")
+        ... class DevEmailService:
+        ...     def send(self, to: str, message: str):
+        ...         # Development email service
+        ...         pass
+        
         >>> # Now EmailService can be injected
         >>> @inject
         ... async def notify(email: Annotated[EmailService, Inject()]):
         ...     await email.send("user@example.com", "Hello!")
     """
-    container = get_current_container() or get_default_container()
-    container[cls] = cls
-    return cls
+    def decorator(cls_to_register: type[T]) -> type[T]:
+        # Evaluate condition at decoration time
+        if evaluate_condition(condition):
+            container = get_current_container() or get_default_container()
+            container.register(cls_to_register, scope="transient", name=name)
+        return cls_to_register
+    
+    if cls is not None:
+        # Called as @provide without parentheses
+        return decorator(cls)
+    else:
+        # Called as @provide() or @provide(name="...")
+        return decorator
 
 
-def singleton(cls: type[T]) -> type[T]:
+def singleton(cls: type[T] | None = None, *, name: str | None = None, condition: Condition | bool | None = None) -> type[T] | Callable[[type[T]], type[T]]:
     """Register a class as a singleton.
     
     This decorator registers a class with singleton scope - only one instance
     will be created and shared across all resolutions.
     
     Args:
-        cls: The class to register as a singleton
+        cls: The class to register as a singleton (when used without parentheses)
+        name: Optional name for named dependencies
+        condition: Optional condition for registration
         
     Returns:
-        The original class (unchanged)
+        The original class (unchanged) or decorator function
         
     Examples:
         >>> @singleton
@@ -127,17 +154,37 @@ def singleton(cls: type[T]) -> type[T]:
         ...     def __init__(self):
         ...         self.settings = load_settings()  # Expensive operation
         
+        >>> @singleton(name="test")
+        ... class TestConfiguration:
+        ...     def __init__(self):
+        ...         self.settings = load_test_settings()
+        
+        >>> @singleton(condition=lambda: not os.getenv("TESTING"))
+        ... class ProductionConfiguration:
+        ...     def __init__(self):
+        ...         self.settings = load_prod_settings()
+        
         >>> # Same instance returned every time
         >>> config1 = await container.resolve(Configuration)
         >>> config2 = await container.resolve(Configuration) 
         >>> assert config1 is config2  # True
     """
-    container = get_current_container() or get_default_container()
-    container.register(cls, scope="singleton")
-    return cls
+    def decorator(cls_to_register: type[T]) -> type[T]:
+        # Evaluate condition at decoration time
+        if evaluate_condition(condition):
+            container = get_current_container() or get_default_container()
+            container.register(cls_to_register, scope="singleton", name=name)
+        return cls_to_register
+    
+    if cls is not None:
+        # Called as @singleton without parentheses
+        return decorator(cls)
+    else:
+        # Called as @singleton() or @singleton(name="...")
+        return decorator
 
 
-def factory(service_type: type[T]) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def factory(service_type: type[T], *, name: str | None = None, condition: Condition | bool | None = None) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Register a factory function for a service type.
     
     This decorator allows you to register a function that creates instances
@@ -146,6 +193,8 @@ def factory(service_type: type[T]) -> Callable[[Callable[..., T]], Callable[...,
     
     Args:
         service_type: The type that the factory creates
+        name: Optional name for named dependencies
+        condition: Optional condition for registration
         
     Returns:
         A decorator that registers the factory function
@@ -157,12 +206,23 @@ def factory(service_type: type[T]) -> Callable[[Callable[..., T]], Callable[...,
         ...         return TestDatabase()
         ...     return PostgresDatabase(os.getenv("DATABASE_URL"))
         
+        >>> @factory(Database, name="readonly")
+        ... def create_readonly_database() -> Database:
+        ...     return ReadOnlyDatabase(os.getenv("READONLY_DB_URL"))
+        
+        >>> @factory(Database, condition=lambda: os.getenv("USE_MOCK_DB"))
+        ... def create_mock_database() -> Database:
+        ...     return MockDatabase()
+        
         >>> # Database will be created by the factory
         >>> db = await container.resolve(Database)
+        >>> readonly_db = await container.resolve(Database, name="readonly")
     """
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        container = get_current_container() or get_default_container()
-        container.register_factory(service_type, func)
+        # Evaluate condition at decoration time
+        if evaluate_condition(condition):
+            container = get_current_container() or get_default_container()
+            container.register_factory(service_type, func, name=name)
         return func
     return decorator
 
@@ -285,10 +345,34 @@ def inject(func: F) -> F:
         return sync_wrapper  # type: ignore
 
 
-def scoped(scope_name: str) -> Callable[[type[T]], type[T]]:
-    """Register a class with a custom scope."""
+def scoped(scope_name: str, *, name: str | None = None, condition: Condition | bool | None = None) -> Callable[[type[T]], type[T]]:
+    """Register a class with a custom scope.
+    
+    Args:
+        scope_name: The scope to register the class with
+        name: Optional name for named dependencies
+        condition: Optional condition for registration
+        
+    Returns:
+        A decorator that registers the class with the specified scope
+        
+    Examples:
+        >>> @scoped("request")
+        ... class RequestContext:
+        ...     pass
+        
+        >>> @scoped("session", name="admin")
+        ... class AdminSessionContext:
+        ...     pass
+        
+        >>> @scoped("request", condition=lambda: os.getenv("ENABLE_REQUEST_TRACKING"))
+        ... class RequestTracker:
+        ...     pass
+    """
     def decorator(cls: type[T]) -> type[T]:
-        container = get_current_container() or get_default_container()
-        container.register(cls, scope=scope_name)
+        # Evaluate condition at decoration time
+        if evaluate_condition(condition):
+            container = get_current_container() or get_default_container()
+            container.register(cls, scope=scope_name, name=name)
         return cls
     return decorator

@@ -81,22 +81,23 @@ class Container:
         Creates registries for services, factories, singletons, and scopes.
         Automatically registers built-in scopes (singleton, transient).
         """
-        self._services: dict[type, Any] = {}
-        self._factories: dict[type, Callable] = {}
-        self._singletons: dict[type, Any] = {}
+        # Updated to use (type, name) tuples as keys for named dependencies
+        self._services: dict[tuple[type, str | None], Any] = {}
+        self._factories: dict[tuple[type, str | None], Callable] = {}
+        self._singletons: dict[tuple[type, str | None], Any] = {}
         self._scopes: dict[str, Any] = {}
-        self._service_scopes: dict[type, str] = {}  # Maps service type to scope name
+        self._service_scopes: dict[tuple[type, str | None], str] = {}  # Maps (service type, name) to scope name
         
         # Register built-in scopes
         # Note: singleton and transient are handled specially, not as scope instances
         
-    def __setitem__(self, service_type: type[T], value: T | type[T] | Callable[..., T]) -> None:
+    def __setitem__(self, key: type[T] | tuple[type[T], str | None], value: T | type[T] | Callable[..., T]) -> None:
         """Register a service, class, or factory.
         
         This method provides dict-like syntax for service registration.
         
         Args:
-            service_type: The type to register (used as the key for resolution)
+            key: Either a type (for unnamed) or (type, name) tuple for named services
             value: Can be:
                 - An instance: Registered as-is
                 - A class: Will be instantiated on first resolve
@@ -106,19 +107,28 @@ class Container:
             >>> container[Database] = Database("postgresql://...")  # Instance
             >>> container[Logger] = Logger  # Class 
             >>> container[Cache] = lambda: RedisCache(host="localhost")  # Factory
+            >>> container[Database, "primary"] = PostgresDB()  # Named service
         """
+        # Normalize key to (type, name) tuple
+        if isinstance(key, tuple):
+            service_type, name = key
+        else:
+            service_type, name = key, None
+        
+        key_tuple = (service_type, name)
+        
         if callable(value) and not isinstance(value, type):
             # It's a factory function
-            self._factories[service_type] = value
+            self._factories[key_tuple] = value
         else:
             # It's an instance or class
-            self._services[service_type] = value
+            self._services[key_tuple] = value
             
-    def __getitem__(self, service_type: type[T]) -> T:
+    def __getitem__(self, key: type[T] | tuple[type[T], str | None]) -> T:
         """Get a service synchronously (for backwards compatibility).
         
         Args:
-            service_type: The type to resolve
+            key: Either a type (for unnamed) or (type, name) tuple for named services
             
         Returns:
             The resolved service instance
@@ -126,13 +136,17 @@ class Container:
         Note:
             Prefer using resolve() or resolve_sync() for explicit async/sync behavior.
         """
-        return self.resolve_sync(service_type)
+        if isinstance(key, tuple):
+            service_type, name = key
+        else:
+            service_type, name = key, None
+        return self.resolve_sync(service_type, name)
         
-    def __contains__(self, service_type: type) -> bool:
+    def __contains__(self, key: type | tuple[type, str | None]) -> bool:
         """Check if a service is registered.
         
         Args:
-            service_type: The type to check
+            key: Either a type (for unnamed) or (type, name) tuple for named services
             
         Returns:
             True if the service is registered in any form (service, factory, or singleton)
@@ -140,34 +154,49 @@ class Container:
         Examples:
             >>> if Database in container:
             ...     db = container[Database]
+            >>> if (Database, "primary") in container:
+            ...     primary_db = container[Database, "primary"]
         """
+        # Normalize key to (type, name) tuple
+        if isinstance(key, tuple):
+            key_tuple = key
+        else:
+            key_tuple = (key, None)
+        
         return (
-            service_type in self._services
-            or service_type in self._factories
-            or service_type in self._singletons
+            key_tuple in self._services
+            or key_tuple in self._factories
+            or key_tuple in self._singletons
         )
         
-    def __delitem__(self, service_type: type) -> None:
+    def __delitem__(self, key: type | tuple[type, str | None]) -> None:
         """Remove a service registration.
         
         Removes the service from all registries (services, factories, singletons).
         
         Args:
-            service_type: The type to unregister
+            key: Either a type (for unnamed) or (type, name) tuple for named services
             
         Note:
             This does not affect already resolved instances held by other services.
         """
-        self._services.pop(service_type, None)
-        self._factories.pop(service_type, None)
-        self._singletons.pop(service_type, None)
+        # Normalize key to (type, name) tuple
+        if isinstance(key, tuple):
+            key_tuple = key
+        else:
+            key_tuple = (key, None)
+        
+        self._services.pop(key_tuple, None)
+        self._factories.pop(key_tuple, None)
+        self._singletons.pop(key_tuple, None)
+        self._service_scopes.pop(key_tuple, None)
         
     async def resolve(self, service_type: type[T], name: str | None = None) -> T:
         """Resolve a service asynchronously.
         
         Args:
             service_type: The type to resolve
-            name: Optional name for named services (ignored for now)
+            name: Optional name for named services
             
         Returns:
             The resolved service instance
@@ -175,57 +204,67 @@ class Container:
         Raises:
             KeyError: If the service is not registered and cannot be created
         """
+        key_tuple = (service_type, name)
+        
         # Check singletons first
-        if service_type in self._singletons:
-            return cast(T, self._singletons[service_type])
+        if key_tuple in self._singletons:
+            return cast(T, self._singletons[key_tuple])
         
         # Check if service has a scope
-        scope_name = self._service_scopes.get(service_type)
+        scope_name = self._service_scopes.get(key_tuple)
         if scope_name and scope_name != "transient":
             # Get active scopes
             active_scopes = _active_scopes.get()
             
             # Handle singleton scope specially
             if scope_name == "singleton":
-                if service_type not in self._singletons:
-                    instance = await self._create_or_resolve_instance(service_type)
-                    self._singletons[service_type] = instance
-                return cast(T, self._singletons[service_type])
+                if key_tuple not in self._singletons:
+                    instance = await self._create_or_resolve_instance(service_type, name)
+                    self._singletons[key_tuple] = instance
+                return cast(T, self._singletons[key_tuple])
             
             # Check if scope is active
             if scope_name in active_scopes:
                 scope = active_scopes[scope_name]
-                # Check if instance exists in scope
-                instance = scope.get(service_type)
+                # Check if instance exists in scope - use tuple key for named services
+                instance = scope.get(key_tuple if name else service_type)
                 if instance is not None:
                     return cast(T, instance)
                 
                 # Create instance and store in scope
-                instance = await self._create_or_resolve_instance(service_type)
-                scope.set(service_type, instance)
+                instance = await self._create_or_resolve_instance(service_type, name)
+                scope.set(key_tuple if name else service_type, instance)
                 return cast(T, instance)
             else:
                 # Scope not active, fall through to transient behavior
                 pass
         
         # Default transient behavior or no scope
-        return await self._create_or_resolve_instance(service_type)
+        return await self._create_or_resolve_instance(service_type, name)
     
-    async def _create_or_resolve_instance(self, service_type: type[T]) -> T:
+    async def _create_or_resolve_instance(self, service_type: type[T], name: str | None = None) -> T:
         """Create or resolve an instance without scope management."""
+        key_tuple = (service_type, name)
+        
         # Check registered instances/classes
-        if service_type in self._services:
-            value = self._services[service_type]
+        if key_tuple in self._services:
+            value = self._services[key_tuple]
             if isinstance(value, type):
                 # It's a class, instantiate it
                 return await self._create_instance(value)
             return cast(T, value)
             
         # Check factories
-        if service_type in self._factories:
-            factory = self._factories[service_type]
+        if key_tuple in self._factories:
+            factory = self._factories[key_tuple]
             return cast(T, await self._call_with_injection(factory))
             
+        # If named service not found, don't fall back to unnamed
+        if name is not None:
+            service_name = getattr(service_type, '__name__', str(service_type))
+            raise KeyError(f"Named service {service_name}[{name}] not registered")
+            
+        # For unnamed services, check if we can create it
         # Try to create if it's a concrete class
         if inspect.isclass(service_type) and not inspect.isabstract(service_type):
             return await self._create_instance(service_type)
@@ -269,24 +308,25 @@ class Container:
             name: Optional name for named services
             factory: Optional factory function
         """
-        # Store scope information
-        self._service_scopes[service_type] = scope
+        key_tuple = (service_type, name)
         
-        # For now, ignore name - we'll add named services later if needed
+        # Store scope information
+        self._service_scopes[key_tuple] = scope
+        
         if factory is not None:
-            self._factories[service_type] = factory
+            self._factories[key_tuple] = factory
         elif scope == "singleton":
             if implementation is None:
                 # Mark class for lazy singleton
-                self._services[service_type] = service_type
+                self._services[key_tuple] = service_type
             elif isinstance(implementation, type):
                 # Mark class for lazy singleton
-                self._services[service_type] = implementation
+                self._services[key_tuple] = implementation
             else:
                 # Register existing instance as singleton
-                self._singletons[service_type] = implementation
+                self._singletons[key_tuple] = implementation
         else:
-            self[service_type] = implementation or service_type
+            self[key_tuple] = implementation or service_type
             
     def register_singleton(
         self,
@@ -299,7 +339,9 @@ class Container:
     ) -> None:
         """Register a singleton service."""
         if instance is not None:
-            self._singletons[service_type] = instance
+            key_tuple = (service_type, name)
+            self._singletons[key_tuple] = instance
+            self._service_scopes[key_tuple] = "singleton"
         else:
             self.register(
                 service_type,
@@ -317,7 +359,8 @@ class Container:
         name: str | None = None,
     ) -> None:
         """Register a factory function."""
-        self._factories[service_type] = factory
+        key_tuple = (service_type, name)
+        self._factories[key_tuple] = factory
         
     def register_scope(self, name: str, scope: Any) -> None:
         """Register a custom scope."""
@@ -347,9 +390,24 @@ class Container:
                         raise TypeError(f"Cannot resolve forward reference '{param_type}' for parameter '{param_name}'")
                     continue
                 
-                # Check if this is an Annotated type with Inject marker
-                from typing import get_origin, get_args
+                # Check for Lazy types first
+                from typing import get_args, get_origin
                 origin = get_origin(param_type)
+                
+                # Handle Lazy[T] types
+                if origin is not None:
+                    try:
+                        from whiskey.core.lazy import Lazy
+                        if origin is Lazy:
+                            # Get the inner type
+                            args = get_args(param_type)
+                            if args:
+                                inner_type = args[0]
+                                # Create a Lazy instance instead of resolving
+                                kwargs[param_name] = Lazy(inner_type, container=self)
+                                continue
+                    except ImportError:
+                        pass
                 
                 if origin is not None:
                     # Handle Annotated types
@@ -372,6 +430,22 @@ class Container:
                                 
                                 if inject_marker:
                                     # This is marked for injection
+                                    # Check if actual_type is Lazy[T]
+                                    actual_origin = get_origin(actual_type)
+                                    if actual_origin is not None:
+                                        try:
+                                            from whiskey.core.lazy import Lazy
+                                            if actual_origin is Lazy:
+                                                # Get inner type from Lazy[T]
+                                                lazy_args = get_args(actual_type)
+                                                if lazy_args:
+                                                    inner_type = lazy_args[0]
+                                                    kwargs[param_name] = Lazy(inner_type, name=inject_marker.name, container=self)
+                                                    continue
+                                        except ImportError:
+                                            pass
+                                    
+                                    # Regular injection
                                     try:
                                         kwargs[param_name] = await self.resolve(actual_type, name=inject_marker.name)
                                     except KeyError:
@@ -390,6 +464,11 @@ class Container:
                 # For backward compatibility, if no Inject marker but has annotation,
                 # only inject if there's no default value
                 if param.default == param.empty:
+                    # Skip built-in types and types that can't be resolved
+                    if param_type in (str, int, float, bool, list, dict, tuple, set, bytes):
+                        # Don't try to inject built-in types
+                        continue
+                    
                     # Try to resolve the dependency
                     try:
                         kwargs[param_name] = await self.resolve(param_type)
@@ -456,15 +535,28 @@ class Container:
     # Dict-like methods for compatibility
     def items(self):
         """Get all registered services."""
-        for service_type, value in self._services.items():
-            yield service_type, value
-        for service_type, value in self._factories.items():
-            yield service_type, value
-        for service_type, value in self._singletons.items():
-            yield service_type, value
+        # Return both (type, name) key and value for full compatibility
+        for key, value in self._services.items():
+            yield key, value
+        for key, value in self._factories.items():
+            yield key, value
+        for key, value in self._singletons.items():
+            yield key, value
             
     def keys(self):
-        """Get all registered service types."""
+        """Get all registered service types (for backward compatibility)."""
+        # Extract just the types from the (type, name) tuples
+        types = set()
+        for key in self._services.keys():
+            types.add(key[0])
+        for key in self._factories.keys():
+            types.add(key[0])
+        for key in self._singletons.keys():
+            types.add(key[0])
+        return types
+    
+    def keys_full(self):
+        """Get all registered service keys as (type, name) tuples."""
         return set(self._services.keys()) | set(self._factories.keys()) | set(self._singletons.keys())
         
     def values(self):
@@ -573,16 +665,43 @@ class Container:
         from whiskey.core.discovery import ContainerInspector
         return ContainerInspector(self)
     
-    def can_resolve(self, service_type: type[T]) -> bool:
+    def can_resolve(self, service_type: type[T], name: str | None = None) -> bool:
         """Check if a service can be resolved.
         
         Args:
             service_type: Type to check
+            name: Optional name for named services
             
         Returns:
             True if the service can be resolved
         """
-        return self.inspect().can_resolve(service_type)
+        # Check if explicitly registered
+        key_tuple = (service_type, name)
+        if key_tuple in self:
+            return True
+        
+        # For unnamed services, check if we can create it
+        if name is None and inspect.isclass(service_type) and not inspect.isabstract(service_type):
+            # Check if the class can be instantiated without required parameters
+            try:
+                sig = inspect.signature(service_type)
+                # Check if all parameters have defaults or can be injected
+                for param_name, param in sig.parameters.items():
+                    if param.default == param.empty:
+                        # Check if this parameter can be resolved
+                        if param.annotation != param.empty:
+                            param_type = param.annotation
+                            # Skip built-in types
+                            if param_type in (str, int, float, bool, list, dict, tuple, set, bytes):
+                                return False
+                            # Check if we can resolve this dependency
+                            if not self.can_resolve(param_type):
+                                return False
+                return True
+            except:
+                return False
+            
+        return False
 
 
 def get_current_container() -> Container | None:

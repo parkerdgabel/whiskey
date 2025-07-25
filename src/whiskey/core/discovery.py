@@ -15,8 +15,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
-from pathlib import Path
-from typing import Any, Callable, Iterator, Type, TypeVar
+from typing import Any, Callable, TypeVar
 
 from whiskey.core.container import Container
 
@@ -329,7 +328,7 @@ class ContainerInspector:
         deps = self.get_dependencies(service_type)
         for dep_type in deps.values():
             # Handle Annotated types
-            from typing import get_origin, get_args
+            from typing import get_args, get_origin
             origin = get_origin(dep_type)
             if origin is not None:
                 try:
@@ -368,7 +367,7 @@ class ContainerInspector:
         for param_name, dep_type in deps.items():
             # Handle Annotated types
             actual_type = dep_type
-            from typing import get_origin, get_args
+            from typing import get_args, get_origin
             origin = get_origin(dep_type)
             if origin is not None:
                 try:

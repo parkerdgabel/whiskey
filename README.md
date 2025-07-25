@@ -83,30 +83,52 @@ container[Logger] = Logger("app.log")              # Instance
 container[Database] = Database                     # Class (lazy instantiation)
 container[Cache] = lambda: RedisCache("localhost") # Factory function
 
+# Named dependencies for multiple implementations
+container[Database, "primary"] = PostgresDB("postgres://primary")
+container[Database, "readonly"] = PostgresDB("postgres://readonly")
+
 # Resolve dependencies
 logger = await container.resolve(Logger)
+primary_db = await container.resolve(Database, name="primary")
 
 # Dict-like operations
 if Logger in container:
     logger = container[Logger]  # Sync resolve for compatibility
+if (Database, "primary") in container:
+    db = container[Database, "primary"]
 ```
 
 ### 2. Dependency Injection
 
-Whiskey supports explicit injection using `Annotated` types:
+Whiskey supports explicit injection using `Annotated` types, including named dependencies and lazy resolution:
 
 ```python
 from typing import Annotated
-from whiskey import Inject, inject
+from whiskey import Inject, inject, Lazy
 
 class UserRepository:
     def __init__(self,
-                 # Will be injected
-                 db: Annotated[Database, Inject()],
+                 # Named dependency injection
+                 primary_db: Annotated[Database, Inject(name="primary")],
+                 readonly_db: Annotated[Database, Inject(name="readonly")],
+                 # Lazy dependency - resolved only when accessed
+                 cache: Annotated[Lazy[Cache], Inject()],
                  # Won't be injected - just a type hint
                  table_name: str = "users"):
-        self.db = db
+        self.primary_db = primary_db
+        self.readonly_db = readonly_db
+        self.cache = cache  # Not resolved yet!
         self.table_name = table_name
+    
+    async def find(self, user_id: int):
+        # Lazy dependency resolved on first access
+        cached = self.cache.value.get(f"user:{user_id}")
+        if cached:
+            return cached
+        
+        user = await self.readonly_db.query("SELECT * FROM users WHERE id = ?", user_id)
+        self.cache.value.set(f"user:{user_id}", user)
+        return user
 
 # Inject into functions
 @inject
@@ -117,18 +139,43 @@ async def get_user(
     return await repo.find(user_id)
 ```
 
-### 3. Scopes
+### 3. Scopes & Conditional Registration
 
-Control the lifecycle of your services:
+Control the lifecycle of your services and register them conditionally:
 
 ```python
-from whiskey import scoped, singleton
+from whiskey import scoped, singleton, provide
+from whiskey.core.conditions import env_equals, env_exists
+import os
 
 # Singleton - one instance for the entire app
 @singleton
 class Configuration:
     def __init__(self):
         self.settings = load_settings()
+
+# Conditional registration based on environment
+@provide(condition=env_equals("ENV", "development"))
+class DevEmailService:
+    def send(self, to: str, subject: str, body: str):
+        print(f"DEV: Email to {to}: {subject}")
+
+@provide(condition=env_equals("ENV", "production"))
+class ProdEmailService:
+    def send(self, to: str, subject: str, body: str):
+        # Actually send email
+        smtp.send(to, subject, body)
+
+# Named conditional services
+@singleton(name="cache", condition=env_exists("REDIS_URL"))
+class RedisCache:
+    def __init__(self):
+        self.client = redis.from_url(os.getenv("REDIS_URL"))
+
+@singleton(name="cache", condition=lambda: not env_exists("REDIS_URL")())
+class MemoryCache:
+    def __init__(self):
+        self.data = {}
 
 # Scoped - different instance per scope
 @scoped("request")
@@ -314,6 +361,140 @@ def create_server(
     debug: bool = Setting("debug")
 ):
     return Server(port=port, debug=debug)
+```
+
+## New Features
+
+### Named Dependencies
+
+Register multiple implementations of the same interface:
+
+```python
+from whiskey import Container, provide, singleton
+from typing import Annotated
+
+# Register multiple database connections
+container[Database, "primary"] = PostgresDB("postgres://primary")
+container[Database, "analytics"] = PostgresDB("postgres://analytics")
+container[Database, "cache"] = RedisDB("redis://cache")
+
+# Use with decorators
+@provide(name="email")
+class SMTPService:
+    pass
+
+@provide(name="sms")
+class TwilioService:
+    pass
+
+# Inject named dependencies
+class NotificationService:
+    def __init__(self,
+                 email: Annotated[SMTPService, Inject(name="email")],
+                 sms: Annotated[TwilioService, Inject(name="sms")]):
+        self.email = email
+        self.sms = sms
+```
+
+### Conditional Registration
+
+Register services based on runtime conditions:
+
+```python
+from whiskey.core.conditions import (
+    env_equals, env_exists, env_truthy,
+    all_conditions, any_conditions, not_condition
+)
+
+# Environment-based registration
+@provide(condition=env_equals("ENV", "development"))
+class DevLogger:
+    def log(self, msg): print(f"DEV: {msg}")
+
+@provide(condition=env_equals("ENV", "production"))
+class ProdLogger:
+    def log(self, msg): syslog.info(msg)
+
+# Feature flags
+@singleton(condition=env_truthy("ENABLE_CACHING"))
+class CacheService:
+    pass
+
+# Complex conditions
+@provide(condition=all_conditions(
+    env_exists("API_KEY"),
+    not_condition(env_equals("ENV", "test"))
+))
+class ExternalAPIClient:
+    pass
+
+# Custom conditions
+@provide(condition=lambda: datetime.now().hour < 18)  # Only during business hours
+class BusinessHoursService:
+    pass
+```
+
+### Lazy Resolution
+
+Defer expensive dependency resolution until needed:
+
+```python
+from whiskey import Lazy
+from typing import Annotated
+
+class ExpensiveService:
+    def __init__(self):
+        print("Expensive initialization!")
+        self.data = load_big_dataset()
+
+class ConsumerService:
+    def __init__(self,
+                 # Lazy dependency - not initialized yet
+                 expensive: Lazy[ExpensiveService],
+                 # Regular dependency - initialized immediately
+                 cheap: Annotated[CheapService, Inject()]):
+        self.expensive = expensive
+        self.cheap = cheap
+        print("Consumer created - expensive service not yet initialized")
+    
+    def use_expensive(self):
+        # First access triggers initialization
+        return self.expensive.value.data
+    
+    def check_if_loaded(self) -> bool:
+        return self.expensive.is_resolved
+
+# Lazy with named dependencies
+class DatabaseService:
+    def __init__(self,
+                 primary: Annotated[Lazy[Database], Inject(name="primary")],
+                 replica: Annotated[Lazy[Database], Inject(name="replica")]):
+        self.primary = primary
+        self.replica = replica
+    
+    async def read(self, query: str):
+        # Use replica for reads (resolved lazily)
+        return await self.replica.value.execute(query)
+    
+    async def write(self, query: str):
+        # Use primary for writes (resolved lazily)
+        return await self.primary.value.execute(query)
+
+# Lazy descriptors for class-level lazy attributes
+from whiskey.core.lazy import LazyDescriptor
+
+class ServiceWithLazyAttrs:
+    database = LazyDescriptor(Database)
+    cache = LazyDescriptor(Cache, name="redis")
+    
+    def __init__(self):
+        pass  # No dependencies resolved yet
+    
+    def do_work(self):
+        # First access creates Lazy instances and resolves them
+        data = self.database.value.query("SELECT * FROM items")
+        self.cache.value.set("items", data)
+        return data
 ```
 
 ## Advanced Features

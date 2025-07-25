@@ -112,8 +112,8 @@ class Application:
         _event_handlers: Event handlers by event name/pattern
         _error_handlers: Error handling functions
         _background_tasks: Set of running background tasks
-    """
         
+    Example:
         @app.component
         @app.priority(10)
         class DatabaseService:
