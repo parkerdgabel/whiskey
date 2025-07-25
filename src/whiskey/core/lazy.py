@@ -70,7 +70,7 @@ class Lazy(Generic[T]):
         """
         self._service_type = service_type
         self._name = name
-        self._container_ref = weakref(container) if container else None
+        self._container_ref = weakref(container) if container is not None else None
         self._instance: T | None = None
         self._resolved = False
         self._resolving = False  # Prevent recursive resolution

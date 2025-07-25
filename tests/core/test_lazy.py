@@ -283,7 +283,8 @@ class TestLazyEdgeCases:
     def test_lazy_with_none_instance(self):
         """Test lazy resolution returning None."""
         container = Container()
-        container.register("nullable", None, key="nullable")
+        # Register a factory that returns None
+        container.register("nullable", lambda: None)
 
         lazy = Lazy("nullable", container=container)
         assert lazy.value is None
@@ -292,7 +293,8 @@ class TestLazyEdgeCases:
     def test_lazy_getattr_on_none(self):
         """Test attribute access on None value."""
         container = Container()
-        container.register("nullable", None, key="nullable")
+        # Register a factory that returns None
+        container.register("nullable", lambda: None)
 
         lazy = Lazy("nullable", container=container)
 
@@ -328,7 +330,7 @@ class TestLazyEdgeCases:
 
         lazy = Lazy(FailingService, container=container)
 
-        with pytest.raises(ValueError, match="Initialization failed"):
+        with pytest.raises(ResolutionError, match="Failed to instantiate FailingService: Initialization failed"):
             _ = lazy.value
 
         # Should not be marked as resolved
