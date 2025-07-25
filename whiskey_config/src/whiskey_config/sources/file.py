@@ -3,7 +3,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from .base import ConfigurationSource
 
@@ -11,7 +11,7 @@ from .base import ConfigurationSource
 class FileSource(ConfigurationSource):
     """Configuration source that reads from files."""
     
-    def __init__(self, path: str, format: Optional[str] = None):
+    def __init__(self, path: str, file_format: Optional[str] = None):
         """Initialize file source.
         
         Args:
@@ -20,7 +20,7 @@ class FileSource(ConfigurationSource):
         """
         super().__init__(f"File:{path}")
         self.path = Path(path)
-        self.format = format or self._detect_format()
+        self.format = file_format or self._detect_format()
         self._last_modified: Optional[float] = None
     
     def _detect_format(self) -> str:
@@ -35,7 +35,7 @@ class FileSource(ConfigurationSource):
         else:
             raise ValueError(f"Unknown file format for {self.path}")
     
-    async def load(self) -> Dict[str, Any]:
+    async def load(self) -> dict[str, Any]:
         """Load configuration from file.
         
         Returns:
@@ -60,7 +60,7 @@ class FileSource(ConfigurationSource):
             except ImportError:
                 raise ImportError(
                     "YAML support requires PyYAML. Install with: pip install whiskey-config[yaml]"
-                )
+                ) from None
         elif self.format == "toml":
             try:
                 import tomli
@@ -72,7 +72,7 @@ class FileSource(ConfigurationSource):
                 except ImportError:
                     raise ImportError(
                         "TOML support requires tomli. Install with: pip install whiskey-config[toml]"
-                    )
+                    ) from None
         else:
             raise ValueError(f"Unsupported format: {self.format}")
     
@@ -80,7 +80,7 @@ class FileSource(ConfigurationSource):
         """File sources can be reloaded."""
         return True
     
-    async def reload(self) -> Optional[Dict[str, Any]]:
+    async def reload(self) -> Optional[dict[str, Any]]:
         """Reload configuration if file has changed.
         
         Returns:

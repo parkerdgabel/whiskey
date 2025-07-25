@@ -1,8 +1,7 @@
 """Environment variable configuration source."""
 
 import os
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 from .base import ConfigurationSource
 
@@ -21,7 +20,7 @@ class EnvironmentSource(ConfigurationSource):
         self.prefix = prefix.upper()
         self.delimiter = delimiter
     
-    async def load(self) -> Dict[str, Any]:
+    async def load(self) -> dict[str, Any]:
         """Load configuration from environment variables.
         
         Returns:
@@ -50,6 +49,10 @@ class EnvironmentSource(ConfigurationSource):
             for part in parts[:-1]:
                 if part not in current:
                     current[part] = {}
+                elif not isinstance(current[part], dict):
+                    # If the current value is not a dict, we can't nest further
+                    # This handles cases where a parent key was already set
+                    break
                 current = current[part]
             
             # Set the value, attempting type conversion

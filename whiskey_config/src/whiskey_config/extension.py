@@ -1,11 +1,10 @@
 """Configuration extension for Whiskey applications."""
 
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Optional, Union
 
 from whiskey import Application
 
 from .manager import ConfigurationManager
-from .providers import ConfigSection, Setting
 from .schema import is_dataclass_type
 from .sources import ConfigurationSource
 
@@ -57,8 +56,8 @@ def config_extension(app: Application) -> None:
     
     # Configure method
     def configure_config(
-        schema: Optional[Type] = None,
-        sources: Optional[List[Union[str, ConfigurationSource]]] = None,
+        schema: Optional[type] = None,
+        sources: Optional[list[Union[str, ConfigurationSource]]] = None,
         env_prefix: str = "",
         watch: bool = False,
         watch_interval: float = 1.0
@@ -109,7 +108,7 @@ def config_extension(app: Application) -> None:
         await app.emit("config.loaded", {"manager": config_manager})
     
     # Configuration change events
-    async def on_config_change(data: Dict[str, Any]) -> None:
+    async def on_config_change(data: dict[str, Any]) -> None:
         """Handle configuration changes."""
         await app.emit("config.changed", data)
     
@@ -128,7 +127,7 @@ def config_extension(app: Application) -> None:
                 host: str = "localhost"
                 port: int = 5432
         """
-        def decorator(cls: Type) -> Type:
+        def decorator(cls: type) -> type:
             if not is_dataclass_type(cls):
                 raise ValueError(f"Config class {cls.__name__} must be a dataclass")
             
@@ -170,7 +169,7 @@ def config_extension(app: Application) -> None:
     app.add_decorator("feature", feature)
     
     # Update configuration method
-    def update_config(updates: Dict[str, Any]) -> None:
+    def update_config(updates: dict[str, Any]) -> None:
         """Update configuration at runtime.
         
         Args:
@@ -195,21 +194,9 @@ def config_extension(app: Application) -> None:
     
     app.get_config = get_config
     
-    # Register Setting provider factory
-    def create_setting_provider(setting: Setting):
-        """Create a factory for Setting provider."""
-        setting.set_manager(config_manager)
-        return setting
-    
-    # Register ConfigSection provider factory  
-    def create_config_section_provider(section: ConfigSection):
-        """Create a factory for ConfigSection provider."""
-        section.set_manager(config_manager)
-        return section
-    
-    # Make Setting and ConfigSection available for injection
-    app.container.register(Setting, factory=create_setting_provider)
-    app.container.register(ConfigSection, factory=create_config_section_provider)
+    # Store config_manager in providers module so Setting/ConfigSection can access it
+    import whiskey_config.providers
+    whiskey_config.providers._config_manager = config_manager
     
     # Health check for configuration
     @app.on_ready

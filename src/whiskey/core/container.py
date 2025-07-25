@@ -261,12 +261,54 @@ class Container:
                     if param.default == param.empty:
                         raise TypeError(f"Cannot resolve forward reference '{param_type}' for parameter '{param_name}'")
                     continue
-                    
-                # Try to resolve the dependency
-                try:
-                    kwargs[param_name] = await self.resolve(param_type)
-                except KeyError:
-                    if param.default == param.empty:
+                
+                # Check if this is an Annotated type with Inject marker
+                from typing import get_origin, get_args
+                origin = get_origin(param_type)
+                
+                if origin is not None:
+                    # Handle Annotated types
+                    try:
+                        from typing import Annotated
+                        if origin is Annotated:
+                            # Get the actual type and metadata
+                            args = get_args(param_type)
+                            if len(args) >= 2:
+                                actual_type = args[0]
+                                metadata = args[1:]
+                                
+                                # Check if any metadata is an Inject marker
+                                from whiskey.core.decorators import Inject
+                                inject_marker = None
+                                for meta in metadata:
+                                    if isinstance(meta, Inject):
+                                        inject_marker = meta
+                                        break
+                                
+                                if inject_marker:
+                                    # This is marked for injection
+                                    try:
+                                        kwargs[param_name] = await self.resolve(actual_type, name=inject_marker.name)
+                                    except KeyError:
+                                        if param.default == param.empty:
+                                            raise
+                                    continue
+                    except ImportError:
+                        # Python < 3.9 doesn't have Annotated in typing
+                        pass
+                
+                # Check if this parameter has a callable default (like Setting providers)
+                if param.default != param.empty and callable(param.default):
+                    # Skip injection - let the callable default handle it
+                    continue
+                
+                # For backward compatibility, if no Inject marker but has annotation,
+                # only inject if there's no default value
+                if param.default == param.empty:
+                    # Try to resolve the dependency
+                    try:
+                        kwargs[param_name] = await self.resolve(param_type)
+                    except KeyError:
                         raise
                         
         return cls(**kwargs)

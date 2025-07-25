@@ -8,6 +8,9 @@ dependencies = [
     "whiskey",
 ]
 
+[tool.uv.sources]
+whiskey = { workspace = true }
+
 [project.optional-dependencies]
 yaml = ["PyYAML>=6.0"]
 toml = ["tomli>=2.0;python_version<'3.11'", "tomli-w>=1.0"]

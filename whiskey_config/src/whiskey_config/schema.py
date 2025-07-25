@@ -1,9 +1,8 @@
 """Configuration schema utilities using dataclasses."""
 
 import dataclasses
-from typing import Any, Dict, Type, TypeVar, Union, get_type_hints, get_origin, get_args
 from collections.abc import Mapping, Sequence
-
+from typing import Any, TypeVar, Union, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
 
@@ -23,7 +22,7 @@ def is_dataclass_type(obj: Any) -> bool:
     return dataclasses.is_dataclass(obj)
 
 
-def convert_value(value: Any, target_type: Type[T], path: str = "") -> T:
+def convert_value(value: Any, target_type: type[T], path: str = "") -> T:
     """Convert a value to the target type.
     
     Args:
@@ -41,8 +40,8 @@ def convert_value(value: Any, target_type: Type[T], path: str = "") -> T:
     if value is None:
         return None
     
-    # Already correct type
-    if isinstance(value, target_type):
+    # Already correct type (skip for generic types)
+    if not hasattr(target_type, "__origin__") and isinstance(value, target_type):
         return value
     
     # Get origin type for generics
@@ -118,11 +117,11 @@ def convert_value(value: Any, target_type: Type[T], path: str = "") -> T:
         
     except (ValueError, TypeError) as e:
         raise ConfigurationError(
-            f"Cannot convert {repr(value)} to {target_type.__name__} at {path}: {e}"
-        )
+            f"Cannot convert {value!r} to {target_type.__name__} at {path}: {e}"
+        ) from e
 
 
-def create_dataclass_from_dict(dataclass_type: Type[T], data: Dict[str, Any], path: str = "") -> T:
+def create_dataclass_from_dict(dataclass_type: type[T], data: dict[str, Any], path: str = "") -> T:
     """Create a dataclass instance from a dictionary.
     
     Args:
@@ -168,10 +167,10 @@ def create_dataclass_from_dict(dataclass_type: Type[T], data: Dict[str, Any], pa
     try:
         return dataclass_type(**kwargs)
     except Exception as e:
-        raise ConfigurationError(f"Failed to create {dataclass_type.__name__} at {path}: {e}")
+        raise ConfigurationError(f"Failed to create {dataclass_type.__name__} at {path}: {e}") from e
 
 
-def merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Deep merge two configuration dictionaries.
     
     Args:
@@ -194,7 +193,7 @@ def merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, A
     return result
 
 
-def dataclass_to_dict(obj: Any) -> Dict[str, Any]:
+def dataclass_to_dict(obj: Any) -> dict[str, Any]:
     """Convert a dataclass instance to a dictionary.
     
     Args:
@@ -221,7 +220,7 @@ def dataclass_to_dict(obj: Any) -> Dict[str, Any]:
     return result
 
 
-def get_value_at_path(config: Union[Dict[str, Any], Any], path: str) -> Any:
+def get_value_at_path(config: Union[dict[str, Any], Any], path: str) -> Any:
     """Get a value from a configuration object using a dotted path.
     
     Args:

@@ -1,7 +1,7 @@
 """Base configuration source interface."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 
 class ConfigurationSource(ABC):
@@ -16,7 +16,7 @@ class ConfigurationSource(ABC):
         self.name = name
     
     @abstractmethod
-    async def load(self) -> Dict[str, Any]:
+    async def load(self) -> dict[str, Any]:
         """Load configuration from the source.
         
         Returns:
@@ -33,7 +33,7 @@ class ConfigurationSource(ABC):
         """
         pass
     
-    async def reload(self) -> Optional[Dict[str, Any]]:
+    async def reload(self) -> Optional[dict[str, Any]]:
         """Reload configuration from the source.
         
         Returns:

@@ -5,6 +5,9 @@ from typing import Any, Optional
 from .manager import ConfigurationManager
 from .schema import ConfigurationError
 
+# Global config manager set by extension
+_config_manager: Optional[ConfigurationManager] = None
+
 
 class Setting:
     """Provider that injects a specific configuration value.
@@ -43,10 +46,11 @@ class Setting:
         Raises:
             ConfigurationError: If manager not set or value not found
         """
-        if not self._manager:
+        manager = self._manager or _config_manager
+        if not manager:
             raise ConfigurationError("Configuration manager not set for Setting provider")
         
-        value = self._manager.get(self.path, self.default)
+        value = manager.get(self.path, self.default)
         if value is None and self.default is None:
             raise ConfigurationError(f"Required configuration setting '{self.path}' not found")
         
@@ -94,10 +98,11 @@ class ConfigSection:
         Raises:
             ConfigurationError: If manager not set or conversion fails
         """
-        if not self._manager:
+        manager = self._manager or _config_manager
+        if not manager:
             raise ConfigurationError("Configuration manager not set for ConfigSection provider")
         
-        return self._manager.get_typed(self.config_type, self.path)
+        return manager.get_typed(self.config_type, self.path)
     
     def __repr__(self) -> str:
         """String representation."""

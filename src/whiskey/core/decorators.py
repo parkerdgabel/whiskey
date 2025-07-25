@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, get_args, get_origin
 
 from whiskey.core.container import Container, get_current_container
 
@@ -14,6 +14,38 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 # Global default container
 _default_container: Container | None = None
+
+
+class Inject:
+    """Marker for explicit dependency injection in type annotations.
+    
+    Used with Annotated to distinguish injection targets from regular type hints:
+    
+    Example:
+        from typing import Annotated
+        
+        class Service:
+            def __init__(self, 
+                        # This will be injected
+                        db: Annotated[Database, Inject()],
+                        # This is just a type hint
+                        name: str):
+                self.db = db
+                self.name = name
+    """
+    
+    def __init__(self, name: str | None = None):
+        """Initialize injection marker.
+        
+        Args:
+            name: Optional service name for named dependencies
+        """
+        self.name = name
+    
+    def __repr__(self):
+        if self.name:
+            return f"Inject(name='{self.name}')"
+        return "Inject()"
 
 
 def get_default_container() -> Container:
@@ -78,6 +110,21 @@ def inject(func: F) -> F:
             bound = sig.bind_partial(*args, **kwargs)
             bound.apply_defaults()
             
+            # Process bound arguments - check for callable defaults after apply_defaults
+            for param_name in list(bound.arguments.keys()):
+                value = bound.arguments[param_name]
+                if callable(value):
+                    try:
+                        # Call the default to get the value
+                        result = value()
+                        if asyncio.iscoroutine(result):
+                            bound.arguments[param_name] = await result
+                        else:
+                            bound.arguments[param_name] = result
+                    except Exception:
+                        # If calling fails, leave as is
+                        pass
+            
             # Inject missing dependencies
             for param_name, param in sig.parameters.items():
                 if param_name not in bound.arguments and param.annotation != param.empty:
@@ -99,6 +146,17 @@ def inject(func: F) -> F:
             # Bind provided arguments
             bound = sig.bind_partial(*args, **kwargs)
             bound.apply_defaults()
+            
+            # Process bound arguments - check for callable defaults after apply_defaults
+            for param_name in list(bound.arguments.keys()):
+                value = bound.arguments[param_name]
+                if callable(value):
+                    try:
+                        # Call the default to get the value
+                        bound.arguments[param_name] = value()
+                    except Exception:
+                        # If calling fails, leave as is
+                        pass
             
             # Inject missing dependencies
             for param_name, param in sig.parameters.items():

@@ -1,18 +1,16 @@
 """Configuration manager that combines multiple sources."""
 
 import asyncio
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union
+from typing import Any, Optional, TypeVar, Union
 
 from .schema import (
     ConfigurationError,
     create_dataclass_from_dict,
-    dataclass_to_dict,
     get_value_at_path,
     is_dataclass_instance,
     merge_configs,
 )
 from .sources import ConfigurationSource, EnvironmentSource, FileSource
-
 
 T = TypeVar("T")
 
@@ -22,12 +20,12 @@ class ConfigurationManager:
     
     def __init__(self):
         """Initialize configuration manager."""
-        self.sources: List[ConfigurationSource] = []
-        self._config_data: Dict[str, Any] = {}
+        self.sources: list[ConfigurationSource] = []
+        self._config_data: dict[str, Any] = {}
         self._config_instance: Optional[Any] = None
-        self._schema: Optional[Type] = None
+        self._schema: Optional[type] = None
         self._watch_task: Optional[asyncio.Task] = None
-        self._change_callbacks: List[Any] = []
+        self._change_callbacks: list[Any] = []
     
     def add_source(self, source: ConfigurationSource) -> None:
         """Add a configuration source.
@@ -37,7 +35,7 @@ class ConfigurationManager:
         """
         self.sources.append(source)
     
-    def set_schema(self, schema: Type[T]) -> None:
+    def set_schema(self, schema: type[T]) -> None:
         """Set the configuration schema.
         
         Args:
@@ -56,7 +54,7 @@ class ConfigurationManager:
                 if source_data:
                     config_data = merge_configs(config_data, source_data)
             except Exception as e:
-                raise ConfigurationError(f"Failed to load from {source}: {e}")
+                raise ConfigurationError(f"Failed to load from {source}: {e}") from e
         
         # Store raw config data
         self._config_data = config_data
@@ -68,7 +66,7 @@ class ConfigurationManager:
             except ConfigurationError:
                 raise
             except Exception as e:
-                raise ConfigurationError(f"Failed to create configuration instance: {e}")
+                raise ConfigurationError(f"Failed to create configuration instance: {e}") from e
     
     async def reload(self) -> bool:
         """Reload configuration from sources that support it.
@@ -77,7 +75,8 @@ class ConfigurationManager:
             True if configuration changed, False otherwise
         """
         changed = False
-        new_config_data = self._config_data.copy()
+        # Start fresh to properly validate schema
+        new_config_data = {}
         
         for source in self.sources:
             if source.can_reload():
@@ -103,7 +102,7 @@ class ConfigurationManager:
                     # Rollback on error
                     self._config_data = old_data
                     self._config_instance = old_instance
-                    raise ConfigurationError(f"Failed to reload configuration: {e}")
+                    raise ConfigurationError(f"Failed to reload configuration: {e}") from e
             
             # Notify callbacks
             await self._notify_changes(old_data, new_config_data)
@@ -129,7 +128,7 @@ class ConfigurationManager:
         except ConfigurationError:
             return default
     
-    def get_typed(self, config_type: Type[T], path: str = "") -> T:
+    def get_typed(self, config_type: type[T], path: str = "") -> T:
         """Get typed configuration section.
         
         Args:
@@ -157,7 +156,7 @@ class ConfigurationManager:
         
         return create_dataclass_from_dict(config_type, data, path)
     
-    def get_raw(self) -> Dict[str, Any]:
+    def get_raw(self) -> dict[str, Any]:
         """Get raw configuration data as dictionary.
         
         Returns:
@@ -165,7 +164,7 @@ class ConfigurationManager:
         """
         return self._config_data.copy()
     
-    def update(self, updates: Dict[str, Any]) -> None:
+    def update(self, updates: dict[str, Any]) -> None:
         """Update configuration with new values.
         
         Args:
@@ -181,10 +180,12 @@ class ConfigurationManager:
             except Exception as e:
                 # Rollback on error
                 self._config_data = old_data
-                raise ConfigurationError(f"Failed to update configuration: {e}")
+                raise ConfigurationError(f"Failed to update configuration: {e}") from e
         
         # Notify changes synchronously (caller should handle async)
-        asyncio.create_task(self._notify_changes(old_data, self._config_data))
+        task = asyncio.create_task(self._notify_changes(old_data, self._config_data))
+        # Store reference to avoid warnings (task will complete independently)
+        self._pending_notify_task = task
     
     def add_change_callback(self, callback: Any) -> None:
         """Add a callback for configuration changes.
@@ -194,7 +195,7 @@ class ConfigurationManager:
         """
         self._change_callbacks.append(callback)
     
-    async def _notify_changes(self, old_data: Dict[str, Any], new_data: Dict[str, Any]) -> None:
+    async def _notify_changes(self, old_data: dict[str, Any], new_data: dict[str, Any]) -> None:
         """Notify callbacks of configuration changes."""
         changes = self._find_changes(old_data, new_data)
         
@@ -211,10 +212,10 @@ class ConfigurationManager:
     
     def _find_changes(
         self,
-        old_data: Dict[str, Any],
-        new_data: Dict[str, Any],
+        old_data: dict[str, Any],
+        new_data: dict[str, Any],
         path: str = ""
-    ) -> Dict[str, tuple]:
+    ) -> dict[str, tuple]:
         """Find changes between two configurations.
         
         Returns:
@@ -271,7 +272,7 @@ class ConfigurationManager:
             self._watch_task = None
     
     @classmethod
-    def from_sources(cls, sources: List[Union[str, ConfigurationSource]], **kwargs) -> "ConfigurationManager":
+    def from_sources(cls, sources: list[Union[str, ConfigurationSource]], **kwargs) -> "ConfigurationManager":
         """Create manager from source specifications.
         
         Args:
