@@ -1,90 +1,213 @@
-"""CLI application example using Whiskey."""
+"""CLI application example using Whiskey's IoC system."""
+
+import asyncio
+from typing import List, Optional
 
 import click
-from whiskey import inject, singleton
-from whiskey_cli import cli
+from whiskey import Application, inject, singleton
+from whiskey_cli import cli_extension
 
 
-# Service definitions
+# Domain models
+class Task:
+    """A task in our todo app."""
+    def __init__(self, id: int, title: str, completed: bool = False):
+        self.id = id
+        self.title = title
+        self.completed = completed
+
+
+# Services
 @singleton
-class ConfigService:
-    """Configuration service."""
+class TaskService:
+    """Service for managing tasks."""
     
     def __init__(self):
-        self.api_url = "https://api.example.com"
-        self.timeout = 30
-
-
-@singleton  
-class DataService:
-    """Service for data operations."""
+        self._tasks: List[Task] = []
+        self._next_id = 1
+        # Add some sample tasks
+        self.add("Learn Whiskey framework")
+        self.add("Build a CLI app", completed=True)
     
-    def __init__(self, config: ConfigService):
-        self.config = config
-        self._cache = {}
+    def add(self, title: str, completed: bool = False) -> Task:
+        """Add a new task."""
+        task = Task(self._next_id, title, completed)
+        self._tasks.append(task)
+        self._next_id += 1
+        return task
     
-    async def fetch_data(self, key: str) -> str:
-        """Fetch data by key."""
-        if key in self._cache:
-            return self._cache[key]
-        
-        # Simulate fetching data
-        data = f"Data for {key} from {self.config.api_url}"
-        self._cache[key] = data
-        return data
+    def list_all(self) -> List[Task]:
+        """List all tasks."""
+        return self._tasks.copy()
     
-    def list_cached(self) -> list[str]:
-        """List cached keys."""
-        return list(self._cache.keys())
+    def get(self, task_id: int) -> Optional[Task]:
+        """Get a task by ID."""
+        for task in self._tasks:
+            if task.id == task_id:
+                return task
+        return None
+    
+    def complete(self, task_id: int) -> bool:
+        """Mark a task as completed."""
+        task = self.get(task_id)
+        if task:
+            task.completed = True
+            return True
+        return False
+    
+    def delete(self, task_id: int) -> bool:
+        """Delete a task."""
+        for i, task in enumerate(self._tasks):
+            if task.id == task_id:
+                del self._tasks[i]
+                return True
+        return False
 
 
-# Build the CLI application
-app = (
-    cli()
-    .configure(lambda c: setattr(c, "name", "WhiskeyCLI"))
-    .service(ConfigService, implementation=ConfigService)
-    .service(DataService, implementation=DataService)
-)
+@singleton
+class ConfigService:
+    """Application configuration."""
+    
+    def __init__(self):
+        self.app_name = "Whiskey Todo CLI"
+        self.version = "1.0.0"
+        self.show_completed = True
 
 
-# Define commands
+# Create the application
+app = Application()
+app.use(cli_extension)
+
+# Register services
+app.component(TaskService)
+app.component(ConfigService)
+
+
+# CLI Commands
 @app.command()
-@click.argument("key")
+@click.argument("title")
 @inject
-async def fetch(key: str, data_service: DataService):
-    """Fetch data by key."""
-    result = await data_service.fetch_data(key)
-    click.echo(f"Fetched: {result}")
+async def add(title: str, task_service: TaskService):
+    """Add a new task."""
+    task = task_service.add(title)
+    click.echo(f"✅ Added task #{task.id}: {task.title}")
+    
+    # Emit event
+    await app.emit("task.created", {"id": task.id, "title": task.title})
+
+
+@app.command(name="list")
+@inject
+def list_tasks(task_service: TaskService, config: ConfigService):
+    """List all tasks."""
+    tasks = task_service.list_all()
+    
+    if not tasks:
+        click.echo("No tasks found. Use 'add' to create one!")
+        return
+    
+    click.echo(f"\n{config.app_name} - Tasks:\n")
+    
+    pending = [t for t in tasks if not t.completed]
+    completed = [t for t in tasks if t.completed]
+    
+    if pending:
+        click.echo("📋 Pending:")
+        for task in pending:
+            click.echo(f"  [{task.id}] {task.title}")
+    
+    if completed and config.show_completed:
+        click.echo("\n✅ Completed:")
+        for task in completed:
+            click.echo(f"  [{task.id}] {task.title}")
+    
+    click.echo(f"\nTotal: {len(pending)} pending, {len(completed)} completed")
 
 
 @app.command()
+@click.argument("task_id", type=int)
 @inject
-def list_cache(data_service: DataService):
-    """List cached data keys."""
-    keys = data_service.list_cached()
-    if keys:
-        click.echo("Cached keys:")
-        for key in keys:
-            click.echo(f"  - {key}")
+async def complete(task_id: int, task_service: TaskService):
+    """Mark a task as completed."""
+    if task_service.complete(task_id):
+        task = task_service.get(task_id)
+        click.echo(f"✅ Completed task #{task_id}: {task.title}")
+        await app.emit("task.completed", {"id": task_id})
     else:
-        click.echo("No cached data")
+        click.echo(f"❌ Task #{task_id} not found", err=True)
+
+
+@app.command()
+@click.argument("task_id", type=int)
+@inject
+async def delete(task_id: int, task_service: TaskService):
+    """Delete a task."""
+    task = task_service.get(task_id)
+    if task and task_service.delete(task_id):
+        click.echo(f"🗑️  Deleted task #{task_id}: {task.title}")
+        await app.emit("task.deleted", {"id": task_id})
+    else:
+        click.echo(f"❌ Task #{task_id} not found", err=True)
 
 
 @app.command()
 @inject
 def config(config_service: ConfigService):
     """Show configuration."""
-    click.echo(f"API URL: {config_service.api_url}")
-    click.echo(f"Timeout: {config_service.timeout}s")
+    click.echo(f"App Name: {config_service.app_name}")
+    click.echo(f"Version: {config_service.version}")
+    click.echo(f"Show Completed: {config_service.show_completed}")
 
 
-# Command that doesn't need the app
-@app.command(needs_app=False)
-def version():
-    """Show version information."""
-    click.echo("WhiskeyCLI v0.1.0")
+# Command groups example
+db_group = app.group("db")
 
 
-# Run the CLI
+@db_group.command()
+async def migrate():
+    """Run database migrations."""
+    click.echo("Running migrations...")
+    await asyncio.sleep(1)
+    click.echo("✅ Migrations complete!")
+
+
+@db_group.command()
+@inject
+async def backup(task_service: TaskService):
+    """Backup the database."""
+    tasks = task_service.list_all()
+    click.echo(f"Backing up {len(tasks)} tasks...")
+    await asyncio.sleep(0.5)
+    click.echo("✅ Backup complete!")
+
+
+# Event handlers (these run during CLI commands)
+@app.on("task.*")
+async def log_task_events(data: dict):
+    """Log all task events."""
+    # In a real app, this might write to a log file
+    print(f"[Event] Task event: {data}")
+
+
+# Background task (won't run in CLI mode, but shows the pattern)
+@app.task
+@inject
+async def cleanup_old_tasks(task_service: TaskService):
+    """This would run if app.run() was called instead of app.run_cli()."""
+    # This is just an example - background tasks don't run in CLI mode
+    pass
+
+
+# Main entry point
 if __name__ == "__main__":
-    app.run()
+    # Run as CLI
+    app.run_cli()
+    
+    # Alternative: Run with a main function
+    # @app.main
+    # @inject
+    # async def main(task_service: TaskService):
+    #     tasks = task_service.list_all()
+    #     print(f"Running with {len(tasks)} tasks")
+    # 
+    # app.run()
