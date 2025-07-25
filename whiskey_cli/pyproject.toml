@@ -1,11 +1,12 @@
 [project]
-name = "whiskey-asgi"
+name = "whiskey-cli"
 version = "0.1.0"
-description = "ASGI web framework plugin for Whiskey"
+description = "CLI framework extension for Whiskey"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "whiskey>=0.1.0",
+    "click>=8.0",
 ]
 
 # Entry points removed - using extension functions instead

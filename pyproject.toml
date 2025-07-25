@@ -22,7 +22,7 @@ dev-dependencies = [
 ]
 
 [tool.uv.workspace]
-members = ["whiskey-*"]
+members = ["whiskey_*"]
 
 [tool.uv.sources]
 whiskey-ai = { workspace = true }

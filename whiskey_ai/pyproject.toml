@@ -1,7 +1,7 @@
 [project]
 name = "whiskey-ai"
 version = "0.1.0"
-description = "AI/LLM integration plugin for Whiskey framework"
+description = "AI/LLM integration extension for Whiskey framework"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
