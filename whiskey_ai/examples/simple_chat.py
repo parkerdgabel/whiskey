@@ -1,6 +1,5 @@
 """Simple chat application using Whiskey AI extension."""
 
-
 from whiskey import inject
 from whiskey_ai import LLMClient, MockLLMClient, ai_extension
 from whiskey_asgi import Request, asgi_extension

@@ -2,12 +2,10 @@
 
 import asyncio
 import os
-from typing import Optional
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
 
-from whiskey import Container
 from whiskey.core.application import Whiskey
 from whiskey.core.decorators import (
     _get_default_app,
@@ -57,6 +55,7 @@ class TestGlobalAppManagement:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_get_default_app_creates_instance(self):
@@ -99,6 +98,7 @@ class TestComponentDecorators:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_component_decorator_simple(self):
@@ -212,6 +212,7 @@ class TestInjectionDecorator:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_inject_sync_function(self):
@@ -312,6 +313,7 @@ class TestLifecycleDecorators:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     async def test_on_startup_decorator(self):
@@ -383,6 +385,7 @@ class TestConditionalDecorators:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_when_env_decorator(self):
@@ -448,6 +451,7 @@ class TestResolutionFunctions:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_resolve_sync(self):
@@ -500,6 +504,7 @@ class TestCallFunctions:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_call_sync(self):
@@ -567,6 +572,7 @@ class TestWrapFunction:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_wrap_function_sync(self):
@@ -618,6 +624,7 @@ class TestDecoratorChaining:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_conditional_singleton(self):
@@ -656,6 +663,7 @@ class TestDecoratorChaining:
         with patch.dict(os.environ, {"FEATURE_FLAG": "disabled", "DEBUG": "true"}):
             app2 = Whiskey()  # New app instance
             import whiskey.core.decorators
+
             whiskey.core.decorators._default_app = app2
 
             with pytest.raises(ResolutionError):
@@ -668,6 +676,7 @@ class TestEdgeCases:
     def teardown_method(self):
         """Reset global state between tests."""
         import whiskey.core.decorators
+
         whiskey.core.decorators._default_app = None
 
     def test_inject_no_type_hints(self):
@@ -696,6 +705,7 @@ class TestEdgeCases:
         """Test component decorator on non-class."""
 
         with pytest.raises(TypeError):
+
             @component
             def not_a_class():
                 pass

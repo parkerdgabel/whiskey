@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from whiskey import Container, Scope, Whiskey, create_app
-from whiskey.core.builder import WhiskeyBuilder, ComponentBuilder, ConditionBuilder
+from whiskey.core.builder import ComponentBuilder, ConditionBuilder, WhiskeyBuilder
 from whiskey.core.errors import ConfigurationError
 
 

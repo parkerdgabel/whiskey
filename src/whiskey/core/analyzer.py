@@ -15,7 +15,6 @@ from typing import Any, Union, get_args, get_origin
 try:
     from typing import Literal, get_type_hints
 except ImportError:
-
     from typing_extensions import Literal
 
 try:

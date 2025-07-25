@@ -1,6 +1,5 @@
 """Comprehensive tests for the discovery module."""
 
-import inspect
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, Mock, patch
@@ -9,7 +8,6 @@ import pytest
 
 from whiskey.core.container import Container
 from whiskey.core.discovery import ComponentDiscoverer, ContainerInspector, discover_components
-from whiskey.core.errors import ResolutionError
 from whiskey.core.registry import Scope
 
 
@@ -129,7 +127,7 @@ class TestComponentDiscoverer:
         discoverer = ComponentDiscoverer(container)
 
         mock_module = MagicMock()
-        mock_module.__name__ = 'test_module'
+        mock_module.__name__ = "test_module"
 
         # Create a property that raises exception
         class BadProperty:
@@ -143,14 +141,14 @@ class TestComponentDiscoverer:
             pass
 
         mock_module.GoodClass = GoodClass
-        GoodClass.__module__ = 'test_module'
+        GoodClass.__module__ = "test_module"
 
         # Set up dir() to return our attributes
-        mock_module.__dir__ = lambda: ['BadProp', 'GoodClass']
+        mock_module.__dir__ = lambda: ["BadProp", "GoodClass"]
 
-        with patch('importlib.import_module', return_value=mock_module):
+        with patch("importlib.import_module", return_value=mock_module):
             # Should skip bad property and find good class
-            components = discoverer.discover_module('test_module')
+            components = discoverer.discover_module("test_module")
             assert GoodClass in components
 
     def test_discover_module_type_checking(self):
@@ -159,23 +157,23 @@ class TestComponentDiscoverer:
         discoverer = ComponentDiscoverer(container)
 
         mock_module = MagicMock()
-        mock_module.__name__ = 'test_module'
+        mock_module.__name__ = "test_module"
 
         # Various non-class objects
         mock_module.string_attr = "not a class"
         mock_module.int_attr = 42
         mock_module.list_attr = [1, 2, 3]
-        mock_module.dict_attr = {'key': 'value'}
+        mock_module.dict_attr = {"key": "value"}
 
         # A proper class
         class ValidClass:
             pass
 
         mock_module.ValidClass = ValidClass
-        ValidClass.__module__ = 'test_module'
+        ValidClass.__module__ = "test_module"
 
-        with patch('importlib.import_module', return_value=mock_module):
-            components = discoverer.discover_module('test_module')
+        with patch("importlib.import_module", return_value=mock_module):
+            components = discoverer.discover_module("test_module")
 
             # Should only find the class
             assert ValidClass in components
@@ -188,11 +186,11 @@ class TestComponentDiscoverer:
 
         # Mock package structure
         main_module = MagicMock()
-        main_module.__name__ = 'mypackage'
-        main_module.__path__ = ['/fake/mypackage']
+        main_module.__name__ = "mypackage"
+        main_module.__path__ = ["/fake/mypackage"]
 
         sub_module = MagicMock()
-        sub_module.__name__ = 'mypackage.submodule'
+        sub_module.__name__ = "mypackage.submodule"
 
         class MainComponent:
             pass
@@ -200,26 +198,26 @@ class TestComponentDiscoverer:
         class SubComponent:
             pass
 
-        MainComponent.__module__ = 'mypackage'
-        SubComponent.__module__ = 'mypackage.submodule'
+        MainComponent.__module__ = "mypackage"
+        SubComponent.__module__ = "mypackage.submodule"
 
         main_module.MainComponent = MainComponent
         sub_module.SubComponent = SubComponent
 
         # Mock the walk_packages to return our submodule
-        with patch('importlib.import_module') as mock_import:
+        with patch("importlib.import_module") as mock_import:
             mock_import.side_effect = lambda name: {
-                'mypackage': main_module,
-                'mypackage.submodule': sub_module
+                "mypackage": main_module,
+                "mypackage.submodule": sub_module,
             }.get(name)
 
-            with patch('whiskey.core.discovery.pkgutil.walk_packages') as mock_walk:
+            with patch("whiskey.core.discovery.pkgutil.walk_packages") as mock_walk:
                 # Return module info for submodule
                 module_info = Mock()
-                module_info.name = 'submodule'
-                mock_walk.return_value = [(None, 'submodule', False)]
+                module_info.name = "submodule"
+                mock_walk.return_value = [(None, "submodule", False)]
 
-                components = discoverer.discover_package('mypackage', recursive=True)
+                components = discoverer.discover_package("mypackage", recursive=True)
 
                 # Should find both components
                 assert MainComponent in components
@@ -256,10 +254,7 @@ class TestComponentDiscoverer:
         class Component:
             pass
 
-        registered = discoverer.auto_register(
-            {Component},
-            scope=Scope.SINGLETON
-        )
+        registered = discoverer.auto_register({Component}, scope=Scope.SINGLETON)
 
         # Should register as singleton
         instance1 = container.resolve_sync(Component)
@@ -317,8 +312,8 @@ class TestContainerInspector:
             pass
 
         container.register(Service1, Service1())
-        container.register(Service2, Service2(), tags={'important'})
-        container.register('custom', Service1())
+        container.register(Service2, Service2(), tags={"important"})
+        container.register("custom", Service1())
 
         inspector = ContainerInspector(container)
         services = inspector.list_services()
@@ -358,16 +353,16 @@ class TestContainerInspector:
         class Service2:
             pass
 
-        container.register(Service1, Service1(), tags={'core', 'stable'})
-        container.register(Service2, Service2(), tags={'experimental'})
+        container.register(Service1, Service1(), tags={"core", "stable"})
+        container.register(Service2, Service2(), tags={"experimental"})
 
         inspector = ContainerInspector(container)
 
         # Filter by tags
-        services = inspector.list_services(tags={'core'})
+        services = inspector.list_services(tags={"core"})
         # Should include Service1
 
-        services = inspector.list_services(tags={'experimental'})
+        services = inspector.list_services(tags={"experimental"})
         # Should include Service2
 
     def test_get_dependencies(self):
@@ -383,8 +378,8 @@ class TestContainerInspector:
                 self.db = db
 
         deps = inspector.get_dependencies(Service)
-        assert 'db' in deps
-        assert deps['db'] is Database
+        assert "db" in deps
+        assert deps["db"] is Database
 
     def test_get_dependencies_no_annotations(self):
         """Test getting dependencies for class without annotations."""
@@ -450,11 +445,11 @@ class TestContainerInspector:
         container.register(Service, Service())
 
         report = inspector.resolution_report(Service)
-        assert 'can_resolve' in report
-        assert 'dependencies' in report
-        assert 'missing_dependencies' in report
-        assert 'resolution_path' in report
-        assert report['can_resolve'] is True
+        assert "can_resolve" in report
+        assert "dependencies" in report
+        assert "missing_dependencies" in report
+        assert "resolution_path" in report
+        assert report["can_resolve"] is True
 
     def test_resolution_report_missing_deps(self):
         """Test resolution report with missing dependencies."""
@@ -470,8 +465,8 @@ class TestContainerInspector:
 
         # Don't register database
         report = inspector.resolution_report(Service)
-        assert report['can_resolve'] is False
-        assert 'db' in report['missing_dependencies']
+        assert report["can_resolve"] is False
+        assert "db" in report["missing_dependencies"]
 
     def test_dependency_graph(self):
         """Test building dependency graph."""
@@ -506,32 +501,32 @@ class TestDiscoverComponentsFunction:
     def test_discover_with_string_module(self):
         """Test discover_components with string module name."""
         # Create test module
-        test_module = ModuleType('test_discover_module')
+        test_module = ModuleType("test_discover_module")
 
         class Component:
             pass
 
         test_module.Component = Component
-        Component.__module__ = 'test_discover_module'
+        Component.__module__ = "test_discover_module"
 
-        sys.modules['test_discover_module'] = test_module
+        sys.modules["test_discover_module"] = test_module
 
         try:
             container = Container()
-            components = discover_components('test_discover_module', container=container)
+            components = discover_components("test_discover_module", container=container)
             assert Component in components
         finally:
-            del sys.modules['test_discover_module']
+            del sys.modules["test_discover_module"]
 
     def test_discover_with_module_object(self):
         """Test discover_components with module object."""
-        test_module = ModuleType('test_module_obj')
+        test_module = ModuleType("test_module_obj")
 
         class Component:
             pass
 
         test_module.Component = Component
-        Component.__module__ = 'test_module_obj'
+        Component.__module__ = "test_module_obj"
 
         container = Container()
         components = discover_components(test_module, container=container)
@@ -542,29 +537,27 @@ class TestDiscoverComponentsFunction:
         # Should require container parameter
         with pytest.raises(TypeError):
             # Missing required container parameter
-            components = discover_components('some_module')
+            components = discover_components("some_module")
 
     def test_discover_and_register(self):
         """Test discovering and auto-registering components."""
         container = Container()
 
         # Create test module
-        test_module = ModuleType('test_auto_module')
+        test_module = ModuleType("test_auto_module")
 
         class AutoService:
             pass
 
         test_module.AutoService = AutoService
-        AutoService.__module__ = 'test_auto_module'
+        AutoService.__module__ = "test_auto_module"
 
-        sys.modules['test_auto_module'] = test_module
+        sys.modules["test_auto_module"] = test_module
 
         try:
             # Discover and register
             components = discover_components(
-                'test_auto_module',
-                container=container,
-                auto_register=True
+                "test_auto_module", container=container, auto_register=True
             )
 
             assert AutoService in components
@@ -572,14 +565,14 @@ class TestDiscoverComponentsFunction:
             instance = container.resolve_sync(AutoService)
             assert isinstance(instance, AutoService)
         finally:
-            del sys.modules['test_auto_module']
+            del sys.modules["test_auto_module"]
 
     def test_discover_with_predicate_function(self):
         """Test discover_components with predicate."""
         container = Container()
 
         # Create test module
-        test_module = ModuleType('test_pred_module')
+        test_module = ModuleType("test_pred_module")
 
         class BaseClass:
             pass
@@ -594,29 +587,23 @@ class TestDiscoverComponentsFunction:
         test_module.DerivedClass = DerivedClass
         test_module.UnrelatedClass = UnrelatedClass
 
-        BaseClass.__module__ = 'test_pred_module'
-        DerivedClass.__module__ = 'test_pred_module'
-        UnrelatedClass.__module__ = 'test_pred_module'
+        BaseClass.__module__ = "test_pred_module"
+        DerivedClass.__module__ = "test_pred_module"
+        UnrelatedClass.__module__ = "test_pred_module"
 
-        sys.modules['test_pred_module'] = test_module
+        sys.modules["test_pred_module"] = test_module
 
         try:
             # Only discover subclasses of BaseClass
             def is_subclass_of_base(cls):
-                return (
-                    isinstance(cls, type) and
-                    issubclass(cls, BaseClass) and
-                    cls is not BaseClass
-                )
+                return isinstance(cls, type) and issubclass(cls, BaseClass) and cls is not BaseClass
 
             components = discover_components(
-                'test_pred_module',
-                container=container,
-                predicate=is_subclass_of_base
+                "test_pred_module", container=container, predicate=is_subclass_of_base
             )
 
             assert DerivedClass in components
             assert BaseClass not in components
             assert UnrelatedClass not in components
         finally:
-            del sys.modules['test_pred_module']
+            del sys.modules["test_pred_module"]

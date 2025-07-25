@@ -2,14 +2,12 @@
 
 import asyncio
 from typing import Optional
-from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from whiskey import Container, Scope, Whiskey
 from whiskey.core.builder import ComponentBuilder, WhiskeyBuilder
-from whiskey.core.errors import ConfigurationError, ResolutionError
-from whiskey.core.registry import ServiceDescriptor
+from whiskey.core.errors import ResolutionError
 from whiskey.core.types import Disposable, Initializable
 
 
@@ -409,6 +407,7 @@ class TestLifecycle:
         events = []
 
         async with Whiskey() as app:
+
             @app.on_startup
             async def on_start():
                 events.append("started")
@@ -462,7 +461,9 @@ class TestMiddleware:
                     result = await next_handler(*args, **kwargs)
                     calls.append(f"{name}_after")
                     return result
+
                 return handler
+
             return middleware
 
         app.use(tracking_middleware("m1"))
@@ -506,7 +507,7 @@ class TestBuilderIntegration:
     def test_builder_property(self):
         """Test accessing container builder."""
         app = Whiskey()
-        
+
         # Should create and return builder
         builder = app.container
         assert isinstance(builder, ComponentBuilder)
@@ -517,10 +518,10 @@ class TestBuilderIntegration:
     def test_build_method(self):
         """Test build() method."""
         app = Whiskey()
-        
+
         # Configure using builder
         app.container.add_singleton(SimpleService).build()
-        
+
         instance = app.resolve(SimpleService)
         assert isinstance(instance, SimpleService)
 
@@ -586,10 +587,10 @@ class TestTaskManagement:
 
         # Start app to begin tasks
         await app.start()
-        
+
         # Wait for task to run
         await asyncio.sleep(0.15)
-        
+
         # Stop app to cancel tasks
         await app.stop()
 
@@ -639,6 +640,7 @@ class TestExtensionSystem:
             def decorator(cls):
                 decorated_items.append((name, cls))
                 return cls
+
             return decorator
 
         app.add_decorator("custom", custom_decorator)
@@ -666,7 +668,7 @@ class TestErrorHandling:
         app = Whiskey()
 
         class ServiceA:
-            def __init__(self, b: 'ServiceB'):
+            def __init__(self, b: "ServiceB"):
                 self.b = b
 
         class ServiceB:
@@ -682,7 +684,7 @@ class TestErrorHandling:
     async def test_startup_error_handling(self):
         """Test error during startup."""
         app = Whiskey()
-        
+
         @app.on_startup
         async def failing_startup():
             raise RuntimeError("Startup failed")
@@ -709,10 +711,7 @@ class TestMetadataAndPriority:
         """Test registering component with metadata."""
         app = Whiskey()
 
-        @app.component(
-            metadata={"version": "1.0", "author": "test"},
-            tags={"core", "stable"}
-        )
+        @app.component(metadata={"version": "1.0", "author": "test"}, tags={"core", "stable"})
         class MetadataService:
             pass
 

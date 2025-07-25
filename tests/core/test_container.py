@@ -2,12 +2,11 @@
 
 import asyncio
 from typing import Optional
-from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from whiskey import Container
-from whiskey.core.container import get_current_container, set_current_container, _current_container
+from whiskey.core.container import _current_container, get_current_container, set_current_container
 from whiskey.core.errors import CircularDependencyError, ResolutionError
 from whiskey.core.registry import Scope
 from whiskey.core.types import Disposable, Initializable
@@ -198,10 +197,10 @@ class TestRegistration:
     @pytest.mark.unit
     def test_resolve_sync_with_async_factory_error(self, container):
         """Test error when resolving async factory synchronously."""
-        container['service'] = async_factory
+        container["service"] = async_factory
 
         with pytest.raises(RuntimeError, match="Cannot resolve async factory"):
-            container.resolve_sync('service')
+            container.resolve_sync("service")
 
     @pytest.mark.unit
     async def test_singleton(self, container):
@@ -226,15 +225,13 @@ class TestRegistration:
     def test_register_with_metadata(self, container):
         """Test registration with metadata."""
         container.register(
-            SimpleService,
-            SimpleService(),
-            metadata={'version': '1.0', 'author': 'test'}
+            SimpleService, SimpleService(), metadata={"version": "1.0", "author": "test"}
         )
 
         # Metadata should be stored in descriptor
         descriptor = container.registry.get(SimpleService)
-        assert descriptor.metadata['version'] == '1.0'
-        assert descriptor.metadata['author'] == 'test'
+        assert descriptor.metadata["version"] == "1.0"
+        assert descriptor.metadata["author"] == "test"
 
     @pytest.mark.unit
     def test_register_with_tuple_key(self, container):
@@ -242,10 +239,10 @@ class TestRegistration:
         instance = SimpleService()
 
         # Set with name
-        container[SimpleService, 'primary'] = instance
+        container[SimpleService, "primary"] = instance
 
         # Should be retrievable by type and name
-        retrieved = container.resolve_sync(SimpleService, name='primary')
+        retrieved = container.resolve_sync(SimpleService, name="primary")
         assert retrieved is instance
 
     @pytest.mark.unit
@@ -264,9 +261,9 @@ class TestRegistration:
     def test_register_none_provider(self, container):
         """Test registering with None provider."""
         # Should handle None provider
-        container.register('null_service', None)
+        container.register("null_service", None)
 
-        result = container.resolve_sync('null_service')
+        result = container.resolve_sync("null_service")
         assert result is None
 
 
@@ -344,11 +341,11 @@ class TestResolution:
         container.register(ComplexService, ComplexService)
 
         # Resolve with override
-        custom_db = DatabaseService('custom')
-        service = container.resolve_sync(ComplexService, overrides={'db': custom_db})
+        custom_db = DatabaseService("custom")
+        service = container.resolve_sync(ComplexService, overrides={"db": custom_db})
 
         assert service.db is custom_db
-        assert service.db.connection_string == 'custom'
+        assert service.db.connection_string == "custom"
 
     @pytest.mark.unit
     def test_optional_dependency(self, container):
@@ -363,6 +360,7 @@ class TestResolution:
     @pytest.mark.unit
     def test_resolve_non_existent(self, container):
         """Test resolving non-existent service."""
+
         class Service:
             pass
 
@@ -381,50 +379,50 @@ class TestScopes:
     @pytest.mark.unit
     def test_enter_scope(self, container):
         """Test entering a scope."""
-        container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name='request')
+        container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name="request")
 
         # Enter scope
-        scope = container.enter_scope('request')
+        scope = container.enter_scope("request")
         assert scope is not None
-        assert scope.name == 'request'
+        assert scope.name == "request"
 
     @pytest.mark.unit
     def test_exit_scope(self, container):
         """Test exiting a scope."""
-        container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name='request')
+        container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name="request")
 
         # Enter and exit scope
-        container.enter_scope('request')
-        container.exit_scope('request')
+        container.enter_scope("request")
+        container.exit_scope("request")
 
         # Scope should be removed
-        assert 'request' not in container._scopes
+        assert "request" not in container._scopes
 
     @pytest.mark.unit
     def test_scope_context_manager(self, container):
         """Test using scope as context manager."""
-        container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name='request')
+        container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name="request")
 
-        with container.scope('request') as scope:
+        with container.scope("request") as scope:
             # Should be able to resolve in scope
             instance = container.resolve_sync(SimpleService)
             assert instance is not None
 
         # Scope should be cleaned up
-        assert 'request' not in container._scopes
+        assert "request" not in container._scopes
 
     @pytest.mark.unit
     async def test_scope_async_context_manager(self, container):
         """Test using scope as async context manager."""
-        container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name='session')
+        container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name="session")
 
-        async with container.scope('session') as scope:
+        async with container.scope("session") as scope:
             # Should be able to resolve in scope
             instance = await container.resolve(SimpleService)
             assert instance is not None
 
         # Scope should be cleaned up
-        assert 'session' not in container._scopes
+        assert "session" not in container._scopes
 
 
 class TestLifecycle:
@@ -535,6 +533,7 @@ class TestCallMethods:
     @pytest.mark.unit
     def test_call_sync(self, container):
         """Test calling function with injection."""
+
         class Service:
             def __init__(self):
                 self.value = 42
@@ -550,6 +549,7 @@ class TestCallMethods:
     @pytest.mark.unit
     async def test_call_async(self, container):
         """Test calling async function with injection."""
+
         class Service:
             def __init__(self):
                 self.value = 42
@@ -566,6 +566,7 @@ class TestCallMethods:
     @pytest.mark.unit
     def test_invoke_sync(self, container):
         """Test invoking function with full injection."""
+
         class Service:
             def __init__(self):
                 self.value = 42
@@ -581,6 +582,7 @@ class TestCallMethods:
     @pytest.mark.unit
     async def test_invoke_async(self, container):
         """Test invoking async function with full injection."""
+
         class Service:
             def __init__(self):
                 self.value = 42
@@ -645,8 +647,9 @@ class TestEdgeCases:
     @pytest.mark.unit
     def test_circular_dependency_detection(self, container):
         """Test circular dependency detection."""
+
         class ServiceA:
-            def __init__(self, b: 'ServiceB'):
+            def __init__(self, b: "ServiceB"):
                 self.b = b
 
         class ServiceB:

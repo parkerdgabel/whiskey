@@ -1,6 +1,5 @@
 """Agent example using Whiskey AI extension."""
 
-
 from whiskey import inject
 from whiskey_ai import LLMClient, MockLLMClient, ai_extension
 from whiskey_ai.agents import AnalysisAgent, CodingAgent, ResearchAgent
