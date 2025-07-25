@@ -1,296 +1,226 @@
 """
-Scopes and Lifecycle Example
+Service Scopes and Lifecycle Example
 
-This example demonstrates advanced container concepts:
-- Service scopes (singleton, transient, scoped)
-- Custom scopes with context variables
-- Service lifecycle management
-- Resource cleanup and disposal
+This example demonstrates Whiskey's service lifecycle management:
+- Singleton services (shared across application)
+- Transient services (new instance per resolution)
+- Scoped services (shared within a scope)
+- Lifecycle hooks and cleanup
 
 Run this example:
     python examples/02_scopes_and_lifecycle.py
 """
 
 import asyncio
-from typing import Annotated
+from contextlib import asynccontextmanager
 
-from whiskey import Container, inject, provide, singleton, factory, scoped, Inject
-from whiskey.core.scopes import ContextVarScope
-from whiskey.core.types import Initializable, Disposable
+from whiskey import Container, singleton, service, create_app, Scope
 
 
-# Step 1: Services with Lifecycle Management
-# ===========================================
-
-class DatabaseConnection(Initializable, Disposable):
-    """Database connection with proper lifecycle."""
-    
-    def __init__(self, connection_string: str = "postgresql://localhost/myapp"):
-        self.connection_string = connection_string
-        self.connected = False
-        self._queries_executed = 0
-        print(f"🗄️ Database connection created for: {connection_string}")
-    
-    async def initialize(self):
-        """Initialize the database connection."""
-        print("🔌 Connecting to database...")
-        await asyncio.sleep(0.1)  # Simulate connection time
-        self.connected = True
-        print("✅ Database connected")
-    
-    async def dispose(self):
-        """Clean up the database connection."""
-        print("🔌 Disconnecting from database...")
-        await asyncio.sleep(0.05)  # Simulate cleanup
-        self.connected = False
-        print("✅ Database disconnected") 
-    
-    async def query(self, sql: str) -> list[dict]:
-        """Execute a query."""
-        if not self.connected:
-            raise RuntimeError("Database not connected")
-        
-        self._queries_executed += 1
-        print(f"📊 Query #{self._queries_executed}: {sql}")
-        return [{"id": 1, "result": f"data_for_{sql}"}]
-    
-    @property
-    def queries_executed(self) -> int:
-        return self._queries_executed
-
+# Step 1: Define Services with Different Scopes
+# ==============================================
 
 @singleton
-class ConfigService:
-    """Global configuration service (singleton)."""
+class DatabaseConnection:
+    """Expensive resource - should be singleton."""
     
     def __init__(self):
-        print("⚙️ ConfigService initialized (singleton)")
-        self.settings = {
-            "app_name": "WhiskeyApp",
-            "version": "1.0.0",
-            "debug": True
-        }
+        self.connection_id = f"conn_{id(self)}"
+        print(f"🔌 Database connection created: {self.connection_id}")
     
-    def get(self, key: str, default=None):
-        """Get a configuration value."""
-        return self.settings.get(key, default)
+    def execute(self, query: str) -> str:
+        return f"[{self.connection_id}] Query: {query}"
+    
+    def dispose(self):
+        """Called during cleanup."""
+        print(f"🔌 Database connection closed: {self.connection_id}")
 
 
 class RequestContext:
-    """Request-scoped context information."""
+    """Per-request context information."""
     
     def __init__(self):
         self.request_id = f"req_{id(self)}"
-        self.user_id = None
-        self.start_time = asyncio.get_event_loop().time()
-        print(f"🔍 RequestContext created: {self.request_id}")
+        self.data = {}
+        print(f"📨 Request context created: {self.request_id}")
     
-    def set_user(self, user_id: int):
-        """Set the current user for this request."""
-        self.user_id = user_id
-        print(f"👤 User {user_id} set for request {self.request_id}")
+    def set_data(self, key: str, value: str):
+        self.data[key] = value
     
-    @property
-    def duration(self) -> float:
-        """Get the request duration so far."""
-        return asyncio.get_event_loop().time() - self.start_time
+    def get_data(self, key: str) -> str:
+        return self.data.get(key, "")
 
 
-@factory
-def create_session_id() -> str:
-    """Factory function that creates unique session IDs."""
-    import time
-    session_id = f"session_{int(time.time() * 1000)}"
-    print(f"🆔 Created session ID: {session_id}")
-    return session_id
-
-
-# Step 2: Services Using Different Scopes
-# ========================================
-
-@provide
-class UserService:
-    """User service that uses various scoped dependencies."""
+@service
+class UserRepository:
+    """Data access layer - transient by default."""
     
-    def __init__(self,
-                 db: Annotated[DatabaseConnection, Inject()],
-                 config: Annotated[ConfigService, Inject()],
-                 request_ctx: Annotated[RequestContext, Inject()],
-                 session_id: Annotated[str, Inject()]):
+    def __init__(self, db: DatabaseConnection):
         self.db = db
-        self.config = config
-        self.request_ctx = request_ctx
-        self.session_id = session_id
-        print(f"👤 UserService initialized for {request_ctx.request_id}")
+        self.instance_id = f"repo_{id(self)}"
+        print(f"📚 UserRepository created: {self.instance_id}")
     
     async def get_user(self, user_id: int) -> dict:
-        """Get user information."""
-        self.request_ctx.set_user(user_id)
-        
-        app_name = self.config.get("app_name")
-        users = await self.db.query(f"SELECT * FROM users WHERE id = {user_id}")
-        
-        return {
-            "user": users[0] if users else None,
-            "app_name": app_name,
-            "request_id": self.request_ctx.request_id,
-            "session_id": self.session_id,
-            "request_duration": self.request_ctx.duration
-        }
+        result = self.db.execute(f"SELECT * FROM users WHERE id = {user_id}")
+        return {"id": user_id, "name": f"User{user_id}", "query": result}
 
 
-@provide 
-class AuditService:
-    """Service that logs user actions."""
+@service
+class UserService:
+    """Business logic - uses repository."""
     
-    def __init__(self,
-                 db: Annotated[DatabaseConnection, Inject()],
-                 request_ctx: Annotated[RequestContext, Inject()]):
-        self.db = db
-        self.request_ctx = request_ctx
-        print(f"📋 AuditService initialized for {self.request_ctx.request_id}")
+    def __init__(self, repo: UserRepository, context: RequestContext):
+        self.repo = repo
+        self.context = context
+        self.instance_id = f"service_{id(self)}"
+        print(f"👤 UserService created: {self.instance_id}")
     
-    async def log_action(self, action: str):
-        """Log a user action."""
-        user_id = self.request_ctx.user_id or "anonymous"
-        await self.db.query(f"INSERT INTO audit_log (user_id, action, request_id) VALUES ({user_id}, '{action}', '{self.request_ctx.request_id}')")
-        print(f"📝 Logged action: {action} for user {user_id}")
+    async def process_user(self, user_id: int) -> dict:
+        user = await self.repo.get_user(user_id)
+        self.context.set_data("last_user", str(user_id))
+        return user
 
 
-# Step 3: Custom Scopes
-# ======================
-
-async def demonstrate_basic_scopes():
-    """Demonstrate singleton, transient, and factory scopes."""
-    print("\n" + "=" * 50)
-    print("BASIC SCOPES DEMONSTRATION")
-    print("=" * 50)
+async def demonstrate_singleton_vs_transient():
+    """Show the difference between singleton and transient services."""
+    print("\n🔄 Singleton vs Transient Demonstration")
+    print("=" * 45)
     
     container = Container()
     
-    # Register services with different scopes
-    container.singleton(ConfigService, ConfigService)  # One instance globally
-    container[DatabaseConnection] = DatabaseConnection  # New instance each time (transient)
-    container.factory(str, create_session_id)  # Factory function called each time
+    # Register with explicit scopes
+    container.add_singleton(DatabaseConnection, DatabaseConnection).build()
+    container.add(UserRepository, UserRepository).build()  # Transient by default
     
-    print("\n1. Singleton behavior (ConfigService):")
-    config1 = await container.resolve(ConfigService)
-    config2 = await container.resolve(ConfigService)
-    print(f"   Same ConfigService instance: {config1 is config2}")
+    print("\nResolving services multiple times...")
     
-    print("\n2. Transient behavior (DatabaseConnection):")
-    db1 = await container.resolve(DatabaseConnection) 
+    # Resolve multiple times
+    db1 = await container.resolve(DatabaseConnection)
     db2 = await container.resolve(DatabaseConnection)
-    print(f"   Same DatabaseConnection instance: {db1 is db2}")
+    repo1 = await container.resolve(UserRepository)
+    repo2 = await container.resolve(UserRepository)
     
-    print("\n3. Factory behavior (session ID):")
-    session1 = await container.resolve(str)
-    session2 = await container.resolve(str)
-    print(f"   Same session ID: {session1 == session2}")
+    print(f"\nSingleton DatabaseConnection:")
+    print(f"  Instance 1: {db1.connection_id}")
+    print(f"  Instance 2: {db2.connection_id}")
+    print(f"  Same object: {db1 is db2}")  # True
     
-    # Cleanup
-    await db1.dispose() if hasattr(db1, 'dispose') else None
-    await db2.dispose() if hasattr(db2, 'dispose') else None
+    print(f"\nTransient UserRepository:")
+    print(f"  Instance 1: {repo1.instance_id}")
+    print(f"  Instance 2: {repo2.instance_id}")
+    print(f"  Same object: {repo1 is repo2}")  # False
 
 
-async def demonstrate_custom_scopes():
-    """Demonstrate custom scopes using ContextVarScope."""
-    print("\n" + "=" * 50)
-    print("CUSTOM SCOPES DEMONSTRATION")
-    print("=" * 50)
+async def demonstrate_scoped_services():
+    """Show scoped service behavior."""
+    print("\n🎯 Scoped Services Demonstration")
+    print("=" * 35)
     
     container = Container()
-    
-    # Create a custom scope for request-level services
-    request_scope = ContextVarScope("request")
     
     # Register services with different scopes
-    container.singleton(ConfigService, ConfigService)  # Global singleton
-    container[DatabaseConnection] = DatabaseConnection  # Transient
-    container.factory(str, create_session_id)  # Factory
-    container.scoped(RequestContext, RequestContext, scope=request_scope)  # Request-scoped
-    container[UserService] = UserService
-    container[AuditService] = AuditService
+    container.add_singleton(DatabaseConnection, DatabaseConnection).build()
+    container.add_scoped(RequestContext, RequestContext, 'request').build()
+    container.add(UserService, UserService).build()
     
-    async def simulate_request(request_num: int):
-        """Simulate processing a request with request-scoped services."""
-        print(f"\n--- Request {request_num} ---")
-        
-        # Enter request scope
-        async with request_scope:
-            # All services resolved within this scope will share the same RequestContext
-            user_service1 = await container.resolve(UserService)
-            user_service2 = await container.resolve(UserService)
-            audit_service = await container.resolve(AuditService)
-            
-            print(f"Same RequestContext: {user_service1.request_ctx is user_service2.request_ctx}")
-            print(f"Same RequestContext (audit): {user_service1.request_ctx is audit_service.request_ctx}")
-            
-            # Use the services
-            user_data = await user_service1.get_user(request_num * 100)
-            await audit_service.log_action("get_user")
-            
-            print(f"User data: {user_data}")
-            
-            # Let the request run for a bit
-            await asyncio.sleep(0.1)
-            
-            # Final audit
-            await audit_service.log_action("request_complete")
-            print(f"Request {request_num} duration: {user_service1.request_ctx.duration:.3f}s")
-        
-        print(f"Request {request_num} scope exited")
+    @asynccontextmanager
+    async def request_scope():
+        """Simulate a request scope."""
+        print("\n📨 Starting request scope...")
+        # In a real application, this would be handled by the framework
+        yield
+        print("📨 Ending request scope...")
     
-    # Simulate multiple concurrent requests
-    await asyncio.gather(
-        simulate_request(1),
-        simulate_request(2),
-        simulate_request(3)
-    )
+    # Simulate two separate requests
+    async with request_scope():
+        print("\n--- Request 1 ---")
+        service1a = await container.resolve(UserService)
+        service1b = await container.resolve(UserService)
+        
+        user1 = await service1a.process_user(1)
+        user2 = await service1b.process_user(2)
+        
+        print(f"Service 1a context: {service1a.context.request_id}")
+        print(f"Service 1b context: {service1b.context.request_id}")
+        print(f"Same context: {service1a.context is service1b.context}")
+        print(f"Last user in context: {service1a.context.get_data('last_user')}")
+    
+    async with request_scope():
+        print("\n--- Request 2 ---")
+        service2a = await container.resolve(UserService)
+        service2b = await container.resolve(UserService)
+        
+        user3 = await service2a.process_user(3)
+        
+        print(f"Service 2a context: {service2a.context.request_id}")
+        print(f"Service 2b context: {service2b.context.request_id}")
+        print(f"Same context: {service2a.context is service2b.context}")
+        print(f"Last user in context: {service2a.context.get_data('last_user')}")
 
 
-async def demonstrate_lifecycle_management():
-    """Demonstrate proper service lifecycle management."""
-    print("\n" + "=" * 50)
-    print("LIFECYCLE MANAGEMENT DEMONSTRATION")
-    print("=" * 50)
+async def demonstrate_application_lifecycle():
+    """Show application lifecycle management."""
+    print("\n🚀 Application Lifecycle Demonstration")
+    print("=" * 40)
+    
+    # Track startup and shutdown
+    startup_called = False
+    shutdown_called = False
+    
+    async def on_startup():
+        nonlocal startup_called
+        startup_called = True
+        print("🚀 Application starting up...")
+    
+    async def on_shutdown():
+        nonlocal shutdown_called
+        shutdown_called = True
+        print("🛑 Application shutting down...")
+    
+    # Create application with lifecycle hooks
+    app = create_app() \
+        .singleton(DatabaseConnection, DatabaseConnection).build() \
+        .service(UserRepository, UserRepository).build() \
+        .on_startup(on_startup) \
+        .on_shutdown(on_shutdown) \
+        .build_app()
+    
+    print("\nUsing application with lifecycle management:")
+    
+    # Use application as context manager
+    async with app:
+        print(f"Startup called: {startup_called}")
+        
+        # Use services
+        repo = await app.resolve_async(UserRepository)
+        user = await repo.get_user(42)
+        print(f"Retrieved user: {user['name']}")
+    
+    print(f"Shutdown called: {shutdown_called}")
+
+
+async def demonstrate_performance_monitoring():
+    """Show performance monitoring capabilities."""
+    print("\n📊 Performance Monitoring Demonstration")
+    print("=" * 42)
+    
+    from whiskey.core.performance import PerformanceMonitor
     
     container = Container()
+    container.add_singleton(DatabaseConnection, DatabaseConnection).build()
+    container.add(UserRepository, UserRepository).build()
+    container.add(UserService, UserService).build()
+    container.add(RequestContext, RequestContext).build()
     
-    # Register services
-    container[DatabaseConnection] = DatabaseConnection
-    container.singleton(ConfigService, ConfigService)
+    # Monitor performance
+    with PerformanceMonitor() as metrics:
+        # Perform various operations
+        for i in range(5):
+            service = await container.resolve(UserService)
+            user = await service.process_user(i + 1)
     
-    print("\n1. Manual lifecycle management:")
-    
-    # Resolve and initialize services
-    db = await container.resolve(DatabaseConnection)
-    config = await container.resolve(ConfigService)
-    
-    # Initialize services that need it
-    if isinstance(db, Initializable):
-        await db.initialize()
-    
-    # Use the services
-    await db.query("SELECT 1")
-    app_name = config.get("app_name")
-    print(f"App name: {app_name}")
-    
-    # Dispose services that need cleanup
-    if isinstance(db, Disposable):
-        await db.dispose()
-    
-    print("\n2. Using container context manager for automatic lifecycle:")
-    
-    # Using context manager for automatic lifecycle management
-    async with container:
-        db = await container.resolve(DatabaseConnection)
-        
-        # Container automatically calls initialize() if service implements Initializable
-        await db.query("SELECT 2")
-        print(f"Queries executed: {db.queries_executed}")
-        
-        # Container automatically calls dispose() on exit if service implements Disposable
+    # Print performance report
+    print(metrics.generate_report())
 
 
 async def main():
@@ -298,23 +228,12 @@ async def main():
     print("🥃 Whiskey Scopes and Lifecycle Example")
     print("=" * 45)
     
-    await demonstrate_basic_scopes()
-    await demonstrate_custom_scopes()
-    await demonstrate_lifecycle_management()
+    await demonstrate_singleton_vs_transient()
+    await demonstrate_scoped_services()
+    await demonstrate_application_lifecycle()
+    await demonstrate_performance_monitoring()
     
-    print("\n" + "=" * 50)
-    print("SUMMARY")
-    print("=" * 50)
-    print("Scopes demonstrated:")
-    print("✅ Singleton - One instance globally")
-    print("✅ Transient - New instance each resolution")
-    print("✅ Factory - Function called each resolution")
-    print("✅ Scoped - Instance per scope context")
-    print("\nLifecycle demonstrated:")
-    print("✅ Initializable - Services that need setup")
-    print("✅ Disposable - Services that need cleanup")
-    print("✅ Manual lifecycle management")
-    print("✅ Automatic lifecycle with context manager")
+    print("\n✅ All demonstrations completed!")
 
 
 if __name__ == "__main__":

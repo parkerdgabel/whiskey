@@ -48,35 +48,27 @@ https://github.com/yourusername/whiskey
 __version__ = "0.1.0"
 
 # Core exports
-from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
+from whiskey.core.application import Application
 from whiskey.core.container import Container
-from whiskey.core.decorators import factory, inject, provide, scoped, singleton, Inject
-from whiskey.core.discovery import ComponentDiscoverer, ContainerInspector, discover_components
-from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
-from whiskey.core.types import Disposable, Initializable
+from whiskey.core.decorators import factory, inject, service, scoped, singleton, component
+from whiskey.core.scopes import ContextVarScope, ScopeType
+from whiskey.core.registry import Scope
+from whiskey.core.builder import create_app
 
 __all__ = [
     # Core DI
     "Container",
     "inject",
-    "provide",
+    "service",
     "singleton",
     "factory",
     "scoped",
-    "Inject",
-    # Discovery
-    "ComponentDiscoverer",
-    "ContainerInspector",
-    "discover_components",
+    "component",
+    # Application Framework
+    "Application",
+    "create_app",
     # Scopes
     "Scope",
     "ContextVarScope",
     "ScopeType",
-    # Application
-    "Application",
-    "ApplicationConfig",
-    "ComponentMetadata",
-    # Types
-    "Initializable",
-    "Disposable",
 ]

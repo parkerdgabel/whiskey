@@ -1,378 +1,422 @@
-"""Simple decorators for dependency injection."""
+"""Global convenience decorators for Whiskey's Pythonic DI redesign.
+
+This module provides global decorators that work with a default application
+instance, similar to Flask's approach. These decorators are convenient for
+simple applications that don't need explicit application management.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import functools
-import inspect
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, Union, Type
+from functools import wraps
 
-from whiskey.core.conditions import Condition, evaluate_condition
-from whiskey.core.container import Container, get_current_container
+from .application import Application, get_current_app, create_default_app
+from .registry import Scope
+from .errors import ConfigurationError
 
-T = TypeVar("T")
-F = TypeVar("F", bound=Callable[..., Any])
+T = TypeVar('T')
 
-# Global default container
-_default_container: Container | None = None
+# Lazy initialization of default app
+_default_app: Application = None
 
 
-class Inject:
-    """Marker for explicit dependency injection in type annotations.
+def _get_default_app() -> Application:
+    """Get or create the default application instance."""
+    global _default_app
+    if _default_app is None:
+        _default_app = create_default_app()
+    return _default_app
+
+
+# Global service registration decorators
+
+def service(cls: Type[T] = None, 
+           *,
+           key: str | type = None,
+           name: str = None,
+           scope: Scope = Scope.TRANSIENT,
+           tags: set[str] = None,
+           condition: Callable[[], bool] = None,
+           lazy: bool = False,
+           app: Application = None) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+    """Global decorator to register a class as a service.
     
-    Used with Annotated to distinguish injection targets from regular type hints:
-    
-    Example:
-        from typing import Annotated
-        
-        class Service:
-            def __init__(self, 
-                        # This will be injected
-                        db: Annotated[Database, Inject()],
-                        # This is just a type hint
-                        name: str):
-                self.db = db
-                self.name = name
-    """
-    
-    def __init__(self, name: str | None = None):
-        """Initialize injection marker.
-        
-        Args:
-            name: Optional service name for named dependencies
-        """
-        self.name = name
-    
-    def __repr__(self):
-        if self.name:
-            return f"Inject(name='{self.name}')"
-        return "Inject()"
-
-
-def get_default_container() -> Container:
-    """Get or create the default container.
-    
-    The default container is a global instance used by decorators when
-    no explicit container is provided. It's created on first access.
-    
-    Returns:
-        The global default Container instance
-        
-    Note:
-        In applications, prefer using Application.container or explicitly
-        passing containers rather than relying on the global default.
-    """
-    global _default_container
-    if _default_container is None:
-        _default_container = Container()
-    return _default_container
-
-
-def set_default_container(container: Container) -> None:
-    """Set the default container.
-    
-    Args:
-        container: The Container instance to use as the global default
-        
-    Note:
-        This affects all decorators that don't have access to a current container.
-    """
-    global _default_container
-    _default_container = container
-
-
-def provide(cls: type[T] | None = None, *, name: str | None = None, condition: Condition | bool | None = None) -> type[T] | Callable[[type[T]], type[T]]:
-    """Register a class with the current or default container.
-    
-    This decorator registers a class for dependency injection with transient scope
-    (new instance created for each resolution).
+    Uses the default application instance unless 'app' is specified.
     
     Args:
         cls: The class to register (when used without parentheses)
-        name: Optional name for named dependencies
-        condition: Optional condition for registration
+        key: Optional service key (defaults to class)
+        name: Optional name for named services
+        scope: Service scope (default: transient)
+        tags: Set of tags for categorization
+        condition: Optional registration condition
+        lazy: Whether to use lazy resolution
+        app: Optional Application instance (uses default if None)
         
     Returns:
-        The original class (unchanged) or decorator function
+        The registered class (for decorator chaining)
         
     Examples:
-        >>> @provide
-        ... class EmailService:
-        ...     def send(self, to: str, message: str):
-        ...         # Send email
-        ...         pass
+        >>> @service
+        >>> class DatabaseService:
+        ...     pass
         
-        >>> @provide(name="smtp")
-        ... class SMTPEmailService:
-        ...     def send(self, to: str, message: str):
-        ...         # Send via SMTP
-        ...         pass
+        >>> @service(scope=Scope.SINGLETON, tags={'infrastructure'})
+        >>> class CacheService:
+        ...     pass
+    """
+    target_app = app or _get_default_app()
+    return target_app.service(
+        cls,
+        key=key,
+        name=name,
+        scope=scope,
+        tags=tags,
+        condition=condition,
+        lazy=lazy
+    )
+
+
+def singleton(cls: Type[T] = None,
+             *,
+             key: str | type = None,
+             name: str = None,
+             tags: set[str] = None,
+             condition: Callable[[], bool] = None,
+             lazy: bool = False,
+             app: Application = None) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+    """Global decorator to register a class as a singleton service."""
+    target_app = app or _get_default_app()
+    return target_app.singleton(
+        cls,
+        key=key,
+        name=name,
+        tags=tags,
+        condition=condition,
+        lazy=lazy
+    )
+
+
+def scoped(cls: Type[T] = None,
+          *,
+          scope_name: str = 'default',
+          key: str | type = None,
+          name: str = None,
+          tags: set[str] = None,
+          condition: Callable[[], bool] = None,
+          lazy: bool = False,
+          app: Application = None) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+    """Global decorator to register a class as a scoped service."""
+    target_app = app or _get_default_app()
+    return target_app.scoped(
+        cls,
+        scope_name=scope_name,
+        key=key,
+        name=name,
+        tags=tags,
+        condition=condition,
+        lazy=lazy
+    )
+
+
+def factory(func: Callable = None,
+           *,
+           key: str | type = None,
+           name: str = None,
+           scope: Scope = Scope.TRANSIENT,
+           tags: set[str] = None,
+           condition: Callable[[], bool] = None,
+           lazy: bool = False,
+           app: Application = None) -> Union[Callable, Callable[[Callable], Callable]]:
+    """Global decorator to register a function as a factory.
+    
+    Args:
+        func: The factory function to register
+        key: Service key (required)
+        name: Optional name for named services
+        scope: Service scope (default: transient)
+        tags: Set of tags for categorization
+        condition: Optional registration condition
+        lazy: Whether to use lazy resolution
+        app: Optional Application instance (uses default if None)
         
-        >>> @provide(condition=lambda: os.getenv("ENV") == "dev")
-        ... class DevEmailService:
-        ...     def send(self, to: str, message: str):
-        ...         # Development email service
-        ...         pass
+    Returns:
+        The registered function
         
-        >>> # Now EmailService can be injected
+    Examples:
+        >>> @factory(key='database')
+        >>> def create_database():
+        ...     return DatabaseImpl()
+        
+        >>> @factory(key=Cache, scope=Scope.SINGLETON)
+        >>> def create_cache():
+        ...     return RedisCache()
+    """
+    target_app = app or _get_default_app()
+    return target_app.factory(
+        func,
+        key=key,
+        name=name,
+        scope=scope,
+        tags=tags,
+        condition=condition,
+        lazy=lazy
+    )
+
+
+def component(target: Union[Type[T], Callable] = None,
+             *,
+             key: str | type = None,
+             name: str = None,
+             scope: Scope = Scope.TRANSIENT,
+             tags: set[str] = None,
+             condition: Callable[[], bool] = None,
+             lazy: bool = False,
+             app: Application = None) -> Union[Any, Callable]:
+    """Global decorator for general-purpose component registration."""
+    target_app = app or _get_default_app()
+    return target_app.component(
+        target,
+        key=key,
+        name=name,
+        scope=scope,
+        tags=tags,
+        condition=condition,
+        lazy=lazy
+    )
+
+
+# Injection decorator
+
+def inject(func: Callable = None,
+          *,
+          app: Application = None) -> Union[Callable, Callable[[Callable], Callable]]:
+    """Global decorator to enable dependency injection for a function.
+    
+    This decorator modifies a function to automatically resolve its
+    parameters from the dependency injection container.
+    
+    Args:
+        func: The function to inject dependencies into
+        app: Optional Application instance (uses default if None)
+        
+    Returns:
+        The wrapped function with automatic injection
+        
+    Examples:
         >>> @inject
-        ... async def notify(email: Annotated[EmailService, Inject()]):
-        ...     await email.send("user@example.com", "Hello!")
+        >>> def process_data(db: Database, cache: Cache):
+        ...     # db and cache are automatically resolved
+        ...     return db.query() + cache.get()
+        
+        >>> @inject
+        >>> async def async_handler(service: MyService):
+        ...     return await service.process()
     """
-    def decorator(cls_to_register: type[T]) -> type[T]:
-        # Evaluate condition at decoration time
-        if evaluate_condition(condition):
-            container = get_current_container() or get_default_container()
-            container.register(cls_to_register, scope="transient", name=name)
-        return cls_to_register
+    def decorator(func: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        
+        if asyncio.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                # Use container's call method with provided args/kwargs
+                return await target_app.container.call(func, *args, **kwargs)
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                # Use container's call_sync method
+                return target_app.container.call_sync(func, *args, **kwargs)
+            return sync_wrapper
     
-    if cls is not None:
-        # Called as @provide without parentheses
-        return decorator(cls)
-    else:
-        # Called as @provide() or @provide(name="...")
+    if func is None:
         return decorator
+    else:
+        return decorator(func)
 
 
-def singleton(cls: type[T] | None = None, *, name: str | None = None, condition: Condition | bool | None = None) -> type[T] | Callable[[type[T]], type[T]]:
-    """Register a class as a singleton.
-    
-    This decorator registers a class with singleton scope - only one instance
-    will be created and shared across all resolutions.
+# Conditional decorators
+
+def when_env(var_name: str, expected_value: str = None, app: Application = None):
+    """Global decorator factory for environment-based conditional registration."""
+    target_app = app or _get_default_app()
+    return target_app.when_env(var_name, expected_value)
+
+
+def when_debug(app: Application = None):
+    """Global decorator factory for debug mode conditional registration."""
+    target_app = app or _get_default_app()
+    return target_app.when_debug()
+
+
+def when_production(app: Application = None):
+    """Global decorator factory for production mode conditional registration."""
+    target_app = app or _get_default_app()
+    return target_app.when_production()
+
+
+# Application lifecycle decorators
+
+def on_startup(func: Callable = None, *, app: Application = None):
+    """Global decorator to register a startup callback.
     
     Args:
-        cls: The class to register as a singleton (when used without parentheses)
-        name: Optional name for named dependencies
-        condition: Optional condition for registration
-        
-    Returns:
-        The original class (unchanged) or decorator function
+        func: The callback function
+        app: Optional Application instance (uses default if None)
         
     Examples:
-        >>> @singleton
-        ... class Configuration:
-        ...     def __init__(self):
-        ...         self.settings = load_settings()  # Expensive operation
+        >>> @on_startup
+        >>> def initialize_services():
+        ...     print("Application starting up...")
         
-        >>> @singleton(name="test")
-        ... class TestConfiguration:
-        ...     def __init__(self):
-        ...         self.settings = load_test_settings()
-        
-        >>> @singleton(condition=lambda: not os.getenv("TESTING"))
-        ... class ProductionConfiguration:
-        ...     def __init__(self):
-        ...         self.settings = load_prod_settings()
-        
-        >>> # Same instance returned every time
-        >>> config1 = await container.resolve(Configuration)
-        >>> config2 = await container.resolve(Configuration) 
-        >>> assert config1 is config2  # True
+        >>> @on_startup
+        >>> async def async_startup():
+        ...     await setup_async_resources()
     """
-    def decorator(cls_to_register: type[T]) -> type[T]:
-        # Evaluate condition at decoration time
-        if evaluate_condition(condition):
-            container = get_current_container() or get_default_container()
-            container.register(cls_to_register, scope="singleton", name=name)
-        return cls_to_register
-    
-    if cls is not None:
-        # Called as @singleton without parentheses
-        return decorator(cls)
-    else:
-        # Called as @singleton() or @singleton(name="...")
-        return decorator
-
-
-def factory(service_type: type[T], *, name: str | None = None, condition: Condition | bool | None = None) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """Register a factory function for a service type.
-    
-    This decorator allows you to register a function that creates instances
-    of a service type. Useful when construction logic is complex or when
-    you need to return different implementations based on configuration.
-    
-    Args:
-        service_type: The type that the factory creates
-        name: Optional name for named dependencies
-        condition: Optional condition for registration
-        
-    Returns:
-        A decorator that registers the factory function
-        
-    Examples:
-        >>> @factory(Database)
-        ... def create_database() -> Database:
-        ...     if os.getenv("TEST"):
-        ...         return TestDatabase()
-        ...     return PostgresDatabase(os.getenv("DATABASE_URL"))
-        
-        >>> @factory(Database, name="readonly")
-        ... def create_readonly_database() -> Database:
-        ...     return ReadOnlyDatabase(os.getenv("READONLY_DB_URL"))
-        
-        >>> @factory(Database, condition=lambda: os.getenv("USE_MOCK_DB"))
-        ... def create_mock_database() -> Database:
-        ...     return MockDatabase()
-        
-        >>> # Database will be created by the factory
-        >>> db = await container.resolve(Database)
-        >>> readonly_db = await container.resolve(Database, name="readonly")
-    """
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        # Evaluate condition at decoration time
-        if evaluate_condition(condition):
-            container = get_current_container() or get_default_container()
-            container.register_factory(service_type, func, name=name)
+    def decorator(func: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        target_app._startup_callbacks.append(func)
         return func
-    return decorator
-
-
-def inject(func: F) -> F:
-    """Decorator that automatically injects dependencies into functions.
     
-    This decorator analyzes function parameters and automatically resolves
-    dependencies from the container for parameters marked with Inject().
-    
-    Args:
-        func: The function to decorate
-        
-    Returns:
-        The decorated function with automatic dependency injection
-        
-    Examples:
-        Basic usage:
-        
-        >>> @inject
-        ... async def process_user(
-        ...     user_id: int,
-        ...     db: Annotated[Database, Inject()]
-        ... ):
-        ...     return await db.get_user(user_id)
-        
-        With multiple dependencies:
-        
-        >>> @inject  
-        ... async def send_notification(
-        ...     message: str,
-        ...     email_svc: Annotated[EmailService, Inject()],
-        ...     sms_svc: Annotated[SMSService, Inject()],
-        ...     user_pref: Annotated[UserPreferences, Inject()]
-        ... ):
-        ...     if user_pref.email_enabled:
-        ...         await email_svc.send(message)
-        ...     if user_pref.sms_enabled:
-        ...         await sms_svc.send(message)
-    
-    Note:
-        - Only parameters with Annotated[T, Inject()] are injected
-        - Parameters with defaults that are callables (like Setting()) are not injected
-        - Works with both sync and async functions
-        - Maintains the original function signature for IDE support
-    """
-    sig = inspect.signature(func)
-    is_async = asyncio.iscoroutinefunction(func)
-    
-    if is_async:
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            # Get the current container
-            container = get_current_container() or get_default_container()
-            
-            # Bind provided arguments
-            bound = sig.bind_partial(*args, **kwargs)
-            bound.apply_defaults()
-            
-            # Process bound arguments - check for callable defaults after apply_defaults
-            for param_name in list(bound.arguments.keys()):
-                value = bound.arguments[param_name]
-                if callable(value):
-                    try:
-                        # Call the default to get the value
-                        result = value()
-                        if asyncio.iscoroutine(result):
-                            bound.arguments[param_name] = await result
-                        else:
-                            bound.arguments[param_name] = result
-                    except Exception:
-                        # If calling fails, leave as is
-                        pass
-            
-            # Inject missing dependencies
-            for param_name, param in sig.parameters.items():
-                if param_name not in bound.arguments and param.annotation != param.empty:
-                    try:
-                        bound.arguments[param_name] = await container.resolve(param.annotation)
-                    except KeyError:
-                        if param.default == param.empty:
-                            raise
-            
-            return await func(**bound.arguments)
-        
-        return async_wrapper  # type: ignore
+    if func is None:
+        return decorator
     else:
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            # Get the current container
-            container = get_current_container() or get_default_container()
-            
-            # Bind provided arguments
-            bound = sig.bind_partial(*args, **kwargs)
-            bound.apply_defaults()
-            
-            # Process bound arguments - check for callable defaults after apply_defaults
-            for param_name in list(bound.arguments.keys()):
-                value = bound.arguments[param_name]
-                if callable(value):
-                    try:
-                        # Call the default to get the value
-                        bound.arguments[param_name] = value()
-                    except Exception:
-                        # If calling fails, leave as is
-                        pass
-            
-            # Inject missing dependencies
-            for param_name, param in sig.parameters.items():
-                if param_name not in bound.arguments and param.annotation != param.empty:
-                    try:
-                        # Use resolve_sync for synchronous functions
-                        bound.arguments[param_name] = container.resolve_sync(param.annotation)
-                    except KeyError:
-                        if param.default == param.empty:
-                            raise
-            
-            return func(**bound.arguments)
-        
-        return sync_wrapper  # type: ignore
+        return decorator(func)
 
 
-def scoped(scope_name: str, *, name: str | None = None, condition: Condition | bool | None = None) -> Callable[[type[T]], type[T]]:
-    """Register a class with a custom scope.
+def on_shutdown(func: Callable = None, *, app: Application = None):
+    """Global decorator to register a shutdown callback."""
+    def decorator(func: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        target_app._shutdown_callbacks.append(func)
+        return func
+    
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
+
+
+def on_error(exception_type: Type[Exception], app: Application = None):
+    """Global decorator to register an error handler.
     
     Args:
-        scope_name: The scope to register the class with
-        name: Optional name for named dependencies
-        condition: Optional condition for registration
-        
-    Returns:
-        A decorator that registers the class with the specified scope
+        exception_type: The exception type to handle
+        app: Optional Application instance (uses default if None)
         
     Examples:
-        >>> @scoped("request")
-        ... class RequestContext:
-        ...     pass
-        
-        >>> @scoped("session", name="admin")
-        ... class AdminSessionContext:
-        ...     pass
-        
-        >>> @scoped("request", condition=lambda: os.getenv("ENABLE_REQUEST_TRACKING"))
-        ... class RequestTracker:
-        ...     pass
+        >>> @on_error(ValueError)
+        >>> def handle_value_error(exc: ValueError):
+        ...     print(f"Handled error: {exc}")
     """
-    def decorator(cls: type[T]) -> type[T]:
-        # Evaluate condition at decoration time
-        if evaluate_condition(condition):
-            container = get_current_container() or get_default_container()
-            container.register(cls, scope=scope_name, name=name)
-        return cls
+    def decorator(func: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        target_app._error_handlers[exception_type] = func
+        return func
+    
     return decorator
+
+
+# Function calling utilities
+
+async def call(func: Callable, *args, app: Application = None, **kwargs) -> Any:
+    """Global function to call a function with dependency injection.
+    
+    Args:
+        func: The function to call
+        *args: Positional arguments
+        app: Optional Application instance (uses default if None)
+        **kwargs: Keyword arguments (override injection)
+        
+    Returns:
+        The function's return value
+        
+    Examples:
+        >>> def process_data(db: Database, user_id: int):
+        ...     return db.get_user(user_id)
+        >>> 
+        >>> result = await call(process_data, user_id=123)
+    """
+    target_app = app or _get_default_app()
+    return await target_app.call(func, *args, **kwargs)
+
+
+def call_sync(func: Callable, *args, app: Application = None, **kwargs) -> Any:
+    """Global function to call a function with dependency injection (sync)."""
+    target_app = app or _get_default_app()
+    return target_app.call_sync(func, *args, **kwargs)
+
+
+async def invoke(func: Callable, *, app: Application = None, **overrides) -> Any:
+    """Global function to invoke a function with full dependency injection."""
+    target_app = app or _get_default_app()
+    return await target_app.invoke(func, **overrides)
+
+
+def wrap_function(func: Callable, *, app: Application = None) -> Callable:
+    """Global function to wrap a function with automatic injection.
+    
+    Args:
+        func: The function to wrap
+        app: Optional Application instance (uses default if None)
+        
+    Returns:
+        Wrapped function that uses automatic injection
+        
+    Examples:
+        >>> def process_data(db: Database, user_id: int):
+        ...     return db.get_user(user_id)
+        >>> 
+        >>> injected_process = wrap_function(process_data)
+        >>> result = await injected_process(user_id=123)  # db auto-injected
+    """
+    target_app = app or _get_default_app()
+    return target_app.wrap_function(func)
+
+
+# Service resolution utilities
+
+def resolve(key: str | type, *, app: Application = None) -> Any:
+    """Global function to resolve a service.
+    
+    Args:
+        key: Service key (string or type)
+        app: Optional Application instance (uses default if None)
+        
+    Returns:
+        The resolved service instance
+        
+    Examples:
+        >>> database = resolve('database')
+        >>> email_service = resolve(EmailService)
+    """
+    target_app = app or _get_default_app()
+    return target_app.resolve(key)
+
+
+async def resolve_async(key: str | type, *, app: Application = None) -> Any:
+    """Global async function to resolve a service."""
+    target_app = app or _get_default_app()
+    return await target_app.resolve_async(key)
+
+
+def get_app() -> Application:
+    """Get the default application instance."""
+    return _get_default_app()
+
+
+def configure_app(config_func: Callable[[Application], None]) -> None:
+    """Configure the default application.
+    
+    Args:
+        config_func: Function that configures the application
+        
+    Examples:
+        >>> def setup_services(app: Application):
+        ...     app.container.add_singleton('config', load_config())
+        >>> 
+        >>> configure_app(setup_services)
+    """
+    app = _get_default_app()
+    config_func(app)

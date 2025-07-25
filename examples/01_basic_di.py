@@ -5,16 +5,15 @@ This example demonstrates Whiskey's fundamental dependency injection concepts:
 - Service registration with decorators
 - Automatic dependency resolution
 - Container as a service registry
-- Manual vs automatic injection
+- Dict-like container interface
 
 Run this example:
     python examples/01_basic_di.py
 """
 
 import asyncio
-from typing import Annotated
 
-from whiskey import Container, inject, provide, singleton, Inject
+from whiskey import Container, inject, service, singleton, create_app
 
 
 # Step 1: Define Your Services
@@ -48,13 +47,11 @@ class Logger:
         print(f"📝 LOG: {message}")
 
 
-@provide  # Register with default container
+@service  # Register with default container
 class UserService:
     """Service for user operations."""
     
-    def __init__(self, 
-                 db: Annotated[Database, Inject()],
-                 logger: Annotated[Logger, Inject()]):
+    def __init__(self, db: Database, logger: Logger):
         self.db = db
         self.logger = logger
         print("👤 UserService initialized")
@@ -75,10 +72,7 @@ class UserService:
 # ===================================
 
 @inject
-async def process_users(
-    user_service: Annotated[UserService, Inject()],
-    logger: Annotated[Logger, Inject()]
-) -> None:
+async def process_users(user_service: UserService, logger: Logger) -> None:
     """Function that uses dependency injection."""
     logger.log("Starting user processing")
     
@@ -98,12 +92,12 @@ async def main():
     print("🥃 Whiskey Basic DI Example")
     print("=" * 40)
     
-    # Example 1: Using Default Container with Decorators
-    # ==================================================
-    print("\n1. Using Default Container with Decorators")
-    print("-" * 45)
+    # Example 1: Using Global Decorators
+    # ==================================
+    print("\n1. Using Global Decorators")
+    print("-" * 30)
     
-    # Services are already registered via @provide and @singleton decorators
+    # Services are already registered via @service and @singleton decorators
     # The @inject decorator automatically resolves dependencies
     
     await process_users()
@@ -116,9 +110,9 @@ async def main():
     # Create a new container
     container = Container()
     
-    # Register services manually
-    container[Database] = Database("mysql://localhost/testdb")  # Instance
-    container[Logger] = Logger  # Class (will be instantiated as singleton)
+    # Register services using dict-like syntax
+    container['database'] = Database("mysql://localhost/testdb")  # Instance
+    container[Logger] = Logger  # Class (will be instantiated)
     container[UserService] = UserService  # Class with auto-resolved dependencies
     
     # Resolve services manually
@@ -148,17 +142,22 @@ async def main():
     # Get service info
     print(f"Container size: {len(container)}")
     print("Registered services:")
-    for service_type in container:
-        print(f"  - {service_type.__name__}")
+    for service_key in container:
+        print(f"  - {service_key}")
     
-    # Example 4: Factory Functions
-    # ============================
-    print("\n\n4. Factory Functions")
-    print("-" * 25)
+    # Example 4: Fluent Registration API
+    # ==================================
+    print("\n\n4. Fluent Registration API")
+    print("-" * 30)
     
     container = Container()
     
-    # Register a factory function
+    # Fluent registration with method chaining
+    container.add(Database, Database).build()
+    container.add_singleton(Logger, Logger).build()
+    container.add(UserService, UserService).tagged('business').build()
+    
+    # Factory functions
     def create_configured_database() -> Database:
         """Factory function for custom Database creation."""
         import os
@@ -170,11 +169,9 @@ async def main():
             return Database("sqlite:///dev.db")
     
     # Register the factory
-    container[Database] = create_configured_database
-    container[Logger] = Logger
-    container[UserService] = UserService
+    container.add_factory('database', create_configured_database).build()
     
-    # Each resolution calls the factory
+    # Each resolution calls the factory for transient services
     user_service1 = await container.resolve(UserService)
     user_service2 = await container.resolve(UserService)
     
@@ -184,32 +181,51 @@ async def main():
     # Same Logger instance (singleton)
     print(f"Same Logger instance: {user_service1.logger is user_service2.logger}")
     
-    # Example 5: Scope Demonstration
+    # Example 5: Application Builder
     # ===============================
-    print("\n\n5. Scope Demonstration")
+    print("\n\n5. Application Builder")
     print("-" * 25)
     
+    # Fluent application configuration
+    app = create_app() \
+        .singleton(Database, Database).build() \
+        .singleton(Logger, Logger).build() \
+        .service(UserService, UserService).build() \
+        .build_app()
+    
+    # Use the application
+    async with app:
+        user_service = await app.resolve_async(UserService)
+        logger = await app.resolve_async(Logger)
+        
+        logger.log("Application builder example")
+        users = await user_service.get_users()
+        print(f"Retrieved {len(users)} users via application")
+    
+    # Example 6: Function Injection and Calling
+    # ==========================================
+    print("\n\n6. Function Injection and Calling")
+    print("-" * 40)
+    
     container = Container()
+    container.add_singleton(Database, Database).build()
+    container.add_singleton(Logger, Logger).build()
     
-    # Different scopes
-    container[Database] = Database  # Transient (default)
-    container.singleton(Logger, Logger)  # Explicit singleton
+    # Define a function that needs dependencies
+    def business_logic(db: Database, logger: Logger, user_id: int = 1) -> str:
+        """Business logic function with DI."""
+        logger.log(f"Processing user {user_id}")
+        return f"Processed user {user_id} using {db.connection_string}"
     
-    # Register factory that creates new instances
-    container.factory(str, lambda: f"request-{id(object())}")
+    # Call with automatic dependency injection
+    result = await container.call(business_logic, user_id=42)
+    print(f"Function result: {result}")
     
-    # Resolve multiple times
-    db1 = await container.resolve(Database)
-    db2 = await container.resolve(Database)
-    logger1 = await container.resolve(Logger)
-    logger2 = await container.resolve(Logger)
-    id1 = await container.resolve(str)
-    id2 = await container.resolve(str)
-    
-    print(f"Database instances same: {db1 is db2}")  # False (transient)
-    print(f"Logger instances same: {logger1 is logger2}")  # True (singleton)
-    print(f"String ID 1: {id1}")
-    print(f"String ID 2: {id2}")
+    # Wrap function for repeated calls
+    injected_func = container.wrap_with_injection(business_logic)
+    result2_task = injected_func(user_id=99)
+    result2 = await result2_task  # Await the task returned by sync wrapper
+    print(f"Wrapped function result: {result2}")
 
 
 if __name__ == "__main__":

@@ -1,709 +1,922 @@
-"""Core dependency injection container for Whiskey.
+"""Pythonic Container implementation for Whiskey's DI redesign.
 
-This module provides the foundation of Whiskey's IoC system with a simple,
-dict-like container that manages service registration and resolution.
+This module provides the new Container class with a clean, dict-like interface
+and smart dependency resolution using the ServiceRegistry and TypeAnalyzer.
 """
 
 from __future__ import annotations
 
 import asyncio
 import inspect
-from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, TypeVar, cast
+from functools import wraps
+from typing import Any, Callable, TypeVar, Union
+from weakref import WeakKeyDictionary
 
-T = TypeVar("T")
-
-# Current container context
-_current_container: ContextVar[Container | None] = ContextVar(
-    "current_container", default=None
+from .analyzer import TypeAnalyzer, InjectDecision, get_type_hints_safe
+from .errors import (
+    ResolutionError, CircularDependencyError, InjectionError, 
+    ScopeError, TypeAnalysisError
+)
+from .registry import ServiceRegistry, ServiceDescriptor, Scope
+from .performance import (
+    monitor_resolution, ResolutionTimer, is_performance_monitoring_enabled,
+    record_error, WeakValueCache
 )
 
-# Active scopes context
-_active_scopes: ContextVar[dict[str, Any]] = ContextVar(
-    "active_scopes", default={}
-)
+T = TypeVar('T')
+
+# Context variables for scope management
+_current_container: ContextVar['Container'] = ContextVar('current_container', default=None)
+_active_scopes: ContextVar[dict[str, dict[str, Any]]] = ContextVar('active_scopes', default={})
+
+
+class ContainerServiceBuilder:
+    """Fluent builder for individual service registration in a Container.
+    
+    This provides a lighter-weight alternative to ApplicationBuilder for 
+    simple service registration with fluent configuration.
+    """
+    
+    def __init__(self, container: 'Container', key: str | type, provider: Any):
+        self._container = container
+        self._key = key
+        self._provider = provider
+        self._scope = Scope.TRANSIENT
+        self._name: str | None = None
+        self._tags: set[str] = set()
+        self._condition: Callable[[], bool] | None = None
+        self._lazy = False
+        self._metadata: dict[str, Any] = {}
+    
+    def as_singleton(self) -> 'ContainerServiceBuilder':
+        """Configure service with singleton scope."""
+        self._scope = Scope.SINGLETON
+        return self
+    
+    def as_scoped(self, scope_name: str = 'default') -> 'ContainerServiceBuilder':
+        """Configure service with scoped lifecycle."""
+        self._scope = Scope.SCOPED
+        self._metadata['scope_name'] = scope_name
+        return self
+    
+    def as_transient(self) -> 'ContainerServiceBuilder':
+        """Configure service with transient scope (default)."""
+        self._scope = Scope.TRANSIENT
+        return self
+    
+    def named(self, name: str) -> 'ContainerServiceBuilder':
+        """Assign a name to this service."""
+        self._name = name
+        return self
+    
+    def tagged(self, *tags: str) -> 'ContainerServiceBuilder':
+        """Add tags to this service."""
+        self._tags.update(tags)
+        return self
+    
+    def when(self, condition: Callable[[], bool] | bool) -> 'ContainerServiceBuilder':
+        """Add a condition for registration."""
+        if isinstance(condition, bool):
+            self._condition = lambda: condition
+        else:
+            self._condition = condition
+        return self
+    
+    def when_env(self, var_name: str, expected_value: str = None) -> 'ContainerServiceBuilder':
+        """Add environment-based condition."""
+        import os
+        if expected_value is None:
+            condition = lambda: var_name in os.environ
+        else:
+            condition = lambda: os.environ.get(var_name) == expected_value
+        return self.when(condition)
+    
+    def when_debug(self) -> 'ContainerServiceBuilder':
+        """Register only in debug mode."""
+        import os
+        condition = lambda: os.environ.get('DEBUG', '').lower() in ('true', '1', 'yes')
+        return self.when(condition)
+    
+    def lazy(self, is_lazy: bool = True) -> 'ContainerServiceBuilder':
+        """Enable lazy resolution."""
+        self._lazy = is_lazy
+        return self
+    
+    def with_metadata(self, **metadata) -> 'ContainerServiceBuilder':
+        """Add arbitrary metadata."""
+        self._metadata.update(metadata)
+        return self
+    
+    def build(self) -> ServiceDescriptor:
+        """Complete the registration and return the descriptor."""
+        return self._container.register(
+            self._key,
+            self._provider,
+            scope=self._scope,
+            name=self._name,
+            condition=self._condition,
+            tags=self._tags,
+            lazy=self._lazy,
+            **self._metadata
+        )
 
 
 class Container:
-    """A dependency injection container with dict-like interface.
+    """Pythonic dependency injection container.
     
-    The Container is the heart of Whiskey's dependency injection system. It manages
-    service registration, resolution, and scoping with a simple, Pythonic API.
+    This is the main container class that provides a clean, dict-like interface
+    for service registration and resolution with smart dependency injection.
     
     Features:
-        - Dict-like syntax for registration and retrieval
-        - Automatic dependency resolution with cycle detection
-        - Scope management (singleton, transient, custom scopes)
-        - Async and sync resolution support
-        - Factory functions and lazy instantiation
-        - Component discovery and introspection
+        - Dict-like interface: container['service'] = implementation
+        - Smart type analysis for automatic injection
+        - Scope management (singleton, transient, scoped)
+        - Circular dependency detection
+        - Clear error messages
+        - Performance optimization with caching
     
     Examples:
         Basic usage:
         
-        >>> container = Container()
+        >>> container = Container() 
+        >>> container['database'] = Database()  # Register instance
+        >>> container[EmailService] = EmailService  # Register class
         >>> 
-        >>> # Register services
-        >>> container[Database] = Database("postgresql://...")  # Instance
-        >>> container[UserService] = UserService  # Class (lazy)
-        >>> container[EmailService] = lambda: EmailService()  # Factory
-        >>> 
-        >>> # Resolve services
-        >>> db = await container.resolve(Database)
-        >>> user_svc = await container.resolve(UserService)  # Auto-injects Database
-        >>> 
-        >>> # Check registration
-        >>> if Database in container:
-        ...     print("Database is registered")
+        >>> db = container['database']  # Get instance
+        >>> email = await container.resolve(EmailService)  # Resolve with DI
         
-        With scopes:
+        Auto-injection:
         
-        >>> # Register with scope
-        >>> container.register(RequestContext, scope="request")
+        >>> class UserService:
+        ...     def __init__(self, db: Database, email: EmailService):
+        ...         self.db = db
+        ...         self.email = email
         >>> 
-        >>> # Use scope
-        >>> async with container.scope("request"):
-        ...     ctx = await container.resolve(RequestContext)
-        ...     # Same instance within scope
-    
-    Attributes:
-        _services: Registry of service types to their implementations
-        _factories: Registry of factory functions for services
-        _singletons: Cache of singleton instances
-        _scopes: Registry of available scopes
-        _service_scopes: Mapping of service types to their scope names
+        >>> container[UserService] = UserService  # Dependencies auto-injected
+        >>> user_svc = await container.resolve(UserService)
     """
     
     def __init__(self):
-        """Initialize a new Container.
+        """Initialize a new Container."""
+        self.registry = ServiceRegistry()
+        self.analyzer = TypeAnalyzer(self.registry)
         
-        Creates registries for services, factories, singletons, and scopes.
-        Automatically registers built-in scopes (singleton, transient).
-        """
-        # Updated to use (type, name) tuples as keys for named dependencies
-        self._services: dict[tuple[type, str | None], Any] = {}
-        self._factories: dict[tuple[type, str | None], Callable] = {}
-        self._singletons: dict[tuple[type, str | None], Any] = {}
-        self._scopes: dict[str, Any] = {}
-        self._service_scopes: dict[tuple[type, str | None], str] = {}  # Maps (service type, name) to scope name
+        # Instance caches for different scopes
+        self._singleton_cache: dict[str, Any] = {}
+        self._scoped_caches: dict[str, dict[str, Any]] = {}
         
-        # Register built-in scopes
-        # Note: singleton and transient are handled specially, not as scope instances
+        # Track resolution in progress to detect circular dependencies
+        self._resolving: set[str] = set()
         
-    def __setitem__(self, key: type[T] | tuple[type[T], str | None], value: T | type[T] | Callable[..., T]) -> None:
-        """Register a service, class, or factory.
+        # Cache for expensive operations
+        self._injection_cache: WeakKeyDictionary = WeakKeyDictionary()
         
-        This method provides dict-like syntax for service registration.
+        # Performance optimizations
+        self._weak_cache = WeakValueCache()
+        self._resolution_depth = 0
+        
+    # Dict-like interface
+    
+    def __setitem__(self, key: str | type, value: Any) -> None:
+        """Register a service using dict-like syntax.
         
         Args:
-            key: Either a type (for unnamed) or (type, name) tuple for named services
-            value: Can be:
-                - An instance: Registered as-is
-                - A class: Will be instantiated on first resolve
-                - A callable/factory: Will be called to create instances
-        
-        Examples:
-            >>> container[Database] = Database("postgresql://...")  # Instance
-            >>> container[Logger] = Logger  # Class 
-            >>> container[Cache] = lambda: RedisCache(host="localhost")  # Factory
-            >>> container[Database, "primary"] = PostgresDB()  # Named service
-        """
-        # Normalize key to (type, name) tuple
-        if isinstance(key, tuple):
-            service_type, name = key
-        else:
-            service_type, name = key, None
-        
-        key_tuple = (service_type, name)
-        
-        if callable(value) and not isinstance(value, type):
-            # It's a factory function
-            self._factories[key_tuple] = value
-        else:
-            # It's an instance or class
-            self._services[key_tuple] = value
+            key: Service key (string or type)
+            value: Service implementation (class, instance, or factory)
             
-    def __getitem__(self, key: type[T] | tuple[type[T], str | None]) -> T:
-        """Get a service synchronously (for backwards compatibility).
+        Examples:
+            >>> container['database'] = Database()  # Instance
+            >>> container[EmailService] = EmailService  # Class
+            >>> container['cache'] = lambda: RedisCache()  # Factory
+        """
+        self.registry.register(key, value)
+    
+    def __getitem__(self, key: str | type) -> Any:
+        """Get a service using dict-like syntax.
         
         Args:
-            key: Either a type (for unnamed) or (type, name) tuple for named services
+            key: Service key (string or type)
             
         Returns:
             The resolved service instance
             
-        Note:
-            Prefer using resolve() or resolve_sync() for explicit async/sync behavior.
+        Examples:
+            >>> db = container['database']
+            >>> email = container[EmailService]
         """
-        if isinstance(key, tuple):
-            service_type, name = key
-        else:
-            service_type, name = key, None
-        return self.resolve_sync(service_type, name)
-        
-    def __contains__(self, key: type | tuple[type, str | None]) -> bool:
+        try:
+            # For synchronous access, we need to handle async resolution
+            if asyncio.iscoroutinefunction(self.resolve):
+                # Try to get current event loop
+                try:
+                    loop = asyncio.get_running_loop()
+                    # We're in an async context - create a task
+                    task = loop.create_task(self.resolve(key))
+                    return task
+                except RuntimeError:
+                    # No event loop - use asyncio.run
+                    return asyncio.run(self.resolve(key))
+            else:
+                return self.resolve(key)
+        except Exception as e:
+            raise ResolutionError(f"Failed to resolve '{key}': {e}", str(key), e)
+    
+    def __contains__(self, key: str | type) -> bool:
         """Check if a service is registered.
         
         Args:
-            key: Either a type (for unnamed) or (type, name) tuple for named services
+            key: Service key (string or type)
             
         Returns:
-            True if the service is registered in any form (service, factory, or singleton)
-            
-        Examples:
-            >>> if Database in container:
-            ...     db = container[Database]
-            >>> if (Database, "primary") in container:
-            ...     primary_db = container[Database, "primary"]
+            True if the service is registered and condition is met
         """
-        # Normalize key to (type, name) tuple
-        if isinstance(key, tuple):
-            key_tuple = key
-        else:
-            key_tuple = (key, None)
-        
-        return (
-            key_tuple in self._services
-            or key_tuple in self._factories
-            or key_tuple in self._singletons
-        )
-        
-    def __delitem__(self, key: type | tuple[type, str | None]) -> None:
+        return self.registry.has(key)
+    
+    def __delitem__(self, key: str | type) -> None:
         """Remove a service registration.
         
-        Removes the service from all registries (services, factories, singletons).
-        
         Args:
-            key: Either a type (for unnamed) or (type, name) tuple for named services
-            
-        Note:
-            This does not affect already resolved instances held by other services.
+            key: Service key (string or type)
         """
-        # Normalize key to (type, name) tuple
-        if isinstance(key, tuple):
-            key_tuple = key
-        else:
-            key_tuple = (key, None)
+        string_key = self.registry._normalize_key(key)
         
-        self._services.pop(key_tuple, None)
-        self._factories.pop(key_tuple, None)
-        self._singletons.pop(key_tuple, None)
-        self._service_scopes.pop(key_tuple, None)
+        # Remove from registry
+        if not self.registry.remove(key):
+            raise KeyError(f"Service '{key}' not found")
         
-    async def resolve(self, service_type: type[T], name: str | None = None) -> T:
+        # Clear from caches
+        self._singleton_cache.pop(string_key, None)
+        for scope_cache in self._scoped_caches.values():
+            scope_cache.pop(string_key, None)
+    
+    def __len__(self) -> int:
+        """Get number of registered services."""
+        return len(self.registry)
+    
+    def __iter__(self):
+        """Iterate over service keys."""
+        return iter(self.registry)
+    
+    # Main resolution methods
+    
+    @monitor_resolution
+    async def resolve(self, key: str | type, *, name: str = None, **context) -> T:
         """Resolve a service asynchronously.
         
+        This is the main resolution method that handles all the smart
+        dependency injection logic.
+        
         Args:
-            service_type: The type to resolve
+            key: Service key (string or type)
             name: Optional name for named services
+            **context: Additional context for scoped resolution
             
         Returns:
             The resolved service instance
             
         Raises:
-            KeyError: If the service is not registered and cannot be created
+            ResolutionError: If the service cannot be resolved
+            CircularDependencyError: If circular dependencies are detected
         """
-        key_tuple = (service_type, name)
+        # Normalize the key
+        string_key = self.registry._normalize_key(key, name)
         
-        # Check singletons first
-        if key_tuple in self._singletons:
-            return cast(T, self._singletons[key_tuple])
+        # Check for circular dependency
+        if string_key in self._resolving:
+            if is_performance_monitoring_enabled():
+                record_error('circular_dependency')
+            raise CircularDependencyError(self._get_resolution_cycle(string_key))
         
-        # Check if service has a scope
-        scope_name = self._service_scopes.get(key_tuple)
-        if scope_name and scope_name != "transient":
-            # Get active scopes
-            active_scopes = _active_scopes.get()
-            
-            # Handle singleton scope specially
-            if scope_name == "singleton":
-                if key_tuple not in self._singletons:
-                    instance = await self._create_or_resolve_instance(service_type, name)
-                    self._singletons[key_tuple] = instance
-                return cast(T, self._singletons[key_tuple])
-            
-            # Check if scope is active
-            if scope_name in active_scopes:
-                scope = active_scopes[scope_name]
-                # Check if instance exists in scope - use tuple key for named services
-                instance = scope.get(key_tuple if name else service_type)
-                if instance is not None:
-                    return cast(T, instance)
-                
-                # Create instance and store in scope
-                instance = await self._create_or_resolve_instance(service_type, name)
-                scope.set(key_tuple if name else service_type, instance)
-                return cast(T, instance)
-            else:
-                # Scope not active, fall through to transient behavior
-                pass
-        
-        # Default transient behavior or no scope
-        return await self._create_or_resolve_instance(service_type, name)
-    
-    async def _create_or_resolve_instance(self, service_type: type[T], name: str | None = None) -> T:
-        """Create or resolve an instance without scope management."""
-        key_tuple = (service_type, name)
-        
-        # Check registered instances/classes
-        if key_tuple in self._services:
-            value = self._services[key_tuple]
-            if isinstance(value, type):
-                # It's a class, instantiate it
-                return await self._create_instance(value)
-            return cast(T, value)
-            
-        # Check factories
-        if key_tuple in self._factories:
-            factory = self._factories[key_tuple]
-            return cast(T, await self._call_with_injection(factory))
-            
-        # If named service not found, don't fall back to unnamed
-        if name is not None:
-            service_name = getattr(service_type, '__name__', str(service_type))
-            raise KeyError(f"Named service {service_name}[{name}] not registered")
-            
-        # For unnamed services, check if we can create it
-        # Try to create if it's a concrete class
-        if inspect.isclass(service_type) and not inspect.isabstract(service_type):
-            return await self._create_instance(service_type)
-            
-        # Handle callables (functions with @inject)
-        if callable(service_type) and not inspect.isclass(service_type):
-            return await self._call_with_injection(service_type)
-            
-        service_name = getattr(service_type, '__name__', str(service_type))
-        raise KeyError(f"Service {service_name} not registered")
-        
-    def resolve_sync(self, service_type: type[T], name: str | None = None) -> T:
-        """Resolve a service synchronously."""
         try:
-            loop = asyncio.get_running_loop()
-            # If we're in an async context, we can't use asyncio.run
-            # This is a limitation we accept for simplicity
-            raise RuntimeError(
-                "Cannot use resolve_sync() in async context. "
-                "Use 'await container.resolve()' instead."
-            )
-        except RuntimeError:
-            # No loop running, we can create one
-            return asyncio.run(self.resolve(service_type, name))
-            
-    def register(
-        self,
-        service_type: type[T],
-        implementation: type[T] | T | None = None,
-        *,
-        scope: str = "transient",
-        name: str | None = None,
-        factory: Callable[..., T] | None = None,
-    ) -> None:
-        """Register a service.
+            self._resolving.add(string_key)
+            self._resolution_depth += 1
+            return await self._do_resolve(key, name, context)
+        finally:
+            self._resolving.discard(string_key)
+            self._resolution_depth -= 1
+    
+    def resolve_sync(self, key: str | type, *, name: str = None, **context) -> T:
+        """Resolve a service synchronously.
         
         Args:
-            service_type: The service type to register
-            implementation: Implementation class or instance
-            scope: Service scope (singleton, transient, etc.)
+            key: Service key (string or type)
             name: Optional name for named services
-            factory: Optional factory function
+            **context: Additional context for scoped resolution
+            
+        Returns:
+            The resolved service instance
         """
-        key_tuple = (service_type, name)
+        return asyncio.run(self.resolve(key, name=name, **context))
+    
+    async def _do_resolve(self, key: str | type, name: str = None, context: dict = None) -> Any:
+        """Internal resolution implementation.
         
-        # Store scope information
-        self._service_scopes[key_tuple] = scope
-        
-        if factory is not None:
-            self._factories[key_tuple] = factory
-        elif scope == "singleton":
-            if implementation is None:
-                # Mark class for lazy singleton
-                self._services[key_tuple] = service_type
-            elif isinstance(implementation, type):
-                # Mark class for lazy singleton
-                self._services[key_tuple] = implementation
-            else:
-                # Register existing instance as singleton
-                self._singletons[key_tuple] = implementation
-        else:
-            self[key_tuple] = implementation or service_type
+        Args:
+            key: Service key (string or type)
+            name: Optional name for named services
+            context: Resolution context
             
-    def register_singleton(
-        self,
-        service_type: type[T],
-        implementation: type[T] | T | None = None,
-        *,
-        name: str | None = None,
-        factory: Callable[..., T] | None = None,
-        instance: T | None = None,
-    ) -> None:
-        """Register a singleton service."""
-        if instance is not None:
-            key_tuple = (service_type, name)
-            self._singletons[key_tuple] = instance
-            self._service_scopes[key_tuple] = "singleton"
-        else:
-            self.register(
-                service_type,
-                implementation,
-                scope="singleton",
-                name=name,
-                factory=factory,
-            )
+        Returns:
+            The resolved service instance
+        """
+        # Get the service descriptor
+        try:
+            descriptor = self.registry.get(key, name)
+        except KeyError:
+            # Service not explicitly registered - try auto-creation
+            if isinstance(key, type):
+                return await self._try_auto_create(key)
+            raise ResolutionError(f"Service '{key}' not registered")
+        
+        string_key = descriptor.key
+        
+        # Handle different scopes
+        if descriptor.scope == Scope.SINGLETON:
+            return await self._resolve_singleton(descriptor)
+        elif descriptor.scope == Scope.SCOPED:
+            return await self._resolve_scoped(descriptor, context or {})
+        else:  # Transient
+            return await self._create_instance(descriptor)
+    
+    async def _resolve_singleton(self, descriptor: ServiceDescriptor) -> Any:
+        """Resolve a singleton service.
+        
+        Args:
+            descriptor: The service descriptor
             
-    def register_factory(
-        self,
-        service_type: type[T],
-        factory: Callable[..., T],
-        *,
-        name: str | None = None,
-    ) -> None:
-        """Register a factory function."""
-        key_tuple = (service_type, name)
-        self._factories[key_tuple] = factory
+        Returns:
+            The singleton instance
+        """
+        if descriptor.key not in self._singleton_cache:
+            instance = await self._create_instance(descriptor)
+            self._singleton_cache[descriptor.key] = instance
         
-    def register_scope(self, name: str, scope: Any) -> None:
-        """Register a custom scope."""
-        self._scopes[name] = scope
+        return self._singleton_cache[descriptor.key]
+    
+    async def _resolve_scoped(self, descriptor: ServiceDescriptor, context: dict) -> Any:
+        """Resolve a scoped service.
         
-    async def _create_instance(self, cls: type[T]) -> T:
-        """Create an instance with dependency injection."""
-        sig = inspect.signature(cls)
+        Args:
+            descriptor: The service descriptor
+            context: Resolution context containing scope information
+            
+        Returns:
+            The scoped instance
+        """
+        # Get active scopes
+        active_scopes = _active_scopes.get()
+        
+        # Find the appropriate scope
+        scope_name = context.get('scope', 'default')
+        
+        if scope_name not in active_scopes:
+            raise ScopeError(f"Scope '{scope_name}' is not active")
+        
+        scope_cache = self._scoped_caches.setdefault(scope_name, {})
+        
+        if descriptor.key not in scope_cache:
+            instance = await self._create_instance(descriptor)
+            scope_cache[descriptor.key] = instance
+        
+        return scope_cache[descriptor.key]
+    
+    async def _create_instance(self, descriptor: ServiceDescriptor) -> Any:
+        """Create a service instance.
+        
+        Args:
+            descriptor: The service descriptor
+            
+        Returns:
+            The created instance
+        """
+        provider = descriptor.provider
+        
+        if isinstance(provider, type):
+            # Class - instantiate with dependency injection
+            return await self._instantiate_class(provider)
+        elif callable(provider):
+            # Factory function - call with dependency injection
+            return await self._call_with_injection(provider)
+        else:
+            # Instance - return as-is
+            return provider
+    
+    async def _instantiate_class(self, cls: type) -> Any:
+        """Instantiate a class with automatic dependency injection.
+        
+        Args:
+            cls: The class to instantiate
+            
+        Returns:
+            The created instance
+        """
+        # Check cache first
+        if cls in self._injection_cache:
+            injection_plan = self._injection_cache[cls]
+        else:
+            # Analyze the class constructor
+            injection_plan = self._analyze_constructor(cls)
+            self._injection_cache[cls] = injection_plan
+        
+        # Resolve dependencies
         kwargs = {}
-        
-        # Get type hints to resolve forward references
-        try:
-            from typing import get_type_hints
-            type_hints = get_type_hints(cls)
-        except:
-            type_hints = {}
-        
-        # Build kwargs with injected dependencies
-        for param_name, param in sig.parameters.items():
-            if param.annotation != param.empty and param.annotation != 'return':
-                # Use type hints if available, otherwise use annotation
-                param_type = type_hints.get(param_name, param.annotation)
-                
-                # Skip string annotations (forward references we can't resolve)
-                if isinstance(param_type, str):
-                    if param.default == param.empty:
-                        raise TypeError(f"Cannot resolve forward reference '{param_type}' for parameter '{param_name}'")
-                    continue
-                
-                # Check for Lazy types first
-                from typing import get_args, get_origin
-                origin = get_origin(param_type)
-                
-                # Handle Lazy[T] types
-                if origin is not None:
-                    try:
-                        from whiskey.core.lazy import Lazy
-                        if origin is Lazy:
-                            # Get the inner type
-                            args = get_args(param_type)
-                            if args:
-                                inner_type = args[0]
-                                # Create a Lazy instance instead of resolving
-                                kwargs[param_name] = Lazy(inner_type, container=self)
-                                continue
-                    except ImportError:
-                        pass
-                
-                if origin is not None:
-                    # Handle Annotated types
-                    try:
-                        from typing import Annotated
-                        if origin is Annotated:
-                            # Get the actual type and metadata
-                            args = get_args(param_type)
-                            if len(args) >= 2:
-                                actual_type = args[0]
-                                metadata = args[1:]
-                                
-                                # Check if any metadata is an Inject marker
-                                from whiskey.core.decorators import Inject
-                                inject_marker = None
-                                for meta in metadata:
-                                    if isinstance(meta, Inject):
-                                        inject_marker = meta
-                                        break
-                                
-                                if inject_marker:
-                                    # This is marked for injection
-                                    # Check if actual_type is Lazy[T]
-                                    actual_origin = get_origin(actual_type)
-                                    if actual_origin is not None:
-                                        try:
-                                            from whiskey.core.lazy import Lazy
-                                            if actual_origin is Lazy:
-                                                # Get inner type from Lazy[T]
-                                                lazy_args = get_args(actual_type)
-                                                if lazy_args:
-                                                    inner_type = lazy_args[0]
-                                                    kwargs[param_name] = Lazy(inner_type, name=inject_marker.name, container=self)
-                                                    continue
-                                        except ImportError:
-                                            pass
-                                    
-                                    # Regular injection
-                                    try:
-                                        kwargs[param_name] = await self.resolve(actual_type, name=inject_marker.name)
-                                    except KeyError:
-                                        if param.default == param.empty:
-                                            raise
-                                    continue
-                    except ImportError:
-                        # Python < 3.9 doesn't have Annotated in typing
-                        pass
-                
-                # Check if this parameter has a callable default (like Setting providers)
-                if param.default != param.empty and callable(param.default):
-                    # Skip injection - let the callable default handle it
-                    continue
-                
-                # For backward compatibility, if no Inject marker but has annotation,
-                # only inject if there's no default value
-                if param.default == param.empty:
-                    # Skip built-in types and types that can't be resolved
-                    if param_type in (str, int, float, bool, list, dict, tuple, set, bytes):
-                        # Don't try to inject built-in types
-                        continue
-                    
-                    # Try to resolve the dependency
-                    try:
-                        kwargs[param_name] = await self.resolve(param_type)
-                    except KeyError:
-                        raise
-                        
-        return cls(**kwargs)
-        
-    async def _call_with_injection(self, func: Callable, *args, **kwargs) -> Any:
-        """Call a function with dependency injection."""
-        sig = inspect.signature(func)
-        
-        # Bind provided arguments
-        bound = sig.bind_partial(*args, **kwargs)
-        bound.apply_defaults()
-        
-        # Inject missing dependencies
-        for param_name, param in sig.parameters.items():
-            if param_name not in bound.arguments and param.annotation != param.empty:
+        for param_name, inject_result in injection_plan.items():
+            if inject_result.decision == InjectDecision.YES:
+                kwargs[param_name] = await self.resolve(inject_result.type_hint)
+            elif inject_result.decision == InjectDecision.OPTIONAL:
                 try:
-                    bound.arguments[param_name] = await self.resolve(param.annotation)
-                except KeyError:
-                    if param.default == param.empty:
-                        raise
-                        
-        # Call the function
-        if asyncio.iscoroutinefunction(func):
-            return await func(**bound.arguments)
-        return func(**bound.arguments)
+                    kwargs[param_name] = await self.resolve(inject_result.inner_type)
+                except ResolutionError:
+                    kwargs[param_name] = None
+            elif inject_result.decision == InjectDecision.ERROR:
+                raise InjectionError(
+                    f"Cannot inject parameter '{param_name}': {inject_result.reason}",
+                    param_name,
+                    inject_result.type_hint
+                )
         
-    # Backwards compatibility methods
-    def get(self, service_type: type[T], default: T | None = None, name: str | None = None) -> T | None:
-        """Get a service synchronously, returning default if not found."""
+        # Create the instance
         try:
-            return self.resolve_sync(service_type, name)
-        except Exception:
-            return default
+            return cls(**kwargs)
+        except Exception as e:
+            raise ResolutionError(
+                f"Failed to instantiate {cls.__name__}: {e}",
+                cls.__name__.lower(),
+                e
+            )
+    
+    async def _call_with_injection(self, func: Callable) -> Any:
+        """Call a function with automatic dependency injection.
+        
+        Args:
+            func: The function to call
             
-    async def aget(self, service_type: type[T], default: T | None = None, name: str | None = None) -> T | None:
-        """Get a service asynchronously, returning default if not found."""
+        Returns:
+            The function result
+        """
+        # Check cache first
+        if func in self._injection_cache:
+            injection_plan = self._injection_cache[func]
+        else:
+            # Analyze the function
+            injection_plan = self.analyzer.analyze_callable(func)
+            self._injection_cache[func] = injection_plan
+        
+        # Resolve dependencies
+        kwargs = {}
+        for param_name, inject_result in injection_plan.items():
+            if inject_result.decision == InjectDecision.YES:
+                kwargs[param_name] = await self.resolve(inject_result.type_hint)
+            elif inject_result.decision == InjectDecision.OPTIONAL:
+                try:
+                    kwargs[param_name] = await self.resolve(inject_result.inner_type)
+                except ResolutionError:
+                    kwargs[param_name] = None
+            elif inject_result.decision == InjectDecision.ERROR:
+                raise InjectionError(
+                    f"Cannot inject parameter '{param_name}': {inject_result.reason}",
+                    param_name,
+                    inject_result.type_hint
+                )
+        
+        # Call the function
         try:
-            return await self.resolve(service_type, name)
-        except Exception:
-            return default
+            result = func(**kwargs)
+            if asyncio.iscoroutine(result):
+                return await result
+            return result
+        except Exception as e:
+            func_name = getattr(func, '__name__', str(func))
+            raise ResolutionError(
+                f"Failed to call {func_name}: {e}",
+                func_name,
+                e
+            )
+    
+    async def _try_auto_create(self, cls: type) -> Any:
+        """Try to auto-create an unregistered class.
+        
+        Args:
+            cls: The class to create
             
+        Returns:
+            The created instance
+            
+        Raises:
+            ResolutionError: If auto-creation is not possible
+        """
+        if not inspect.isclass(cls):
+            raise ResolutionError(f"Cannot auto-create non-class: {cls}")
+        
+        if not self.analyzer.can_auto_create(cls):
+            raise ResolutionError(
+                f"Cannot auto-create {cls.__name__}: not all parameters can be injected"
+            )
+        
+        # Auto-create by instantiating
+        return await self._instantiate_class(cls)
+    
+    def _analyze_constructor(self, cls: type) -> dict[str, Any]:
+        """Analyze a class constructor for dependency injection.
+        
+        Args:
+            cls: The class to analyze
+            
+        Returns:
+            Dict mapping parameter names to InjectResults
+        """
+        try:
+            return self.analyzer.analyze_callable(cls.__init__)
+        except Exception as e:
+            raise TypeAnalysisError(f"Failed to analyze {cls.__name__}: {e}", cls)
+    
+    def _get_resolution_cycle(self, current_key: str) -> list[type]:
+        """Get the circular dependency cycle for error reporting.
+        
+        Args:
+            current_key: The current service key being resolved
+            
+        Returns:
+            List of types in the circular dependency
+        """
+        # This is a simplified implementation
+        # In practice, you'd track the full resolution stack
+        try:
+            descriptor = self.registry.get(current_key)
+            return [descriptor.service_type]
+        except KeyError:
+            return []
+    
+    # Fluent registration builders
+    
+    def add(self, key: str | type, provider: Union[type, object, Callable] = None) -> 'ContainerServiceBuilder':
+        """Start fluent service registration.
+        
+        Args:
+            key: Service key (string or type)
+            provider: Service implementation (defaults to key if it's a type)
+            
+        Returns:
+            ContainerServiceBuilder for fluent configuration
+            
+        Examples:
+            >>> container.add('database', DatabaseImpl).as_singleton().tagged('core')
+            >>> container.add(EmailService).as_scoped('request').when_debug()
+        """
+        if provider is None and isinstance(key, type):
+            provider = key
+            
+        if provider is None:
+            raise ValueError(f"Provider required for service '{key}'")
+            
+        return ContainerServiceBuilder(self, key, provider)
+    
+    def add_singleton(self, key: str | type, provider: Union[type, object, Callable] = None) -> 'ContainerServiceBuilder':
+        """Start fluent singleton registration."""
+        return self.add(key, provider).as_singleton()
+    
+    def add_scoped(self, key: str | type, provider: Union[type, object, Callable] = None, scope_name: str = 'default') -> 'ContainerServiceBuilder':
+        """Start fluent scoped registration."""
+        return self.add(key, provider).as_scoped(scope_name)
+    
+    def add_factory(self, key: str | type, factory_func: Callable) -> 'ContainerServiceBuilder':
+        """Start fluent factory registration."""
+        return self.add(key, factory_func)
+    
+    def add_function(self, key: str | type, func: Callable) -> 'ContainerServiceBuilder':
+        """Register a function as a service (not a factory).
+        
+        The function will be called once and its result cached according to scope.
+        This is different from add_factory where the function itself is the provider.
+        """
+        return self.add(key, func)
+    
+    def add_instance(self, key: str | type, instance: Any) -> 'ContainerServiceBuilder':
+        """Start fluent instance registration (as singleton)."""
+        return self.add(key, instance).as_singleton()
+    
+    # Batch registration methods
+    
+    def add_services(self, **services) -> None:
+        """Register multiple services at once.
+        
+        Args:
+            **services: Mapping of keys to providers
+            
+        Examples:
+            >>> container.add_services(
+            ...     database=DatabaseImpl,
+            ...     cache=CacheImpl,
+            ...     email=EmailService
+            ... )
+        """
+        for key, provider in services.items():
+            self.add(key, provider).build()
+    
+    def add_singletons(self, **services) -> None:
+        """Register multiple singleton services at once."""
+        for key, provider in services.items():
+            self.add_singleton(key, provider).build()
+    
+    # Convenience registration methods
+    
+    def register(self, 
+                 key: str | type,
+                 provider: Union[type, object, Callable],
+                 *,
+                 scope: Scope = Scope.TRANSIENT,
+                 name: str = None,
+                 **kwargs) -> ServiceDescriptor:
+        """Register a service with explicit parameters.
+        
+        Args:
+            key: Service key (string or type)
+            provider: Service implementation
+            scope: Service scope
+            name: Optional name for named services
+            **kwargs: Additional registration options
+            
+        Returns:
+            The created ServiceDescriptor
+        """
+        return self.registry.register(
+            key, provider, scope=scope, name=name, **kwargs
+        )
+    
+    def singleton(self, 
+                  key: str | type,
+                  provider: Union[type, object, Callable] = None,
+                  *,
+                  name: str = None,
+                  **kwargs) -> ServiceDescriptor:
+        """Register a singleton service.
+        
+        Args:
+            key: Service key (string or type)
+            provider: Service implementation (defaults to key if it's a type)
+            name: Optional name for named services
+            **kwargs: Additional registration options
+            
+        Returns:
+            The created ServiceDescriptor
+        """
+        if provider is None and isinstance(key, type):
+            provider = key
+        
+        return self.registry.register(
+            key, provider, scope=Scope.SINGLETON, name=name, **kwargs
+        )
+    
+    def scoped(self,
+               key: str | type,
+               provider: Union[type, object, Callable] = None,
+               *,
+               scope_name: str = 'default',
+               name: str = None,
+               **kwargs) -> ServiceDescriptor:
+        """Register a scoped service.
+        
+        Args:
+            key: Service key (string or type)
+            provider: Service implementation
+            scope_name: Name of the scope
+            name: Optional name for named services
+            **kwargs: Additional registration options
+            
+        Returns:
+            The created ServiceDescriptor
+        """
+        if provider is None and isinstance(key, type):
+            provider = key
+        
+        return self.registry.register(
+            key, provider, scope=Scope.SCOPED, name=name, 
+            metadata={'scope_name': scope_name}, **kwargs
+        )
+    
+    # Context management
+    
     def __enter__(self):
-        """Set this as the current container."""
+        """Set this container as the current container."""
         self._token = _current_container.set(self)
         return self
-        
+    
     def __exit__(self, *args):
         """Reset the current container."""
         _current_container.reset(self._token)
-        
+    
     async def __aenter__(self):
-        """Async context manager support."""
+        """Async context manager entry."""
         self.__enter__()
         return self
-        
+    
     async def __aexit__(self, *args):
-        """Async context manager cleanup."""
-        self.__exit__()
-        
-    # Dict-like methods for compatibility
-    def items(self):
-        """Get all registered services."""
-        # Return both (type, name) key and value for full compatibility
-        for key, value in self._services.items():
-            yield key, value
-        for key, value in self._factories.items():
-            yield key, value
-        for key, value in self._singletons.items():
-            yield key, value
-            
-    def keys(self):
-        """Get all registered service types (for backward compatibility)."""
-        # Extract just the types from the (type, name) tuples
-        types = set()
-        for key in self._services.keys():
-            types.add(key[0])
-        for key in self._factories.keys():
-            types.add(key[0])
-        for key in self._singletons.keys():
-            types.add(key[0])
-        return types
+        """Async context manager exit."""
+        self.__exit__(*args)
     
-    def keys_full(self):
-        """Get all registered service keys as (type, name) tuples."""
-        return set(self._services.keys()) | set(self._factories.keys()) | set(self._singletons.keys())
-        
-    def values(self):
-        """Get all registered values."""
-        for value in self._services.values():
-            yield value
-        for value in self._factories.values():
-            yield value
-        for value in self._singletons.values():
-            yield value
-            
-    def clear(self) -> None:
-        """Clear all registrations."""
-        self._services.clear()
-        self._factories.clear()
-        self._singletons.clear()
-        self._scopes.clear()
-        
-    # Simplified scope manager interface
-    @property
-    def scope_manager(self):
-        """Backwards compatibility for scope manager access."""
-        return self
-        
-    def get_scope(self, name: str) -> Any:
-        """Get a registered scope."""
-        return self._scopes.get(name)
+    # Function injection and calling methods
     
-    def enter_scope(self, name: str) -> Any:
-        """Enter a scope, making it active.
+    async def call(self, func: Callable, *args, **kwargs) -> Any:
+        """Call a function with dependency injection for its parameters.
         
-        Returns the scope instance for use in with statements.
+        This method analyzes the function's parameters and automatically
+        injects registered services, while allowing manual override via args/kwargs.
+        
+        Args:
+            func: The function to call
+            *args: Positional arguments (override automatic injection)
+            **kwargs: Keyword arguments (override automatic injection)
+            
+        Returns:
+            The function's return value
+            
+        Examples:
+            >>> def process_data(db: Database, cache: Cache, user_id: int):
+            ...     return db.get_user(user_id) + cache.get(f"user_{user_id}")
+            >>> 
+            >>> result = await container.call(process_data, user_id=123)
+            >>> # db and cache are injected, user_id is provided manually
         """
-        # Get or create scope instance
-        if name not in self._scopes:
-            raise KeyError(f"Scope '{name}' not registered")
+        # Get function signature
+        sig = inspect.signature(func)
         
-        scope_class = self._scopes[name]
-        if inspect.isclass(scope_class):
-            # Check if it needs a name parameter
-            sig = inspect.signature(scope_class)
-            if 'name' in sig.parameters:
-                scope_instance = scope_class(name)
+        # Build final kwargs by merging injected and provided
+        final_kwargs = {}
+        
+        # Process each parameter
+        for param_name, param in sig.parameters.items():
+            if param_name in kwargs:
+                # Use provided value
+                final_kwargs[param_name] = kwargs[param_name]
+            elif param.kind == param.POSITIONAL_ONLY:
+                # Skip positional-only params (handled by *args)
+                continue
             else:
-                scope_instance = scope_class()
+                # Try to inject
+                try:
+                    inject_result = self.analyzer.should_inject(param)
+                    if inject_result.decision == InjectDecision.YES:
+                        final_kwargs[param_name] = await self.resolve(inject_result.type_hint)
+                    elif inject_result.decision == InjectDecision.OPTIONAL:
+                        try:
+                            final_kwargs[param_name] = await self.resolve(inject_result.inner_type)
+                        except ResolutionError:
+                            final_kwargs[param_name] = None
+                    # For NO or ERROR decisions, don't inject
+                except Exception:
+                    # If injection fails, don't add to kwargs
+                    pass
+        
+        # Call the function
+        try:
+            if asyncio.iscoroutinefunction(func):
+                return await func(*args, **final_kwargs)
+            else:
+                result = func(*args, **final_kwargs)
+                if asyncio.iscoroutine(result):
+                    return await result
+                return result
+        except Exception as e:
+            func_name = getattr(func, '__name__', str(func))
+            raise ResolutionError(
+                f"Failed to call {func_name}: {e}",
+                func_name,
+                e
+            )
+    
+    def call_sync(self, func: Callable, *args, **kwargs) -> Any:
+        """Synchronous version of call()."""
+        return asyncio.run(self.call(func, *args, **kwargs))
+    
+    async def invoke(self, func: Callable, **overrides) -> Any:
+        """Invoke a function with full dependency injection.
+        
+        Similar to call() but only accepts keyword overrides for clarity.
+        
+        Args:
+            func: The function to invoke
+            **overrides: Explicit parameter values to override injection
+            
+        Returns:
+            The function's return value
+        """
+        return await self.call(func, **overrides)
+    
+    def wrap_with_injection(self, func: Callable) -> Callable:
+        """Wrap a function to always use dependency injection when called.
+        
+        Args:
+            func: The function to wrap
+            
+        Returns:
+            Wrapped function that uses automatic injection
+            
+        Examples:
+            >>> def process_data(db: Database, user_id: int):
+            ...     return db.get_user(user_id)
+            >>> 
+            >>> injected_process = container.wrap_with_injection(process_data)
+            >>> result = await injected_process(user_id=123)  # db is auto-injected
+        """
+        if asyncio.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                return await self.call(func, *args, **kwargs)
+            return async_wrapper
         else:
-            scope_instance = scope_class
-        
-        # Add to active scopes
-        active_scopes = _active_scopes.get().copy()
-        active_scopes[name] = scope_instance
-        _active_scopes.set(active_scopes)
-        
-        return scope_instance
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                # Check if we're in an async context
+                try:
+                    loop = asyncio.get_running_loop()
+                    # We're in async context, create a task for the call
+                    return loop.create_task(self.call(func, *args, **kwargs))
+                except RuntimeError:
+                    # No event loop, use asyncio.run
+                    return asyncio.run(self.call(func, *args, **kwargs))
+            return sync_wrapper
     
-    def exit_scope(self, name: str) -> None:
-        """Exit a scope, removing it from active scopes."""
-        active_scopes = _active_scopes.get()
-        if name in active_scopes:
-            # Get the scope and clear it
-            scope = active_scopes[name]
-            if hasattr(scope, 'clear'):
-                scope.clear()
-            
-            # Remove from active scopes
-            new_scopes = active_scopes.copy()
-            del new_scopes[name]
-            _active_scopes.set(new_scopes)
-    
-    def scope(self, name: str):
-        """Create a scope context manager.
-        
-        Example:
-            async with container.scope("request"):
-                # All services resolved here will be request-scoped
-                service = await container.resolve(MyService)
-        """
-        from whiskey.core.scopes import ScopeManager
-        return ScopeManager(self, name)
-    
-    # Discovery and introspection
-    
-    def discover(self, module_or_package: str, **kwargs) -> set[type]:
-        """Discover components in a module or package.
+    async def create_injected_partial(self, func: Callable, **fixed_kwargs) -> Callable:
+        """Create a partial function with some parameters pre-injected.
         
         Args:
-            module_or_package: Module/package to scan
-            **kwargs: Discovery options
+            func: The function to create a partial for
+            **fixed_kwargs: Fixed parameter values
             
         Returns:
-            Set of discovered components
+            Partial function with injected dependencies
         """
-        from whiskey.core.discovery import discover_components
-        return discover_components(
-            module_or_package, 
-            container=self,
-            **kwargs
-        )
-    
-    def inspect(self):
-        """Get an inspector for this container.
+        # Analyze function to determine which params can be injected
+        injection_plan = self.analyzer.analyze_callable(func)
         
-        Returns:
-            Inspector instance for introspection
-        """
-        from whiskey.core.discovery import ContainerInspector
-        return ContainerInspector(self)
+        # Resolve injectable parameters now
+        injected_kwargs = {}
+        for param_name, inject_result in injection_plan.items():
+            if param_name not in fixed_kwargs:
+                if inject_result.decision == InjectDecision.YES:
+                    injected_kwargs[param_name] = await self.resolve(inject_result.type_hint)
+                elif inject_result.decision == InjectDecision.OPTIONAL:
+                    try:
+                        injected_kwargs[param_name] = await self.resolve(inject_result.inner_type)
+                    except ResolutionError:
+                        injected_kwargs[param_name] = None
+        
+        # Combine with fixed kwargs
+        all_kwargs = {**injected_kwargs, **fixed_kwargs}
+        
+        # Return partial function
+        from functools import partial
+        return partial(func, **all_kwargs)
     
-    def can_resolve(self, service_type: type[T], name: str | None = None) -> bool:
-        """Check if a service can be resolved.
+    # Utility methods
+    
+    def clear_caches(self) -> None:
+        """Clear all resolution caches."""
+        self._singleton_cache.clear()
+        self._scoped_caches.clear()
+        self._injection_cache.clear()
+        self._weak_cache.clear()
+        self.analyzer.clear_cache()
+    
+    def get_service_info(self, key: str | type) -> dict[str, Any]:
+        """Get information about a registered service.
         
         Args:
-            service_type: Type to check
-            name: Optional name for named services
+            key: Service key (string or type)
             
         Returns:
-            True if the service can be resolved
+            Dict with service information
         """
-        # Check if explicitly registered
-        key_tuple = (service_type, name)
-        if key_tuple in self:
-            return True
+        try:
+            descriptor = self.registry.get(key)
+            return {
+                'key': descriptor.key,
+                'type': descriptor.service_type.__name__,
+                'scope': descriptor.scope.value,
+                'name': descriptor.name,
+                'tags': list(descriptor.tags),
+                'lazy': descriptor.lazy,
+                'is_factory': descriptor.is_factory,
+                'condition_met': descriptor.matches_condition()
+            }
+        except KeyError:
+            return {'registered': False}
+    
+    def list_services(self) -> list[dict[str, Any]]:
+        """List all registered services with their information.
         
-        # For unnamed services, check if we can create it
-        if name is None and inspect.isclass(service_type) and not inspect.isabstract(service_type):
-            # Check if the class can be instantiated without required parameters
-            try:
-                sig = inspect.signature(service_type)
-                # Check if all parameters have defaults or can be injected
-                for param_name, param in sig.parameters.items():
-                    if param.default == param.empty:
-                        # Check if this parameter can be resolved
-                        if param.annotation != param.empty:
-                            param_type = param.annotation
-                            # Skip built-in types
-                            if param_type in (str, int, float, bool, list, dict, tuple, set, bytes):
-                                return False
-                            # Check if we can resolve this dependency
-                            if not self.can_resolve(param_type):
-                                return False
-                return True
-            except:
-                return False
-            
-        return False
+        Returns:
+            List of service information dicts
+        """
+        return [self.get_service_info(desc.key) for desc in self.registry.list_all()]
 
 
 def get_current_container() -> Container | None:
     """Get the current container from context."""
     return _current_container.get()
+
+
+def set_current_container(container: Container) -> None:
+    """Set the current container in context."""
+    _current_container.set(container)
