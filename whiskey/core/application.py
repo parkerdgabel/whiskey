@@ -256,7 +256,14 @@ class Application:
     # Event system
     
     def on(self, event: str):
-        """Register an event handler."""
+        """Register an event handler.
+        
+        Supports @inject for automatic dependency injection:
+            @app.on("user.created")
+            @inject
+            async def handle_user(event_data: dict, email_service: EmailService):
+                await email_service.send_welcome(event_data["user"])
+        """
         def decorator(func: Callable) -> Callable:
             self._event_handlers[event].append(func)
             return func
@@ -277,10 +284,20 @@ class Application:
         # Execute all handlers
         for handler in handlers:
             try:
-                if asyncio.iscoroutinefunction(handler):
-                    await handler(data) if data is not None else await handler()
+                # Check if handler uses @inject
+                if hasattr(handler, "__wrapped__"):
+                    # The handler is wrapped by @inject, call it directly
+                    # @inject will handle the dependency resolution
+                    if asyncio.iscoroutinefunction(handler):
+                        await handler(data) if data is not None else await handler()
+                    else:
+                        handler(data) if data is not None else handler()
                 else:
-                    handler(data) if data is not None else handler()
+                    # Regular handler without injection
+                    if asyncio.iscoroutinefunction(handler):
+                        await handler(data) if data is not None else await handler()
+                    else:
+                        handler(data) if data is not None else handler()
             except Exception as e:
                 # Fire error event
                 await self._handle_error(e, f"event.{event}")
@@ -290,6 +307,23 @@ class Application:
     def task(self, func: Callable) -> Callable:
         """Register a background task."""
         self.on_startup(lambda: self._start_background_task(func))
+        return func
+    
+    # Main entry point
+    
+    def main(self, func: Callable) -> Callable:
+        """Decorator to mark the main entry point.
+        
+        Example:
+            @app.main
+            @inject
+            async def main(db: Database, config: Config):
+                await db.connect(config.database_url)
+                print("Application started!")
+            
+            app.run()  # Will automatically run the decorated main
+        """
+        self._main_func = func
         return func
     
     # Lifecycle execution
@@ -357,10 +391,19 @@ class Application:
         """Run all hooks for a lifecycle phase."""
         hooks = self._hooks.get(phase, [])
         for hook in hooks:
-            if asyncio.iscoroutinefunction(hook):
-                await hook()
+            # Check if hook uses @inject
+            if hasattr(hook, "__wrapped__"):
+                # The hook is wrapped by @inject, call it directly
+                if asyncio.iscoroutinefunction(hook):
+                    await hook()
+                else:
+                    hook()
             else:
-                hook()
+                # Regular hook without injection
+                if asyncio.iscoroutinefunction(hook):
+                    await hook()
+                else:
+                    hook()
     
     async def _handle_error(self, error: Exception, phase: str) -> None:
         """Handle lifecycle errors."""
@@ -402,13 +445,22 @@ class Application:
             pass  # Component not instantiated
             
     def _start_background_task(self, func: Callable) -> None:
-        """Start a background task."""
+        """Start a background task with DI support."""
         async def run_task():
             try:
-                if asyncio.iscoroutinefunction(func):
-                    await func()
+                # Check if task uses @inject
+                if hasattr(func, "__wrapped__"):
+                    # The task is wrapped by @inject, call it directly
+                    if asyncio.iscoroutinefunction(func):
+                        await func()
+                    else:
+                        func()
                 else:
-                    func()
+                    # Regular task without injection
+                    if asyncio.iscoroutinefunction(func):
+                        await func()
+                    else:
+                        func()
             except Exception as e:
                 await self._handle_error(e, "background_task")
                 
@@ -459,7 +511,30 @@ class Application:
     # Running the application
         
     def run(self, main: Callable | None = None) -> None:
-        """Run the application with optional main function."""
+        """Run the application with optional main function.
+        
+        If the main function uses @inject, dependencies will be resolved.
+        Otherwise, the app instance is passed as the first argument.
+        
+        If no main is provided but one was registered with @app.main,
+        that function will be used.
+        
+        Example:
+            @inject
+            async def main(db: Database, cache: Cache):
+                # Dependencies are auto-injected
+                pass
+                
+            app.run(main)
+            
+        Or with decorator:
+            @app.main
+            @inject
+            async def startup(db: Database):
+                await db.connect()
+                
+            app.run()  # Uses the decorated main
+        """
         async def run_async():
             # Set up signal handlers
             loop = asyncio.get_event_loop()
@@ -476,11 +551,26 @@ class Application:
                     pass
                     
             async with self.lifespan():
-                if main:
-                    if asyncio.iscoroutinefunction(main):
-                        await main()
+                # Use provided main or fallback to registered one
+                main_func = main or getattr(self, '_main_func', None)
+                
+                if main_func:
+                    # Make Application instance available for injection
+                    self.container[Application] = self
+                    
+                    # Check if main uses @inject (has __wrapped__ attribute)
+                    if hasattr(main_func, "__wrapped__"):
+                        # The main is wrapped by @inject, call it directly
+                        if asyncio.iscoroutinefunction(main_func):
+                            await main_func()
+                        else:
+                            main_func()
                     else:
-                        main()
+                        # No injection - pass app as first argument for backward compatibility
+                        if asyncio.iscoroutinefunction(main_func):
+                            await main_func(self)
+                        else:
+                            main_func(self)
                 else:
                     # Keep running until signal
                     await asyncio.Event().wait()

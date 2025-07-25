@@ -111,6 +111,10 @@ class Container:
         if inspect.isclass(service_type) and not inspect.isabstract(service_type):
             return await self._create_instance(service_type)
             
+        # Handle callables (functions with @inject)
+        if callable(service_type) and not inspect.isclass(service_type):
+            return await self._call_with_injection(service_type)
+            
         service_name = getattr(service_type, '__name__', str(service_type))
         raise KeyError(f"Service {service_name} not registered")
         
@@ -233,24 +237,27 @@ class Container:
                         
         return cls(**kwargs)
         
-    async def _call_with_injection(self, func: Callable) -> Any:
+    async def _call_with_injection(self, func: Callable, *args, **kwargs) -> Any:
         """Call a function with dependency injection."""
         sig = inspect.signature(func)
-        kwargs = {}
         
-        # Build kwargs with injected dependencies
+        # Bind provided arguments
+        bound = sig.bind_partial(*args, **kwargs)
+        bound.apply_defaults()
+        
+        # Inject missing dependencies
         for param_name, param in sig.parameters.items():
-            if param.annotation != param.empty and param.annotation != 'return':
+            if param_name not in bound.arguments and param.annotation != param.empty:
                 try:
-                    kwargs[param_name] = await self.resolve(param.annotation)
+                    bound.arguments[param_name] = await self.resolve(param.annotation)
                 except KeyError:
                     if param.default == param.empty:
                         raise
                         
         # Call the function
         if asyncio.iscoroutinefunction(func):
-            return await func(**kwargs)
-        return func(**kwargs)
+            return await func(**bound.arguments)
+        return func(**bound.arguments)
         
     # Backwards compatibility methods
     def get(self, service_type: type[T], default: T | None = None, name: str | None = None) -> T | None:
