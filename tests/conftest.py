@@ -7,48 +7,34 @@ from typing import Any
 import pytest
 
 from whiskey.core.container import Container
-from whiskey.core.decorators import set_default_container
-from whiskey.core.types import Disposable, Initializable
+from whiskey.core.application import Application
+from whiskey.core.builder import create_app
 
 
 @pytest.fixture
 def container():
     """Create a fresh container for testing."""
     container = Container()
-    # Set as default for decorators
-    set_default_container(container)
     yield container
-    # Cleanup
-    asyncio.run(container.dispose())
+    # Cleanup caches
+    container.clear_caches()
 
 
 @pytest.fixture
 def event_bus():
     """Create a fresh event bus for testing."""
-    from whiskey.core.events import EventBus
-    
-    bus = EventBus()
-    yield bus
-    # Cleanup if started
-    if bus._running:
-        asyncio.run(bus.stop())
+    # Event bus is now part of Application
+    app = create_app().build_app()
+    yield app._event_emitter
+    # Cleanup handled by application
 
 
 @pytest.fixture
 def app():
     """Create a test application."""
-    from whiskey.core.application import Application, ApplicationConfig
-    
-    config = ApplicationConfig(
-        name="TestApp",
-        version="0.1.0",
-        debug=True,
-    )
-    app = Application(config)
+    app = create_app().build_app()
     yield app
-    # Cleanup
-    if app._running:
-        asyncio.run(app.shutdown())
+    # Cleanup handled by context manager
 
 
 # Test classes for dependency injection
@@ -90,7 +76,7 @@ class OptionalDependencyService:
         self.has_dependency = simple is not None
 
 
-class AsyncInitService(Initializable):
+class AsyncInitService:
     """Service with async initialization."""
     
     def __init__(self):
@@ -103,7 +89,7 @@ class AsyncInitService(Initializable):
         self.init_count += 1
 
 
-class DisposableService(Disposable):
+class DisposableService:
     """Service with disposal logic."""
     
     def __init__(self):
@@ -116,7 +102,7 @@ class DisposableService(Disposable):
         self.dispose_count += 1
 
 
-class ComplexService(Initializable, Disposable):
+class ComplexService:
     """Service with both initialization and disposal."""
     
     def __init__(self, simple: SimpleService):
