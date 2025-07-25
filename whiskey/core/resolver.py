@@ -53,8 +53,11 @@ class DependencyResolver:
             if not descriptor:
                 self._handle_missing_service(service_key)
 
-            # Get the appropriate scope
-            scope = self._container.scope_manager.get_scope(descriptor.scope)
+            # Determine which container owns this service
+            owning_container = self._get_owning_container(service_key)
+            
+            # Get the appropriate scope from the owning container
+            scope = owning_container.scope_manager.get_scope(descriptor.scope)
             context.scope = scope
 
             # Check if instance already exists in scope
@@ -212,6 +215,19 @@ class DependencyResolver:
             return self._container.parent.get_descriptor(service_key)
 
         return None
+    
+    def _get_owning_container(self, service_key: ServiceKey) -> Any:
+        """Get the container that owns a service."""
+        # Check if current container owns it
+        if service_key in self._container._services:
+            return self._container
+        
+        # Check parent containers
+        if self._container.parent:
+            return self._container.parent._resolver._get_owning_container(service_key)
+        
+        # Default to current container
+        return self._container
 
     def _handle_missing_service(self, service_key: ServiceKey) -> None:
         """Handle missing service with helpful error message."""
