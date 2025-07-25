@@ -1,35 +1,38 @@
-# Migration Guide: Implicit to Explicit Injection
+# Migration Guide: Explicit Back to Pythonic Injection  
 
-This guide helps you migrate from Whiskey's old implicit injection pattern to the new explicit pattern using `Annotated` types.
+This guide helps you migrate from Whiskey's explicit `Annotated` injection pattern back to the new pythonic implicit pattern using simple type hints.
 
 ## Why the Change?
 
-The new explicit injection pattern provides:
-- **Clarity**: It's immediately clear which parameters are injected
-- **Flexibility**: Mix injected and non-injected parameters freely
-- **IDE Support**: Better autocomplete and type checking
-- **Compatibility**: Works with callable defaults like `Setting()`
+The new pythonic implicit injection pattern provides:
+- **Simplicity**: Clean, natural Python - no special imports needed
+- **Clarity**: Simple rule - type hints without defaults get injected  
+- **Flexibility**: Mix injected and non-injected parameters naturally
+- **IDE Support**: Standard Python type hints work perfectly
 
 ## Quick Summary
 
-**Old Pattern (Implicit):**
-```python
-@inject
-def process(user_id: int, db: Database, cache: Cache):
-    # Whiskey would try to inject ALL parameters with type hints
-    pass
-```
-
-**New Pattern (Explicit):**
+**Old Pattern (Explicit):**
 ```python
 from typing import Annotated
 from whiskey import Inject
 
 @inject
 def process(
-    user_id: int,  # NOT injected - regular parameter
+    user_id: int,  # Regular parameter  
     db: Annotated[Database, Inject()],  # Injected
     cache: Annotated[Cache, Inject()]   # Injected
+):
+    pass
+```
+
+**New Pattern (Pythonic):**
+```python
+@inject
+def process(
+    user_id: int,  # NOT injected - regular parameter (passed as argument)
+    db: Database,  # Injected - has type hint, no default
+    cache: Cache   # Injected - has type hint, no default
 ):
     pass
 ```

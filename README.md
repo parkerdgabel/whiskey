@@ -12,7 +12,7 @@ Whiskey is a dependency injection framework designed for Python developers who v
 ### Key Principles
 
 - **Pythonic**: Uses familiar Python idioms like dict-like containers and decorators
-- **Type-Safe**: Full typing support with `Annotated` for explicit injection
+- **Type-Safe**: Full typing support with automatic injection based on type hints
 - **Async-First**: Built for modern async/await Python applications
 - **Zero Dependencies**: Core has no required dependencies
 - **Extensible**: Rich extension system for different application types
@@ -20,8 +20,7 @@ Whiskey is a dependency injection framework designed for Python developers who v
 ## Quick Start
 
 ```python
-from typing import Annotated
-from whiskey import Container, Inject, inject
+from whiskey import Container, inject
 from whiskey.core.application import Whiskey as Application
 
 # Simple container usage
@@ -35,9 +34,9 @@ app = Application()  # Application is imported as Whiskey
 @app.component
 class EmailService:
     def __init__(self, 
-                 # Explicit injection with Annotated
-                 smtp: Annotated[SmtpClient, Inject()],
-                 # Regular parameter - not injected
+                 # Automatic injection based on type hints
+                 smtp: SmtpClient,
+                 # Regular parameter - not injected (has default)
                  sender: str = "noreply@example.com"):
         self.smtp = smtp
         self.sender = sender
@@ -45,8 +44,8 @@ class EmailService:
 # Automatic injection in functions
 @inject
 async def send_welcome_email(
-    user: User,
-    email_service: Annotated[EmailService, Inject()]
+    user: User,  # Passed as argument
+    email_service: EmailService  # Automatically injected
 ):
     await email_service.send(user.email, "Welcome!")
 
@@ -101,41 +100,38 @@ if (Database, "primary") in container:
 
 ### 2. Dependency Injection
 
-Whiskey supports explicit injection using `Annotated` types, including named dependencies and lazy resolution:
+Whiskey uses pythonic implicit injection based on type hints:
 
 ```python
-from typing import Annotated
-from whiskey import Inject, inject, Lazy
+from whiskey import inject
 
 class UserRepository:
     def __init__(self,
-                 # Named dependency injection
-                 primary_db: Annotated[Database, Inject(name="primary")],
-                 readonly_db: Annotated[Database, Inject(name="readonly")],
-                 # Lazy dependency - resolved only when accessed
-                 cache: Annotated[Lazy[Cache], Inject()],
-                 # Won't be injected - just a type hint
+                 # Automatically injected based on type hints
+                 primary_db: Database,
+                 readonly_db: Database,
+                 cache: Cache,
+                 # Won't be injected - has default value
                  table_name: str = "users"):
         self.primary_db = primary_db
         self.readonly_db = readonly_db
-        self.cache = cache  # Not resolved yet!
+        self.cache = cache
         self.table_name = table_name
     
     async def find(self, user_id: int):
-        # Lazy dependency resolved on first access
-        cached = self.cache.value.get(f"user:{user_id}")
+        cached = self.cache.get(f"user:{user_id}")
         if cached:
             return cached
         
         user = await self.readonly_db.query("SELECT * FROM users WHERE id = ?", user_id)
-        self.cache.value.set(f"user:{user_id}", user)
+        self.cache.set(f"user:{user_id}", user)
         return user
 
 # Inject into functions
 @inject
 async def get_user(
-    user_id: int,
-    repo: Annotated[UserRepository, Inject()]
+    user_id: int,  # Regular parameter (passed as argument)
+    repo: UserRepository  # Automatically injected
 ) -> User:
     return await repo.find(user_id)
 ```
@@ -267,7 +263,7 @@ class TranslatorAgent:
     @inject
     async def process(self, 
                      text: str,
-                     llm: Annotated[LLMClient, Inject()]):
+                     llm: LLMClient):
         return await llm.complete(f"Translate to Spanish: {text}")
 
 # Scoped to conversation
@@ -292,7 +288,7 @@ app.use(asgi_extension)
 @inject
 async def get_user(
     user_id: int,
-    repo: Annotated[UserRepository, Inject()]
+    repo: UserRepository
 ) -> dict:
     user = await repo.find(user_id)
     return {"id": user.id, "name": user.name}
@@ -303,7 +299,7 @@ async def get_user(
 async def log_requests(
     request: Request,
     call_next,
-    logger: Annotated[Logger, Inject()]
+    logger: Logger
 ):
     logger.info(f"{request.method} {request.url}")
     return await call_next(request)
@@ -325,7 +321,7 @@ app.use(cli_extension)
 @inject
 async def greet(
     name: str,
-    greeter: Annotated[GreetingService, Inject()]
+    greeter: GreetingService
 ):
     """Greet someone."""
     message = await greeter.create_greeting(name)
@@ -374,7 +370,6 @@ Register multiple implementations of the same interface:
 
 ```python
 from whiskey import Container, provide, singleton
-from typing import Annotated
 
 # Register multiple database connections
 container[Database, "primary"] = PostgresDB("postgres://primary")
@@ -393,8 +388,8 @@ class TwilioService:
 # Inject named dependencies
 class NotificationService:
     def __init__(self,
-                 email: Annotated[SMTPService, Inject(name="email")],
-                 sms: Annotated[TwilioService, Inject(name="sms")]):
+                 email: SMTPService,
+                 sms: TwilioService):
         self.email = email
         self.sms = sms
 ```
@@ -442,8 +437,7 @@ class BusinessHoursService:
 Defer expensive dependency resolution until needed:
 
 ```python
-from whiskey import Lazy
-from typing import Annotated
+from whiskey import inject
 
 class ExpensiveService:
     def __init__(self):
@@ -455,7 +449,7 @@ class ConsumerService:
                  # Lazy dependency - not initialized yet
                  expensive: Lazy[ExpensiveService],
                  # Regular dependency - initialized immediately
-                 cheap: Annotated[CheapService, Inject()]):
+                 cheap: CheapService):
         self.expensive = expensive
         self.cheap = cheap
         print("Consumer created - expensive service not yet initialized")
@@ -470,8 +464,8 @@ class ConsumerService:
 # Lazy with named dependencies
 class DatabaseService:
     def __init__(self,
-                 primary: Annotated[Lazy[Database], Inject(name="primary")],
-                 replica: Annotated[Lazy[Database], Inject(name="replica")]):
+                 primary: Database,
+                 replica: Database):
         self.primary = primary
         self.replica = replica
     
@@ -594,8 +588,8 @@ app.use(metrics_extension)
 ```python
 # ✅ Good - explicit about what gets injected
 def __init__(self,
-             db: Annotated[Database, Inject()],
-             cache: Annotated[Cache, Inject()],
+             db: Database,
+             cache: Cache,
              timeout: int = 30):
     ...
 

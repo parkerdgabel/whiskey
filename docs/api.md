@@ -263,8 +263,8 @@ Automatically inject dependencies into functions.
 ```python
 @inject
 async def process_user(
-    user_id: int,
-    service: Annotated[UserService, Inject()]
+    user_id: int,      # Regular parameter
+    service: UserService  # Automatically injected
 ):
     return await service.get_user(user_id)
 ```
@@ -311,22 +311,14 @@ class RequestContext:
 #### `Inject`
 Marker for explicit dependency injection in type annotations.
 
-```python
-class Inject:
-    def __init__(self, name: str | None = None):
-        """name: Optional service name for named dependencies"""
-```
-
-Usage with `Annotated`:
+Whiskey uses automatic injection based on type hints. Parameters with type hints but no default values are automatically injected:
 
 ```python
-from typing import Annotated
-
 class Service:
     def __init__(self,
-                 # Will be injected
-                 db: Annotated[Database, Inject()],
-                 # Won't be injected
+                 # Will be injected (has type hint, no default)
+                 db: Database,
+                 # Won't be injected (has default value)
                  timeout: int = 30):
         pass
 ```

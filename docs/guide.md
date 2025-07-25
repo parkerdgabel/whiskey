@@ -35,8 +35,7 @@ pip install whiskey[all]    # Everything
 Let's build a simple application that demonstrates core concepts:
 
 ```python
-from typing import Annotated
-from whiskey import Container, Inject, inject, singleton
+from whiskey import Container, inject, singleton
 from whiskey.core.application import Whiskey
 
 # 1. Create an application
@@ -58,7 +57,7 @@ class Database:
 
 @app.component
 class UserService:
-    def __init__(self, db: Annotated[Database, Inject()]):
+    def __init__(self, db: Database):
         self.db = db
         print("👤 UserService created")
         
@@ -83,7 +82,7 @@ async def shutdown():
 # 4. Create your main logic
 @app.main
 @inject
-async def main(user_service: Annotated[UserService, Inject()]):
+async def main(user_service: UserService):
     user = await user_service.get_user(123)
     print(f"✅ Found user: {user}")
 
@@ -106,7 +105,7 @@ class EmailService:
         
 # With DI - loose coupling
 class EmailService:
-    def __init__(self, smtp: Annotated[SmtpClient, Inject()]):
+    def __init__(self, smtp: SmtpClient):
         self.smtp = smtp  # Receives dependency
 ```
 
@@ -125,25 +124,23 @@ container[Database] = lambda: Database(get_connection_string())
 service = await container.resolve(MyService)
 ```
 
-### Explicit Injection with Annotated
+### Pythonic Injection with Type Hints
 
-Whiskey uses Python's `Annotated` type for explicit injection:
+Whiskey uses simple type hints for automatic injection:
 
 ```python
-from typing import Annotated
-
 class OrderService:
     def __init__(self,
-                 # These will be injected
-                 db: Annotated[Database, Inject()],
-                 logger: Annotated[Logger, Inject()],
-                 # These won't be injected
+                 # These will be injected (no default values)
+                 db: Database,
+                 logger: Logger,
+                 # These won't be injected (have defaults)  
                  table_name: str = "orders",
                  timeout: int = 30):
         pass
 ```
 
-This makes it crystal clear what gets injected and what doesn't!
+The rule is simple: parameters with type hints but no default values get injected!
 
 ### Scopes
 
@@ -198,14 +195,13 @@ Group related functionality into services:
 
 ```python
 # services/auth.py
-from typing import Annotated
-from whiskey import inject, Inject, scoped
+from whiskey import inject, scoped
 
 @scoped(scope_name="request")
 class AuthService:
     def __init__(self,
-                 db: Annotated[Database, Inject()],
-                 hasher: Annotated[PasswordHasher, Inject()]):
+                 db: Database,
+                 hasher: PasswordHasher):
         self.db = db
         self.hasher = hasher
         
@@ -268,7 +264,7 @@ class OrderService:
 @inject
 async def send_order_confirmation(
     event_data: dict,
-    email_service: Annotated[EmailService, Inject()]
+    email_service: EmailService
 ):
     await email_service.send_confirmation(event_data["order_id"])
 
@@ -285,8 +281,8 @@ Run background tasks with automatic dependency injection:
 @app.task
 @inject
 async def cleanup_old_sessions(
-    db: Annotated[Database, Inject()],
-    config: Annotated[Config, Inject()]
+    db: Database,
+    config: Config
 ):
     while True:
         await asyncio.sleep(config.cleanup_interval)
@@ -301,7 +297,7 @@ async def cleanup_old_sessions(
 Build web APIs with dependency injection:
 
 ```python
-from whiskey import inject, Annotated, Inject
+from whiskey import inject
 from whiskey.core.application import Whiskey
 from whiskey_asgi import asgi_extension
 
@@ -313,7 +309,7 @@ app.use(asgi_extension)
 @inject
 async def get_user(
     user_id: int,
-    user_service: Annotated[UserService, Inject()]
+    user_service: UserService
 ):
     user = await user_service.get_user(user_id)
     if not user:
@@ -326,7 +322,7 @@ async def get_user(
 async def auth_middleware(
     request: Request,
     call_next,
-    auth_service: Annotated[AuthService, Inject()]
+    auth_service: AuthService
 ):
     token = request.headers.get("Authorization")
     if token:
@@ -341,7 +337,7 @@ async def auth_middleware(
 @inject
 async def websocket_endpoint(
     websocket: WebSocket,
-    message_service: Annotated[MessageService, Inject()]
+    message_service: MessageService
 ):
     await websocket.accept()
     
@@ -355,7 +351,7 @@ async def websocket_endpoint(
 Create command-line tools with automatic DI:
 
 ```python
-from whiskey import inject, Annotated, Inject
+from whiskey import inject
 from whiskey.core.application import Whiskey
 from whiskey_cli import cli_extension
 
@@ -370,7 +366,7 @@ app.use(cli_extension)
 async def create_user(
     username: str,
     admin: bool,
-    user_service: Annotated[UserService, Inject()]
+    user_service: UserService
 ):
     """Create a new user."""
     user = await user_service.create_user(username, is_admin=admin)
@@ -385,7 +381,7 @@ async def migrate():
 @app.command(group="db")
 @inject
 async def seed(
-    db: Annotated[Database, Inject()]
+    db: Database
 ):
     """Seed the database."""
     await db.seed_data()
@@ -397,7 +393,7 @@ async def seed(
 Build AI-powered applications:
 
 ```python
-from whiskey import inject, Annotated, Inject
+from whiskey import inject
 from whiskey.core.application import Whiskey
 from whiskey_ai import ai_extension
 
@@ -420,8 +416,8 @@ class AssistantAgent:
     @inject
     async def process(self,
                      message: str,
-                     llm: Annotated[LLMClient, Inject()],
-                     context: Annotated[ConversationContext, Inject()]):
+                     llm: LLMClient,
+                     context: ConversationContext):
         # Add message to context
         context.add_message("user", message)
         
@@ -439,7 +435,7 @@ class AssistantAgent:
 @inject
 async def chat_with_assistant(
     user_input: str,
-    agent: Annotated[AssistantAgent, Inject()]
+    agent: AssistantAgent
 ):
     response = await agent.process(user_input)
     print(f"Assistant: {response}")
@@ -607,13 +603,13 @@ async def test_order_created_event(app):
 
 ### 1. Use Explicit Injection
 
-Always use `Annotated` with `Inject()` to make injection explicit:
+Use type hints to control what gets injected:
 
 ```python
 # ✅ Good - clear what gets injected
 def __init__(self,
-             db: Annotated[Database, Inject()],
-             logger: Annotated[Logger, Inject()],
+             db: Database,
+             logger: Logger,
              cache_ttl: int = 3600):  # Not injected
     pass
 
@@ -630,7 +626,7 @@ Inject dependencies through constructors, not properties:
 # ✅ Good - dependencies clear at construction
 @app.component
 class UserService:
-    def __init__(self, db: Annotated[Database, Inject()]):
+    def __init__(self, db: Database):
         self.db = db
 
 # ❌ Avoid - dependencies set after construction
@@ -706,7 +702,7 @@ container[CacheProtocol] = RedisCache()
 
 # Use interface in services
 class UserService:
-    def __init__(self, cache: Annotated[CacheProtocol, Inject()]):
+    def __init__(self, cache: CacheProtocol):
         self.cache = cache
 ```
 
@@ -727,7 +723,7 @@ class Repository(Protocol, Generic[T]):
 
 @app.component
 class UserRepository:
-    def __init__(self, db: Annotated[Database, Inject()]):
+    def __init__(self, db: Database):
         self.db = db
         
     async def find(self, id: int) -> User | None:
@@ -757,7 +753,7 @@ container[Repository[User]] = UserRepository
 ```python
 @scoped(scope_name="request")
 class UnitOfWork:
-    def __init__(self, db: Annotated[Database, Inject()]):
+    def __init__(self, db: Database):
         self.db = db
         self._transaction = None
         
@@ -783,8 +779,8 @@ async def transfer_funds(
     from_id: int,
     to_id: int,
     amount: float,
-    uow: Annotated[UnitOfWork, Inject()],
-    account_service: Annotated[AccountService, Inject()]
+    uow: UnitOfWork,
+    account_service: AccountService
 ):
     async with uow:
         await account_service.debit(from_id, amount)
@@ -797,7 +793,7 @@ async def transfer_funds(
 ```python
 @app.component
 class ConnectionFactory:
-    def __init__(self, config: Annotated[Config, Inject()]):
+    def __init__(self, config: Config):
         self.config = config
         
     def create_database_connection(self, name: str) -> Database:
@@ -812,7 +808,7 @@ class ConnectionFactory:
 # Usage
 @inject
 async def get_user_data(
-    factory: Annotated[ConnectionFactory, Inject()]
+    factory: ConnectionFactory
 ):
     # Get specific database
     user_db = factory.create_database_connection("users")
@@ -851,7 +847,7 @@ from myapp.services import UserService  # Correct module?
 # Solution: Break the cycle with lazy injection
 @app.component
 class ServiceA:
-    def __init__(self, container: Annotated[Container, Inject()]):
+    def __init__(self, container: Container):
         self._container = container
         
     async def get_service_b(self):
