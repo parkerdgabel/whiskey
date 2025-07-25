@@ -14,7 +14,7 @@ from whiskey.core.container import Container
 from whiskey.core.decorators import get_default_container, set_default_container
 from whiskey.core.events import EventBus
 from whiskey.core.types import Disposable, Initializable
-from whiskey.plugins import initialize_plugins, load_plugins
+# Plugin imports removed - using new extension pattern
 
 
 @dataclass
@@ -29,9 +29,8 @@ class ApplicationConfig:
     # Component scanning
     component_scan_packages: list[str] = field(default_factory=list)
     component_scan_paths: list[str] = field(default_factory=list)
-    # Plugin configuration
-    plugins: list[str] | None = None  # None = load all discovered plugins
-    exclude_plugins: list[str] = field(default_factory=list)
+    # Extension configuration
+    extensions: list[Callable[[Application], None]] = field(default_factory=list)
     
 
 class Application:
@@ -276,16 +275,11 @@ class Application:
         if self.config.component_scan_packages or self.config.component_scan_paths:
             await self._scan_components()
         
-        # Load plugins
-        logger.info("Loading plugins...")
-        load_plugins(
-            self.container,
-            plugins=self.config.plugins,
-            exclude=self.config.exclude_plugins,
-        )
-        
-        # Initialize plugins
-        initialize_plugins(self)
+        # Apply extensions from config
+        if self.config.extensions:
+            logger.info(f"Applying {len(self.config.extensions)} extensions...")
+            for extension in self.config.extensions:
+                self.extend(extension)
         
         # Discover modules
         await self.discover_modules()
@@ -352,6 +346,38 @@ class Application:
             asyncio.run(main())
         except KeyboardInterrupt:
             logger.info("Application interrupted")
+    
+    # Extension Methods
+    
+    def extend(self, extension: Callable[[Application], None]) -> Application:
+        """Extend the application with a function.
+        
+        The extension function receives the application and can:
+        - Register services in the container
+        - Add event handlers
+        - Register scopes
+        - Configure the application
+        
+        Example:
+            def redis_extension(app):
+                @app.service
+                class RedisClient:
+                    pass
+            
+            app.extend(redis_extension)
+        """
+        extension(self)
+        return self
+    
+    def use(self, *extensions: Callable[[Application], None]) -> Application:
+        """Use multiple extensions at once.
+        
+        Example:
+            app.use(redis_extension, cache_extension, metrics_extension)
+        """
+        for extension in extensions:
+            self.extend(extension)
+        return self
 
 
 # Global app instance for convenience

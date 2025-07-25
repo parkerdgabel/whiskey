@@ -8,8 +8,7 @@ dependencies = [
     "whiskey>=0.1.0",
 ]
 
-[project.entry-points."whiskey.plugins"]
-ai = "whiskey_ai.plugin:AIPlugin"
+# Entry points removed - using extension functions instead
 
 [tool.uv.sources]
 whiskey = { workspace = true }

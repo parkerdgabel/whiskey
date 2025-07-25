@@ -17,7 +17,8 @@ class GreetingService:
         return f"Hello, {name}! (Request #{self._counter})"
 
 
-# Build the ASGI application
+# Build the ASGI application using the builder
+# The builder automatically includes the ASGI extension
 app = (
     asgi()
     .configure(lambda c: setattr(c, "name", "WhiskeyASGIExample"))

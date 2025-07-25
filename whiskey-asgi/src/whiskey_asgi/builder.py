@@ -9,6 +9,7 @@ from whiskey.core.bootstrap import ApplicationBuilder
 
 from .app import ASGIApp
 from .routing import Router
+from . import asgi_extension
 
 if TYPE_CHECKING:
     from .middleware import Middleware
@@ -19,8 +20,8 @@ class ASGIApplicationBuilder(ApplicationBuilder[ASGIApp]):
     
     def __init__(self, config: ApplicationConfig | None = None):
         super().__init__(config)
-        # Always include the ASGI plugin
-        self.plugin("whiskey-asgi")
+        # Always include the ASGI extension
+        self.setup(lambda app: app.extend(asgi_extension))
         self._routes: list[tuple[str, str | list[str], Callable]] = []
         self._middleware: list[Middleware] = []
         self._startup_handlers: list[Callable] = []

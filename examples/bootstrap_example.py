@@ -76,6 +76,7 @@ async def example_web():
         from whiskey_asgi import asgi, Request, Response
         
         # Build an ASGI application
+        # The asgi() builder automatically includes the ASGI extension
         web_app = (
             asgi()
             .configure(lambda c: setattr(c, "name", "WebAPI"))

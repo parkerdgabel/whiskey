@@ -20,11 +20,12 @@ class GreetingService:
         return f"Hello, {name}! (Request #{self._counter})"
 
 
-# Create the Whiskey application with ASGI plugin
+# Create the Whiskey application and extend with ASGI
+from whiskey_asgi import asgi_extension
+
 app = Application(ApplicationConfig(
     name="WhiskeyASGIExample",
-    plugins=["whiskey-asgi"],  # Load the ASGI plugin
-))
+)).extend(asgi_extension)
 
 # Get the ASGI app from the container
 async def get_asgi():

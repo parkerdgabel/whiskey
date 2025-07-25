@@ -61,29 +61,23 @@ class TestDynamicScopeRegistration:
         with pytest.raises(ScopeError, match="already registered"):
             container.register_scope("duplicate", CustomScope())
     
-    def test_plugin_scope_registration(self):
-        """Test that plugins can register scopes."""
+    def test_extension_scope_registration(self):
+        """Test that extensions can register scopes."""
         from whiskey import Application
-        from whiskey.plugins import BasePlugin
         
-        # Create a test plugin that registers a scope
-        class TestPlugin(BasePlugin):
-            def __init__(self):
-                super().__init__("test-plugin", "1.0.0")
+        # Create a test extension that registers a scope
+        def test_extension(app: Application) -> None:
+            class ExtensionScope(ContextVarScope):
+                def __init__(self):
+                    super().__init__("extension_scope")
             
-            def register(self, container: Container) -> None:
-                class PluginScope(ContextVarScope):
-                    def __init__(self):
-                        super().__init__("plugin_scope")
-                
-                container.register_scope("plugin_scope", PluginScope())
+            app.container.register_scope("extension_scope", ExtensionScope())
         
-        # Create app and manually register the plugin
+        # Create app and apply extension
         app = Application()
-        plugin = TestPlugin()
-        plugin.register(app.container)
+        app.extend(test_extension)
         
         # Verify the scope is available
-        scope = app.container.scope_manager.get_scope("plugin_scope")
+        scope = app.container.scope_manager.get_scope("extension_scope")
         assert scope is not None
-        assert scope.name == "plugin_scope"
+        assert scope.name == "extension_scope"

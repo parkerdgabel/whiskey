@@ -16,8 +16,7 @@ from whiskey.core.events import Event, EventBus
 from whiskey.core.commands import Command, Query, CommandBus
 from whiskey.core.bootstrap import ApplicationBuilder, standalone
 
-# Plugin exports
-from whiskey.plugins import WhiskeyPlugin, BasePlugin
+# Extensions - plugins removed in favor of simple functions
 
 __all__ = [
     # Core DI
@@ -46,9 +45,6 @@ __all__ = [
     "Query",
     "CommandBus",
     
-    # Plugins
-    "WhiskeyPlugin",
-    "BasePlugin",
 ]
 
 # Configure default logger

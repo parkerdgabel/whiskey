@@ -5,6 +5,7 @@ A next-generation dependency injection and IoC framework for Python AI applicati
 ## Features
 
 - **AI-First Design**: Built specifically for AI workloads with native support for model management, token tracking, and conversation contexts
+- **Simple Extensions**: Extend functionality with plain Python functions - no complex plugin system
 - **Zero-Config Magic**: Convention-over-configuration with intelligent defaults
 - **Autodiscovery**: Automatic component discovery based on Python conventions
 - **Type-Safe**: Full type hints and runtime validation
@@ -14,8 +15,7 @@ A next-generation dependency injection and IoC framework for Python AI applicati
 ## Quick Start
 
 ```python
-from whiskey import inject, provide, singleton
-from whiskey.ai.context import AIContext
+from whiskey import Application, inject, singleton
 
 # Define services
 @singleton
@@ -23,24 +23,26 @@ class ConfigService:
     def __init__(self):
         self.api_key = "your-api-key"
 
-@provide
+@singleton
 class AIService:
     def __init__(self, config: ConfigService):
         self.config = config
     
-    async def process(self, prompt: str, context: AIContext):
+    async def process(self, prompt: str):
         # Your AI logic here
-        context.add_usage(prompt_tokens=10)
         return f"Processed: {prompt}"
+
+# Create application
+app = Application()
 
 # Use with automatic injection
 @inject
 async def handle_request(prompt: str, ai: AIService):
-    context = AIContext()
-    return await ai.process(prompt, context)
+    return await ai.process(prompt)
 
 # Run it
-result = await handle_request("Hello AI!")
+async with app.lifespan():
+    result = await handle_request("Hello AI!")
 ```
 
 ## Core Concepts
@@ -95,12 +97,38 @@ Whiskey provides several built-in scopes:
 - `@inject` - Automatically inject dependencies into functions
 - `@factory` - Register a factory function
 
-### AI-Specific Features
+### Extensions
 
-- **AIContext**: Automatic tracking of token usage, costs, and conversation history
-- **Model Registry**: Unified interface for different AI providers
-- **Resource Management**: Token budgets, rate limiting, GPU memory management
-- **Conversation Scopes**: Maintain state across multi-turn dialogues
+Whiskey uses simple functions to extend functionality:
+
+```python
+# Create an extension
+def redis_extension(app):
+    @app.service
+    class RedisClient:
+        async def get(self, key): ...
+        async def set(self, key, value): ...
+
+# Use extensions
+app = Application()
+app.extend(redis_extension)
+
+# Or use multiple at once
+from whiskey_ai import ai_extension
+from whiskey_asgi import asgi_extension
+
+app = Application().use(
+    ai_extension,    # Adds AI-specific scopes
+    asgi_extension,  # Adds web framework support
+    redis_extension, # Adds Redis client
+)
+```
+
+### First-Party Extensions
+
+- **whiskey-ai**: AI/LLM-specific scopes and utilities
+- **whiskey-asgi**: ASGI web framework support
+- **whiskey-cli**: CLI application support
 
 ## Installation
 

@@ -15,8 +15,7 @@ class CLIApplicationBuilder(ApplicationBuilder[click.Group]):
     
     def __init__(self, config: ApplicationConfig | None = None):
         super().__init__(config)
-        # Always include the CLI plugin
-        self.plugin("whiskey-cli")
+        # CLI extension is minimal - no services needed currently
         self._cli_group = click.Group()
         self._commands: list[tuple[click.Command, bool]] = []  # (command, needs_app)
     

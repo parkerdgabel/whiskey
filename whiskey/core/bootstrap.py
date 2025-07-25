@@ -43,12 +43,9 @@ class ApplicationBuilder(ABC, Generic[T]):
         self._async_setup_hooks.append(func)
         return self
     
-    def plugin(self, plugin_name: str) -> ApplicationBuilder[T]:
-        """Add a plugin to load."""
-        if self.config.plugins is None:
-            self.config.plugins = []
-        if plugin_name not in self.config.plugins:
-            self.config.plugins.append(plugin_name)
+    def extension(self, ext: Callable[[Application], None]) -> ApplicationBuilder[T]:
+        """Add an extension to apply during build."""
+        self._async_setup_hooks.append(lambda app: ext(app))
         return self
     
     def service(self, service_type: type, **kwargs) -> ApplicationBuilder[T]:

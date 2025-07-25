@@ -9,8 +9,7 @@ dependencies = [
     "click>=8.0",
 ]
 
-[project.entry-points."whiskey.plugins"]
-cli = "whiskey_cli.plugin:CLIPlugin"
+# Entry points removed - using extension functions instead
 
 [tool.uv.sources]
 whiskey = { workspace = true }
