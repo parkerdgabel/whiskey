@@ -1,0 +1,22 @@
+[project]
+name = "whiskey-cli"
+version = "0.1.0"
+description = "CLI framework extension for Whiskey"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "whiskey>=0.1.0",
+    "click>=8.0",
+]
+
+# Entry points removed - using extension functions instead
+
+[tool.uv.sources]
+whiskey = { workspace = true }
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

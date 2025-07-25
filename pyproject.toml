@@ -1,16 +1,16 @@
 [project]
 name = "whiskey"
 version = "0.1.0"
-description = "Next-generation dependency injection and IoC framework for Python AI applications"
+description = "Simple, Pythonic dependency injection for AI applications"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = [
-    "typing-extensions>=4.8.0",
-    "aiofiles>=23.2.0",
-    "rich>=13.7.0",
-    "loguru>=0.7.0",
-    "pyyaml>=6.0.0",
-]
+dependencies = []
+
+[project.optional-dependencies]
+ai = ["whiskey-ai"]
+web = ["whiskey-asgi"]
+cli = ["whiskey-cli"]
+all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli"]
 
 [tool.uv]
 dev-dependencies = [
@@ -21,6 +21,21 @@ dev-dependencies = [
     "mypy>=1.7.0",
 ]
 
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.workspace]
+members = ["whiskey_*"]
+
+[tool.uv.sources]
+whiskey-asgi = { workspace = true }
+whiskey-cli = { workspace = true }
+whiskey-ai = { workspace = true }
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"
@@ -28,6 +43,9 @@ target-version = "py39"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF"]
 ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/whiskey/plugins/base.py" = ["B027"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -43,7 +61,7 @@ asyncio_default_fixture_loop_scope = "function"
 addopts = [
     "-v",
     "--strict-markers",
-    "--cov=whiskey",
+    "--cov=src/whiskey",
     "--cov-report=html",
     "--cov-report=term-missing",
     "--cov-fail-under=80"

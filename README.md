@@ -1,57 +1,92 @@
-# Whiskey >C
+# Whiskey 🥃
 
-A next-generation dependency injection and IoC framework for Python AI applications.
+A simple, Pythonic dependency injection framework for AI applications.
 
 ## Features
 
-- **AI-First Design**: Built specifically for AI workloads with native support for model management, token tracking, and conversation contexts
-- **Zero-Config Magic**: Convention-over-configuration with intelligent defaults
-- **Type-Safe**: Full type hints and runtime validation
-- **Async-Native**: First-class support for async/await patterns
-- **Framework Agnostic**: Works with FastAPI, Django, Flask, and pure Python
+- **Simple API**: Dict-like container interface that feels natural
+- **Rich IoC**: Full lifecycle management with events and metadata
+- **Async-First**: Built for modern async Python applications
+- **Zero Dependencies**: Core has no required dependencies
+- **Event-Driven**: Built-in event emitter with wildcard support
+- **Extensible**: Rich extension API for building any kind of app
+- **Type-Safe**: Full type hints and IDE support
+- **AI-Ready**: Perfect for LLM apps with specialized extensions
 
 ## Quick Start
 
 ```python
-from whiskey import inject, provide, singleton
-from whiskey.ai.context import AIContext
+from whiskey import Application, inject
 
-# Define services
-@singleton
-class ConfigService:
-    def __init__(self):
-        self.api_key = "your-api-key"
+# Create application
+app = Application()
 
-@provide
-class AIService:
-    def __init__(self, config: ConfigService):
-        self.config = config
-    
-    async def process(self, prompt: str, context: AIContext):
-        # Your AI logic here
-        context.add_usage(prompt_tokens=10)
-        return f"Processed: {prompt}"
+# Register components with metadata
+@app.component
+@app.priority(10)  # Startup order
+@app.provides("database")
+class Database:
+    async def initialize(self):
+        print("Connected to database")
 
-# Use with automatic injection
-@inject
-async def handle_request(prompt: str, ai: AIService):
-    context = AIContext()
-    return await ai.process(prompt, context)
+@app.component
+@app.requires(Database)
+class UserService:
+    def __init__(self, db: Database):
+        self.db = db
 
-# Run it
-result = await handle_request("Hello AI!")
+# Event handlers
+@app.on("user.created")
+async def send_welcome(user):
+    print(f"Welcome {user['name']}!")
+
+# Lifecycle hooks
+@app.on_ready
+async def ready():
+    print("Application ready!")
+
+# Run with automatic lifecycle
+async with app.lifespan():
+    await app.emit("user.created", {"name": "Alice"})
 ```
 
 ## Core Concepts
 
+### Simple Container API
+
+Whiskey's container works like a Python dict:
+
+```python
+from whiskey import Container
+
+container = Container()
+
+# Register services
+container[Database] = Database("postgresql://...")
+container[EmailService] = EmailService
+container[Cache] = lambda: RedisCache("localhost")
+
+# Resolve services
+db = await container.resolve(Database)
+
+# Dict-like operations
+if Database in container:
+    db = await container.resolve(Database)
+
+# Context manager for scoping
+with container:
+    service = await container.resolve(MyService)
+```
+
 ### Scopes
 
-Whiskey provides several built-in scopes:
-
+Core scopes (built-in):
 - `singleton` - One instance for the entire application
-- `transient` - New instance for each request
+- `transient` - New instance for each request (default)
 - `request` - One instance per HTTP request
-- `session` - One instance per user session
+
+AI scopes (via whiskey-ai extension):
+- `session` - One instance per user session  
 - `conversation` - One instance per AI conversation
 - `ai_context` - One instance per AI operation
 
@@ -62,12 +97,63 @@ Whiskey provides several built-in scopes:
 - `@inject` - Automatically inject dependencies into functions
 - `@factory` - Register a factory function
 
-### AI-Specific Features
+### Rich Lifecycle & Events
 
-- **AIContext**: Automatic tracking of token usage, costs, and conversation history
-- **Model Registry**: Unified interface for different AI providers
-- **Resource Management**: Token budgets, rate limiting, GPU memory management
-- **Conversation Scopes**: Maintain state across multi-turn dialogues
+```python
+# Lifecycle phases
+@app.before_startup
+async def init_resources():
+    print("Initializing...")
+
+@app.after_shutdown  
+async def cleanup():
+    print("Cleaning up...")
+
+# Event system with wildcards
+@app.on("http.request.*")
+async def log_requests(event_data):
+    print(f"HTTP Event: {event_data}")
+
+# Error handling
+@app.on_error
+async def handle_errors(error):
+    print(f"Error: {error['message']}")
+```
+
+### Extensions
+
+Extensions can add new features to the Application:
+
+```python
+# Create an extension
+def monitoring_extension(app):
+    # Add custom lifecycle phase
+    app.add_lifecycle_phase("metrics_init", after="startup")
+    
+    # Add custom decorator
+    def tracked(cls):
+        cls._metrics_enabled = True
+        return cls
+    
+    app.add_decorator("tracked", tracked)
+    
+    # Listen to events
+    @app.on("application.*")
+    async def monitor_app(event):
+        print(f"Monitor: {event}")
+
+# Use extensions
+app = Application().use(
+    monitoring_extension,
+    # ... other extensions
+)
+```
+
+### First-Party Extensions
+
+- **whiskey-ai**: AI/LLM-specific scopes and utilities
+- **whiskey-asgi**: ASGI web framework support
+- **whiskey-cli**: CLI application support
 
 ## Installation
 
