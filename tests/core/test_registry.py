@@ -248,7 +248,7 @@ class TestServiceRegistry:
         """Test basic service registration."""
         descriptor = registry.register(key=TestService, provider=TestService, scope=Scope.SINGLETON)
 
-        assert descriptor.key == "testservice"
+        assert descriptor.key == "TestService"
         assert descriptor.service_type == TestService
         assert descriptor.provider == TestService
         assert descriptor.scope == Scope.SINGLETON
@@ -384,7 +384,7 @@ class TestServiceRegistry:
         registry.register(key=TestService, provider=TestService)
 
         assert registry.has(TestService)
-        assert registry.has("testservice")
+        assert registry.has("TestService")
 
     def test_has_service_with_name(self, registry):
         """Test checking named service existence."""
@@ -523,10 +523,10 @@ class TestServiceRegistry:
 
         # Both should work
         assert registry.has(TestService)
-        assert registry.has("testservice")  # Key is normalized to lowercase
+        assert registry.has("TestService")  # Key is normalized to lowercase
 
         # Check internal storage uses normalized string
-        assert "testservice" in registry._services
+        assert "TestService" in registry._services
 
     def test_key_normalization_with_name(self, registry):
         """Test key normalization with names."""

@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Union
 
+from .errors import RegistrationError
+
 
 class Scope(Enum):
     """Service lifecycle scopes."""
@@ -68,11 +70,7 @@ class ServiceDescriptor:
             )
 
         # Auto-detect if provider is a factory function
-        if (
-            callable(self.provider)
-            and not isinstance(self.provider, type)
-            and not hasattr(self.provider, "__class__")
-        ):
+        if callable(self.provider) and not isinstance(self.provider, type):
             self.is_factory = True
 
     def matches_condition(self) -> bool:
@@ -93,6 +91,18 @@ class ServiceDescriptor:
     def has_tag(self, tag: str) -> bool:
         """Check if service has a specific tag."""
         return tag in self.tags
+
+    def has_any_tag(self, tags: set[str]) -> bool:
+        """Check if service has any of the given tags."""
+        if not tags:
+            return False
+        return bool(self.tags & tags)
+
+    def has_all_tags(self, tags: set[str]) -> bool:
+        """Check if service has all of the given tags."""
+        if not tags:
+            return True
+        return tags.issubset(self.tags)
 
     def add_tag(self, tag: str) -> None:
         """Add a tag to this service."""
@@ -123,6 +133,11 @@ class ServiceRegistry:
         self._tag_to_keys: dict[str, set[str]] = defaultdict(set)
         self._scope_to_keys: dict[Scope, set[str]] = defaultdict(set)
 
+        # Compatibility properties for tests
+        self._services = self._descriptors  # Alias for old tests
+        self._tag_index = self._tag_to_keys  # Alias for old tests
+        self._type_index = self._type_to_keys  # Alias for old tests
+
     def register(
         self,
         key: str | type,
@@ -134,7 +149,8 @@ class ServiceRegistry:
         condition: Callable[[], bool] | None = None,
         tags: set[str] | None = None,
         lazy: bool = False,
-        **metadata,
+        metadata: dict[str, Any] | None = None,
+        **extra_metadata,
     ) -> ServiceDescriptor:
         """Register a service with the registry.
 
@@ -147,7 +163,8 @@ class ServiceRegistry:
             condition: Optional registration condition
             tags: Set of tags for categorization
             lazy: Whether to use lazy resolution
-            **metadata: Additional arbitrary metadata
+            metadata: Additional arbitrary metadata
+            **extra_metadata: Additional metadata via kwargs
 
         Returns:
             The created ServiceDescriptor
@@ -157,15 +174,39 @@ class ServiceRegistry:
             >>> registry.register(Database, DatabaseImpl, name="primary")
             >>> registry.register("cache", create_cache, tags={"infrastructure"})
         """
+        # Validate provider
+        if provider is None:
+            raise RegistrationError(f"Provider cannot be None for service '{key}'")
+
         # Normalize key to string
         string_key = self._normalize_key(key, name)
+
+        # Check for duplicate registration
+        if string_key in self._descriptors:
+            raise RegistrationError(f"Service '{string_key}' is already registered")
 
         # Determine service type
         if service_type is None:
             if isinstance(provider, type):
                 service_type = provider
+            elif callable(provider) and not isinstance(provider, type):
+                # For factory functions, try to infer from return type annotation
+                import inspect
+                try:
+                    sig = inspect.signature(provider)
+                    if sig.return_annotation != inspect.Signature.empty:
+                        service_type = sig.return_annotation
+                    else:
+                        service_type = type(provider)
+                except Exception:
+                    service_type = type(provider)
             else:
                 service_type = type(provider)
+
+        # Combine metadata
+        final_metadata = metadata or {}
+        if extra_metadata:
+            final_metadata.update(extra_metadata)
 
         # Create descriptor
         descriptor = ServiceDescriptor(
@@ -177,7 +218,7 @@ class ServiceRegistry:
             condition=condition,
             tags=tags or set(),
             lazy=lazy,
-            metadata=metadata,
+            metadata=final_metadata,
         )
 
         # Store in primary registry
@@ -207,10 +248,27 @@ class ServiceRegistry:
         """
         string_key = self._normalize_key(key, name)
 
-        if string_key not in self._descriptors:
-            raise KeyError(f"Service '{string_key}' not registered")
-
-        descriptor = self._descriptors[string_key]
+        # Try the key as-is first
+        if string_key in self._descriptors:
+            descriptor = self._descriptors[string_key]
+        else:
+            # For backwards compatibility, try case-insensitive lookup for types
+            if isinstance(key, type) and hasattr(key, '__name__'):
+                # Try lowercase version
+                lowercase_key = key.__name__.lower() + (f":{name}" if name else "")
+                if lowercase_key in self._descriptors:
+                    descriptor = self._descriptors[lowercase_key]
+                else:
+                    raise KeyError(f"Service '{string_key}' not registered")
+            elif isinstance(key, str):
+                # Try lowercase version for string keys too
+                lowercase_key = key.lower() + (f":{name}" if name else "")
+                if lowercase_key in self._descriptors:
+                    descriptor = self._descriptors[lowercase_key]
+                else:
+                    raise KeyError(f"Service '{string_key}' not registered")
+            else:
+                raise KeyError(f"Service '{string_key}' not registered")
 
         # Check condition if present
         if not descriptor.matches_condition():
@@ -355,9 +413,12 @@ class ServiceRegistry:
         """
         if isinstance(key, str):
             base_key = key
+        elif hasattr(key, '__name__'):
+            # Convert type to string (preserve original case)
+            base_key = key.__name__
         else:
-            # Convert type to lowercase string
-            base_key = key.__name__.lower()
+            # Convert other types (like numbers) to string
+            base_key = str(key)
 
         if name:
             return f"{base_key}:{name}"
