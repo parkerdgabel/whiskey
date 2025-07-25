@@ -459,6 +459,45 @@ class Container:
         """
         from whiskey.core.scopes import ScopeManager
         return ScopeManager(self, name)
+    
+    # Discovery and introspection
+    
+    def discover(self, module_or_package: str, **kwargs) -> set[type]:
+        """Discover components in a module or package.
+        
+        Args:
+            module_or_package: Module/package to scan
+            **kwargs: Discovery options
+            
+        Returns:
+            Set of discovered components
+        """
+        from whiskey.core.discovery import discover_components
+        return discover_components(
+            module_or_package, 
+            container=self,
+            **kwargs
+        )
+    
+    def inspect(self):
+        """Get an inspector for this container.
+        
+        Returns:
+            Inspector instance for introspection
+        """
+        from whiskey.core.discovery import ContainerInspector
+        return ContainerInspector(self)
+    
+    def can_resolve(self, service_type: type[T]) -> bool:
+        """Check if a service can be resolved.
+        
+        Args:
+            service_type: Type to check
+            
+        Returns:
+            True if the service can be resolved
+        """
+        return self.inspect().can_resolve(service_type)
 
 
 def get_current_container() -> Container | None:

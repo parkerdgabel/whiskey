@@ -3,6 +3,7 @@
 from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
 from whiskey.core.container import Container
 from whiskey.core.decorators import (
+    Inject,
     factory,
     get_default_container,
     inject,
@@ -11,6 +12,7 @@ from whiskey.core.decorators import (
     set_default_container,
     singleton,
 )
+from whiskey.core.discovery import ComponentDiscoverer, ContainerInspector, discover_components
 from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
 from whiskey.core.types import Disposable, Initializable
 
@@ -20,6 +22,7 @@ __all__ = [
     "get_default_container",
     "set_default_container",
     # Decorators
+    "Inject",
     "provide",
     "singleton",
     "factory",
@@ -29,6 +32,10 @@ __all__ = [
     "Application",
     "ApplicationConfig",
     "ComponentMetadata",
+    # Discovery
+    "ComponentDiscoverer",
+    "ContainerInspector",
+    "discover_components",
     # Scopes
     "Scope",
     "ContextVarScope",

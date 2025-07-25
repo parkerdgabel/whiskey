@@ -6,6 +6,7 @@ __version__ = "0.1.0"
 from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
 from whiskey.core.container import Container
 from whiskey.core.decorators import factory, inject, provide, scoped, singleton, Inject
+from whiskey.core.discovery import ComponentDiscoverer, ContainerInspector, discover_components
 from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
 from whiskey.core.types import Disposable, Initializable
 
@@ -18,6 +19,10 @@ __all__ = [
     "factory",
     "scoped",
     "Inject",
+    # Discovery
+    "ComponentDiscoverer",
+    "ContainerInspector",
+    "discover_components",
     # Scopes
     "Scope",
     "ContextVarScope",

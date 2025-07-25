@@ -547,6 +547,118 @@ class Application:
         """Get metadata for a component."""
         return self._component_metadata.get(component_type)
     
+    # Discovery and introspection
+    
+    def discover(self, module_or_package: str, *,
+                auto_register: bool = False,
+                decorator_name: str | None = None,
+                **kwargs) -> set[type]:
+        """Discover components in a module or package.
+        
+        Args:
+            module_or_package: Module/package to scan
+            auto_register: Whether to auto-register found components
+            decorator_name: Look for classes with this decorator attribute
+            **kwargs: Additional discovery options
+            
+        Returns:
+            Set of discovered component types
+            
+        Example:
+            # Discover all classes in a package
+            components = app.discover("myapp.services")
+            
+            # Auto-register discovered components
+            app.discover("myapp.services", auto_register=True)
+            
+            # Find only components with specific decorator
+            app.discover("myapp.models", decorator_name="_is_entity")
+        """
+        components = self.container.discover(
+            module_or_package,
+            auto_register=auto_register,
+            decorator_name=decorator_name,
+            **kwargs
+        )
+        
+        # Emit discovery event
+        asyncio.create_task(self.emit("components.discovered", {
+            "module": module_or_package,
+            "count": len(components),
+            "components": list(components)
+        }))
+        
+        return components
+    
+    def list_components(self, *,
+                       interface: type | None = None,
+                       scope: str | None = None,
+                       tags: set[str] | None = None) -> list[type]:
+        """List registered components with optional filters.
+        
+        Args:
+            interface: Filter by interface/base class
+            scope: Filter by scope
+            tags: Filter by component tags
+            
+        Returns:
+            List of matching component types
+            
+        Example:
+            # List all components
+            all_components = app.list_components()
+            
+            # List only singleton services
+            singletons = app.list_components(scope="singleton")
+            
+            # List components implementing an interface
+            handlers = app.list_components(interface=MessageHandler)
+        """
+        components = self.container.inspect().list_services(
+            interface=interface,
+            scope=scope
+        )
+        
+        # Additional filtering by tags if metadata exists
+        if tags:
+            components = [
+                comp for comp in components
+                if self._component_metadata.get(comp) and
+                tags.intersection(self._component_metadata[comp].tags)
+            ]
+        
+        return components
+    
+    def inspect_component(self, component_type: type) -> dict[str, Any]:
+        """Get detailed information about a component.
+        
+        Args:
+            component_type: Component to inspect
+            
+        Returns:
+            Dict with component details
+            
+        Example:
+            info = app.inspect_component(UserService)
+            print(f"Dependencies: {info['dependencies']}")
+            print(f"Can resolve: {info['can_resolve']}")
+        """
+        report = self.container.inspect().resolution_report(component_type)
+        
+        # Add metadata if available
+        metadata = self._component_metadata.get(component_type)
+        if metadata:
+            report["metadata"] = {
+                "name": metadata.name,
+                "priority": metadata.priority,
+                "tags": list(metadata.tags),
+                "critical": metadata.critical,
+                "requires": list(metadata.requires),
+                "provides": list(metadata.provides)
+            }
+        
+        return report
+    
     def get_components_by_tag(self, tag: str) -> List[type]:
         """Get all components with a specific tag."""
         return [
