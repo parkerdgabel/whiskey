@@ -10,8 +10,13 @@ dependencies = [
 
 # Entry points removed - using extension functions instead
 
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.uv.sources]
 whiskey = { workspace = true }
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["whiskey_ai*"]

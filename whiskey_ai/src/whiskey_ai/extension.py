@@ -120,18 +120,18 @@ class ChatCompletionChunk:
 @dataclass
 class Embedding:
     """Single embedding."""
-    object: str = "embedding"
     index: int
     embedding: List[float]
+    object: str = "embedding"
 
 
 @dataclass
 class EmbeddingResponse:
     """OpenAI-compatible embedding response."""
-    object: str = "list"
     data: List[Embedding]
     model: str
     usage: Usage
+    object: str = "list"
 
 
 # Protocol definitions for OpenAI-compatible interfaces
@@ -323,7 +323,7 @@ def ai_extension(app: Application) -> None:
     app.agent_manager = agent_manager
     
     # Add conversation scope
-    app.container.add_scope("conversation", ConversationScope)
+    app.container.register_scope("conversation", ConversationScope)
     
     # Register managers as services
     app.container[ModelManager] = model_manager
