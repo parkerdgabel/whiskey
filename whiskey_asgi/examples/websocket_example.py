@@ -3,53 +3,53 @@
 import asyncio
 from typing import Set
 
-from whiskey import Application, inject
-from whiskey_asgi import asgi_extension, WebSocket
+from whiskey import inject
+from whiskey_asgi import WebSocket, asgi_extension
 
 
 # Service for managing chat rooms
 class ChatService:
     """Service that manages chat rooms and connections."""
-    
+
     def __init__(self):
         self.rooms: dict[str, Set[WebSocket]] = {}
         self.user_names: dict[WebSocket, str] = {}
-    
+
     async def join_room(self, room_id: str, websocket: WebSocket, username: str) -> None:
         """Add a user to a room."""
         if room_id not in self.rooms:
             self.rooms[room_id] = set()
-        
+
         self.rooms[room_id].add(websocket)
         self.user_names[websocket] = username
-        
+
         # Notify others
         await self.broadcast(room_id, f"{username} joined the room", exclude=websocket)
-    
+
     async def leave_room(self, room_id: str, websocket: WebSocket) -> None:
         """Remove a user from a room."""
         if room_id in self.rooms and websocket in self.rooms[room_id]:
             self.rooms[room_id].remove(websocket)
             username = self.user_names.pop(websocket, "Unknown")
-            
+
             # Notify others
             await self.broadcast(room_id, f"{username} left the room", exclude=websocket)
-            
+
             # Clean up empty rooms
             if not self.rooms[room_id]:
                 del self.rooms[room_id]
-    
+
     async def broadcast(self, room_id: str, message: str, exclude: WebSocket = None) -> None:
         """Broadcast a message to all users in a room."""
         if room_id not in self.rooms:
             return
-        
+
         # Send to all connections in the room
         tasks = []
         for ws in self.rooms[room_id]:
             if ws != exclude:
                 tasks.append(ws.send(message))
-        
+
         # Send all messages concurrently
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -69,14 +69,14 @@ app.container[ChatService] = ChatService()
 async def chat_handler(websocket: WebSocket, room_id: str, chat: ChatService):
     """WebSocket chat handler with rooms."""
     await websocket.accept()
-    
+
     # Get username from query params or headers
     username = websocket.headers.get("x-username", f"User_{id(websocket)}")
-    
+
     # Join the room
     await chat.join_room(room_id, websocket, username)
     await websocket.send(f"Welcome to room {room_id}, {username}!")
-    
+
     try:
         # Handle messages
         async for message in websocket:
@@ -93,7 +93,7 @@ async def chat_handler(websocket: WebSocket, room_id: str, chat: ChatService):
 async def echo_handler(websocket: WebSocket):
     """Simple echo WebSocket handler."""
     await websocket.accept()
-    
+
     try:
         async for message in websocket:
             # Echo back the message
@@ -112,15 +112,11 @@ async def index():
             {
                 "path": "/ws/chat/{room_id}",
                 "protocol": "websocket",
-                "description": "Join a chat room"
+                "description": "Join a chat room",
             },
-            {
-                "path": "/ws/echo",
-                "protocol": "websocket", 
-                "description": "Echo service"
-            }
+            {"path": "/ws/echo", "protocol": "websocket", "description": "Echo service"},
         ],
-        "example": "Connect to ws://localhost:8000/ws/chat/general"
+        "example": "Connect to ws://localhost:8000/ws/chat/general",
     }
 
 
@@ -128,7 +124,8 @@ async def index():
 @app.get("/client")
 async def client():
     """Simple HTML client for testing WebSockets."""
-    return """
+    return (
+        """
     <!DOCTYPE html>
     <html>
     <head>
@@ -203,7 +200,9 @@ async def client():
         </script>
     </body>
     </html>
-    """, 200  # Return HTML with 200 status
+    """,
+        200,
+    )  # Return HTML with 200 status
 
 
 # Run with uvicorn

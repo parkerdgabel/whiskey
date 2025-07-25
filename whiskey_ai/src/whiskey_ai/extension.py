@@ -3,19 +3,26 @@
 from __future__ import annotations
 
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import (
-    Any, AsyncIterator, Callable, Dict, List, Literal, Optional, Protocol,
-    Union, runtime_checkable
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    Union,
+    runtime_checkable,
 )
-
-from whiskey import Application
 
 
 # OpenAI-compatible types
 @dataclass
 class Function:
     """OpenAI function definition."""
+
     name: str
     description: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
@@ -24,6 +31,7 @@ class Function:
 @dataclass
 class Tool:
     """OpenAI tool definition."""
+
     type: Literal["function"]
     function: Function
 
@@ -31,6 +39,7 @@ class Tool:
 @dataclass
 class FunctionCall:
     """Function call in a message."""
+
     name: str
     arguments: str
 
@@ -38,6 +47,7 @@ class FunctionCall:
 @dataclass
 class ToolCall:
     """Tool call in a message."""
+
     id: str
     type: Literal["function"]
     function: FunctionCall
@@ -46,12 +56,14 @@ class ToolCall:
 @dataclass
 class ResponseFormat:
     """Response format specification."""
+
     type: Literal["text", "json_object"]
 
 
 @dataclass
 class Message:
     """OpenAI-compatible message."""
+
     role: Literal["system", "user", "assistant", "function", "tool"]
     content: Optional[str] = None
     name: Optional[str] = None
@@ -62,6 +74,7 @@ class Message:
 @dataclass
 class Usage:
     """Token usage information."""
+
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
@@ -70,6 +83,7 @@ class Usage:
 @dataclass
 class Choice:
     """Completion choice."""
+
     index: int
     message: Message
     finish_reason: Optional[str]
@@ -79,6 +93,7 @@ class Choice:
 @dataclass
 class ChatCompletion:
     """OpenAI-compatible chat completion response."""
+
     id: str
     model: str
     choices: List[Choice]
@@ -91,6 +106,7 @@ class ChatCompletion:
 @dataclass
 class Delta:
     """Streaming message delta."""
+
     content: Optional[str] = None
     function_call: Optional[FunctionCall] = None
     tool_calls: Optional[List[ToolCall]] = None
@@ -100,6 +116,7 @@ class Delta:
 @dataclass
 class StreamChoice:
     """Streaming completion choice."""
+
     index: int
     delta: Delta
     finish_reason: Optional[str] = None
@@ -109,6 +126,7 @@ class StreamChoice:
 @dataclass
 class ChatCompletionChunk:
     """OpenAI-compatible streaming chunk."""
+
     id: str
     model: str
     choices: List[StreamChoice]
@@ -120,6 +138,7 @@ class ChatCompletionChunk:
 @dataclass
 class Embedding:
     """Single embedding."""
+
     index: int
     embedding: List[float]
     object: str = "embedding"
@@ -128,6 +147,7 @@ class Embedding:
 @dataclass
 class EmbeddingResponse:
     """OpenAI-compatible embedding response."""
+
     data: List[Embedding]
     model: str
     usage: Usage
@@ -138,7 +158,7 @@ class EmbeddingResponse:
 @runtime_checkable
 class ChatCompletions(Protocol):
     """OpenAI-compatible chat completions interface."""
-    
+
     async def create(
         self,
         *,
@@ -160,7 +180,7 @@ class ChatCompletions(Protocol):
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
         response_format: Optional[Dict[str, Any]] = None,
         seed: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> Union[ChatCompletion, AsyncIterator[ChatCompletionChunk]]:
         """Create a chat completion."""
         ...
@@ -169,7 +189,7 @@ class ChatCompletions(Protocol):
 @runtime_checkable
 class Embeddings(Protocol):
     """OpenAI-compatible embeddings interface."""
-    
+
     async def create(
         self,
         *,
@@ -178,7 +198,7 @@ class Embeddings(Protocol):
         encoding_format: Optional[Literal["float", "base64"]] = "float",
         dimensions: Optional[int] = None,
         user: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ) -> EmbeddingResponse:
         """Create embeddings."""
         ...
@@ -187,6 +207,7 @@ class Embeddings(Protocol):
 @runtime_checkable
 class LLMClient(Protocol):
     """OpenAI-compatible client interface."""
+
     chat: ChatCompletions
     embeddings: Embeddings
 
@@ -194,21 +215,21 @@ class LLMClient(Protocol):
 # Manager classes
 class ModelManager:
     """Manages LLM model implementations."""
-    
+
     def __init__(self):
         self.models: Dict[str, type] = {}
         self.instances: Dict[str, LLMClient] = {}
-    
+
     def register(self, name: str, model_class: type) -> None:
         """Register a model implementation."""
         self.models[name] = model_class
-    
+
     def get(self, name: str) -> LLMClient:
         """Get a model instance."""
         if name not in self.instances:
             raise ValueError(f"Model '{name}' not configured")
         return self.instances[name]
-    
+
     def configure(self, name: str, **kwargs) -> None:
         """Configure a model instance."""
         if name not in self.models:
@@ -218,25 +239,25 @@ class ModelManager:
 
 class ToolManager:
     """Manages tools/functions for LLMs."""
-    
+
     def __init__(self):
         self.tools: Dict[str, Callable] = {}
         self.schemas: Dict[str, Dict[str, Any]] = {}
-    
+
     def register(self, tool: Callable, schema: Dict[str, Any]) -> None:
         """Register a tool with its schema."""
         name = schema["function"]["name"]
         self.tools[name] = tool
         self.schemas[name] = schema
-    
+
     def get(self, name: str) -> Optional[Callable]:
         """Get a tool by name."""
         return self.tools.get(name)
-    
+
     def get_schema(self, name: str) -> Optional[Dict[str, Any]]:
         """Get a tool's schema."""
         return self.schemas.get(name)
-    
+
     def all_schemas(self) -> List[Dict[str, Any]]:
         """Get all tool schemas."""
         return list(self.schemas.values())
@@ -244,15 +265,15 @@ class ToolManager:
 
 class AgentManager:
     """Manages AI agents."""
-    
+
     def __init__(self):
         self.agents: Dict[str, type] = {}
         self.instances: Dict[str, Any] = {}
-    
+
     def register(self, name: str, agent_class: type) -> None:
         """Register an agent class."""
         self.agents[name] = agent_class
-    
+
     def get(self, name: str) -> Any:
         """Get an agent instance."""
         return self.instances.get(name)
@@ -264,14 +285,14 @@ from whiskey.core.scopes import ContextVarScope
 
 class ConversationScope(ContextVarScope):
     """Scope for conversation/chat sessions - isolated per async context."""
-    
+
     def __init__(self):
         super().__init__("conversation")
 
 
 def ai_extension(app: Application) -> None:
     """AI extension that adds LLM capabilities to Whiskey applications.
-    
+
     This extension provides:
     - OpenAI-compatible LLM client abstraction
     - Model registration with @app.model decorator
@@ -279,28 +300,28 @@ def ai_extension(app: Application) -> None:
     - Agent framework with @app.agent decorator
     - Conversation management
     - Streaming support
-    
+
     Example:
         app = Application()
         app.use(ai_extension)
-        
+
         # Register a model
         @app.model("openai")
         class OpenAIModel:
             def __init__(self, api_key: str):
                 self.client = AsyncOpenAI(api_key=api_key)
-            
+
             @property
             def chat(self):
                 return self.client.chat.completions
-            
+
             @property
             def embeddings(self):
                 return self.client.embeddings
-        
+
         # Configure the model
         app.configure_model("openai", api_key=os.getenv("OPENAI_API_KEY"))
-        
+
         # Use in a route
         @app.post("/chat")
         @inject
@@ -316,56 +337,55 @@ def ai_extension(app: Application) -> None:
     model_manager = ModelManager()
     tool_manager = ToolManager()
     agent_manager = AgentManager()
-    
+
     # Store managers in app
     app.model_manager = model_manager
     app.tool_manager = tool_manager
     app.agent_manager = agent_manager
-    
+
     # Add conversation scope
     app.add_scope("conversation", ConversationScope)
-    
+
     # Register managers as services
     app.container[ModelManager] = model_manager
     app.container[ToolManager] = tool_manager
     app.container[AgentManager] = agent_manager
-    
+
     # Model decorator
     def model(name: str):
         """Decorator to register an LLM model implementation.
-        
+
         The decorated class should implement the LLMClient protocol
         with OpenAI-compatible chat and embeddings interfaces.
         """
+
         def decorator(cls: type) -> type:
             model_manager.register(name, cls)
             return cls
+
         return decorator
-    
+
     app.add_decorator("model", model)
-    
+
     # Tool decorator
     def tool(name: Optional[str] = None, description: Optional[str] = None):
         """Decorator to register a tool/function for LLMs.
-        
+
         The decorated function should have type hints for parameters
         and can return any JSON-serializable value.
         """
+
         def decorator(func: Callable) -> Callable:
             import inspect
-            
+
             # Generate OpenAI function schema from function signature
             sig = inspect.signature(func)
-            parameters = {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-            
+            parameters = {"type": "object", "properties": {}, "required": []}
+
             for param_name, param in sig.parameters.items():
                 if param_name == "self":
                     continue
-                    
+
                 # Infer type from annotation
                 param_type = "string"  # default
                 if param.annotation != inspect.Parameter.empty:
@@ -379,60 +399,63 @@ def ai_extension(app: Application) -> None:
                         param_type = "array"
                     elif param.annotation == dict or param.annotation == Dict:
                         param_type = "object"
-                
+
                 parameters["properties"][param_name] = {
                     "type": param_type,
-                    "description": f"Parameter {param_name}"
+                    "description": f"Parameter {param_name}",
                 }
-                
+
                 if param.default == inspect.Parameter.empty:
                     parameters["required"].append(param_name)
-            
+
             schema = {
                 "type": "function",
                 "function": {
                     "name": name or func.__name__,
                     "description": description or func.__doc__ or f"Function {func.__name__}",
-                    "parameters": parameters
-                }
+                    "parameters": parameters,
+                },
             }
-            
+
             tool_manager.register(func, schema)
             return func
+
         return decorator
-    
+
     app.add_decorator("tool", tool)
-    
+
     # Agent decorator
     def agent(name: str):
         """Decorator to register an AI agent.
-        
+
         Agents are classes that can be injected and perform
         complex tasks using LLMs and tools.
         """
+
         def decorator(cls: type) -> type:
             agent_manager.register(name, cls)
             # Register the agent class in the container
             app.container[cls] = cls
             return cls
+
         return decorator
-    
+
     app.add_decorator("agent", agent)
-    
+
     # Model configuration method
     def configure_model(name: str, **kwargs) -> None:
         """Configure a model instance with the given parameters."""
         model_manager.configure(name, **kwargs)
-    
+
     app.configure_model = configure_model
-    
+
     # Get model method
     def get_model(name: str) -> LLMClient:
         """Get a configured model instance."""
         return model_manager.get(name)
-    
+
     app.get_model = get_model
-    
+
     # Default LLMClient injection
     @app.on_startup
     async def setup_default_client():

@@ -1,25 +1,26 @@
 """Agent example using Whiskey AI extension."""
 
-import json
 
-from whiskey import Application, inject
-from whiskey_ai import ai_extension, MockLLMClient, LLMClient
-from whiskey_ai.agents import ResearchAgent, CodingAgent, AnalysisAgent
-from whiskey_ai.tools import calculate, web_search, get_current_time
-from whiskey_asgi import asgi_extension, Request
-
+from whiskey import inject
+from whiskey_ai import LLMClient, MockLLMClient, ai_extension
+from whiskey_ai.agents import AnalysisAgent, CodingAgent, ResearchAgent
+from whiskey_ai.tools import calculate, get_current_time, web_search
+from whiskey_asgi import Request, asgi_extension
 
 # Create application
 app = Application()
 app.use(ai_extension)
 app.use(asgi_extension)
 
+
 # Register mock model
 @app.model("mock")
 class MockModel(MockLLMClient):
     pass
 
+
 app.configure_model("mock")
+
 
 # Register built-in tools
 @app.tool()
@@ -27,38 +28,44 @@ async def search_web(query: str, max_results: int = 5) -> list:
     """Search the web for information."""
     return await web_search(query, max_results)
 
+
 @app.tool()
 def calculate_expression(expression: str) -> float:
     """Calculate a mathematical expression."""
     return calculate(expression)
+
 
 @app.tool()
 def current_time(timezone: str = None) -> str:
     """Get the current time."""
     return get_current_time(timezone)
 
+
 # Register specialized agents
 @app.agent("researcher")
 class Researcher(ResearchAgent):
     pass
 
+
 @app.agent("coder")
 class Coder(CodingAgent):
     pass
 
+
 @app.agent("analyst")
 class Analyst(AnalysisAgent):
     pass
+
 
 # Custom agent
 @app.agent("assistant")
 @inject
 class GeneralAssistant:
     """General purpose assistant agent."""
-    
+
     def __init__(self, client: LLMClient, tools: "ToolManager", agents: "AgentManager"):
         from whiskey_ai.agents import LLMAgent
-        
+
         self.agent = LLMAgent(
             name="General Assistant",
             description="A helpful assistant that can handle various tasks",
@@ -71,12 +78,12 @@ class GeneralAssistant:
 4. Help with various tasks
 
 Use the available tools when needed to provide accurate, up-to-date information.""",
-            model="gpt-4"
+            model="gpt-4",
         )
-        
+
         # Store reference to other agents for delegation
         self.agents = agents
-    
+
     async def run(self, task: str) -> str:
         """Run the assistant on a task."""
         # Check if we should delegate to a specialized agent
@@ -92,7 +99,7 @@ Use the available tools when needed to provide accurate, up-to-date information.
             analyst = self.agents.get("analyst")
             if analyst:
                 return await analyst.run(task)
-        
+
         # Handle with general agent
         return await self.agent.run(task)
 
@@ -110,24 +117,16 @@ async def run_agent(agent_name: str, request: Request, agents: "AgentManager"):
     """Run a specific agent."""
     data = await request.json()
     task = data.get("task", "")
-    
+
     agent = agents.get(agent_name)
     if not agent:
         return {"error": f"Agent '{agent_name}' not found"}, 404
-    
+
     try:
         result = await agent.run(task)
-        return {
-            "agent": agent_name,
-            "task": task,
-            "result": result
-        }
+        return {"agent": agent_name, "task": task, "result": result}
     except Exception as e:
-        return {
-            "agent": agent_name,
-            "task": task,
-            "error": str(e)
-        }, 500
+        return {"agent": agent_name, "task": task, "error": str(e)}, 500
 
 
 @app.get("/agents")
@@ -139,7 +138,7 @@ async def list_agents(agents: "AgentManager"):
             {
                 "name": name,
                 "class": agent_class.__name__,
-                "description": getattr(agent_class, "__doc__", "No description")
+                "description": getattr(agent_class, "__doc__", "No description"),
             }
             for name, agent_class in agents.agents.items()
         ]
@@ -153,13 +152,10 @@ async def chat_with_agent(request: Request, assistant: GeneralAssistant):
     """Chat with the general assistant."""
     data = await request.json()
     message = data.get("message", "")
-    
+
     result = await assistant.run(message)
-    
-    return {
-        "message": message,
-        "response": result
-    }
+
+    return {"message": message, "response": result}
 
 
 # Tool execution endpoint
@@ -168,30 +164,22 @@ async def chat_with_agent(request: Request, assistant: GeneralAssistant):
 async def execute_tool(tool_name: str, request: Request, tools: "ToolManager"):
     """Execute a specific tool."""
     data = await request.json()
-    
+
     tool = tools.get(tool_name)
     if not tool:
         return {"error": f"Tool '{tool_name}' not found"}, 404
-    
+
     try:
         import asyncio
-        
+
         if asyncio.iscoroutinefunction(tool):
             result = await tool(**data)
         else:
             result = tool(**data)
-        
-        return {
-            "tool": tool_name,
-            "arguments": data,
-            "result": result
-        }
+
+        return {"tool": tool_name, "arguments": data, "result": result}
     except Exception as e:
-        return {
-            "tool": tool_name,
-            "arguments": data,
-            "error": str(e)
-        }, 500
+        return {"tool": tool_name, "arguments": data, "error": str(e)}, 500
 
 
 @app.get("/tools")
@@ -203,7 +191,7 @@ async def list_tools(tools: "ToolManager"):
             {
                 "name": schema["function"]["name"],
                 "description": schema["function"]["description"],
-                "parameters": schema["function"]["parameters"]
+                "parameters": schema["function"]["parameters"],
             }
             for schema in tools.all_schemas()
         ]
@@ -222,10 +210,10 @@ async def index():
             "POST /agent/{name}": "Run a specific agent",
             "POST /chat": "Chat with the general assistant",
             "GET /tools": "List available tools",
-            "POST /tools/{name}": "Execute a specific tool"
+            "POST /tools/{name}": "Execute a specific tool",
         },
         "agents": ["researcher", "coder", "analyst", "assistant"],
-        "tools": ["search_web", "calculate_expression", "current_time"]
+        "tools": ["search_web", "calculate_expression", "current_time"],
     }
 
 
@@ -236,12 +224,12 @@ if __name__ == "__main__":
     print("\n1. List agents:")
     print("curl http://localhost:8000/agents")
     print("\n2. Chat with assistant:")
-    print('curl -X POST http://localhost:8000/chat \\')
+    print("curl -X POST http://localhost:8000/chat \\")
     print('  -H "Content-Type: application/json" \\')
     print('  -d \'{"message": "What is 25 * 4?"}\'')
     print("\n3. Run specific agent:")
-    print('curl -X POST http://localhost:8000/agent/researcher \\')
+    print("curl -X POST http://localhost:8000/agent/researcher \\")
     print('  -H "Content-Type: application/json" \\')
     print('  -d \'{"task": "Find information about Python async programming"}\'')
-    
+
     app.run_asgi(port=8000)

@@ -1,6 +1,7 @@
 """Type definitions for ASGI."""
 
-from typing import Any, Awaitable, Callable, Dict, List, Tuple, TypedDict, Union
+from collections.abc import Awaitable
+from typing import Any, Callable, Dict, List, Tuple, TypedDict
 
 # ASGI types
 Scope = Dict[str, Any]

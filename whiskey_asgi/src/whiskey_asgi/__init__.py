@@ -2,14 +2,14 @@
 
 from typing import TYPE_CHECKING
 
-from .extension import asgi_extension, Request, WebSocket
+from .extension import Request, WebSocket, asgi_extension
 
 if TYPE_CHECKING:
-    from whiskey import Application
+    from whiskey import Whiskey
 
 
 __all__ = [
-    "asgi_extension",
     "Request",
     "WebSocket",
+    "asgi_extension",
 ]

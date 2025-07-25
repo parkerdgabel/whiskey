@@ -1,7 +1,8 @@
 """Core Whiskey dependency injection framework - Pythonic API."""
 
-from whiskey.core.application import Application
-from whiskey.core.builder import ApplicationBuilder, create_app
+from whiskey.core.analyzer import InjectDecision, TypeAnalyzer
+from whiskey.core.application import Whiskey
+from whiskey.core.builder import WhiskeyBuilder, create_app
 from whiskey.core.container import Container, get_current_container, set_current_container
 from whiskey.core.decorators import (
     component,
@@ -15,46 +16,43 @@ from whiskey.core.decorators import (
     resolve,
     resolve_async,
     scoped,
-    service,
     singleton,
     when_debug,
     when_env,
     when_production,
 )
-from whiskey.core.performance import PerformanceMonitor, PerformanceMetrics
-from whiskey.core.registry import ServiceRegistry, ServiceDescriptor, Scope
-from whiskey.core.scopes import ContextVarScope, ScopeType
-from whiskey.core.analyzer import TypeAnalyzer, InjectDecision
 from whiskey.core.errors import (
-    WhiskeyError,
-    ResolutionError,
     CircularDependencyError,
-    RegistrationError,
-    InjectionError,
-    ScopeError,
     ConfigurationError,
+    InjectionError,
+    RegistrationError,
+    ResolutionError,
+    ScopeError,
     TypeAnalysisError,
+    WhiskeyError,
 )
+from whiskey.core.performance import PerformanceMetrics, PerformanceMonitor
+from whiskey.core.registry import Scope, ServiceDescriptor, ServiceRegistry
+from whiskey.core.scopes import ContextVarScope, ScopeType
 
 __all__ = [
     # Container
     "Container",
-    "get_current_container", 
+    "get_current_container",
     "set_current_container",
     # Application
-    "Application",
-    "ApplicationBuilder",
+    "Whiskey",
+    "WhiskeyBuilder",
     "create_app",
     # Global decorators
-    "service",
+    "component",
     "singleton",
     "scoped",
     "factory",
-    "component",
     "inject",
     # Lifecycle decorators
     "on_startup",
-    "on_shutdown", 
+    "on_shutdown",
     "on_error",
     # Conditional decorators
     "when_env",
@@ -85,6 +83,6 @@ __all__ = [
     "RegistrationError",
     "InjectionError",
     "ScopeError",
-    "ConfigurationError", 
+    "ConfigurationError",
     "TypeAnalysisError",
 ]

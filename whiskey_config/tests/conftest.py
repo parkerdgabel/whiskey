@@ -26,23 +26,16 @@ def config_file(temp_dir):
             "host": "localhost",
             "port": 5432,
             "username": "testuser",
-            "password": "testpass"
+            "password": "testpass",
         },
-        "server": {
-            "host": "0.0.0.0",
-            "port": 8000,
-            "workers": 2
-        },
-        "features": {
-            "new_feature": True,
-            "beta_feature": False
-        }
+        "server": {"host": "0.0.0.0", "port": 8000, "workers": 2},
+        "features": {"new_feature": True, "beta_feature": False},
     }
-    
+
     config_path = temp_dir / "config.json"
     with open(config_path, "w") as f:
         json.dump(config, f)
-    
+
     return config_path
 
 
@@ -50,26 +43,26 @@ def config_file(temp_dir):
 def env_vars():
     """Set up test environment variables."""
     original_env = os.environ.copy()
-    
+
     # Set test environment variables
     test_vars = {
         "MYAPP_DEBUG": "false",
         "MYAPP_DATABASE_HOST": "db.example.com",
         "MYAPP_DATABASE_PORT": "3306",
         "MYAPP_SERVER_WORKERS": "4",
-        "MYAPP_FEATURES_BETA_FEATURE": "true"
+        "MYAPP_FEATURES_BETA_FEATURE": "true",
     }
-    
+
     for key, value in test_vars.items():
         os.environ[key] = value
-    
+
     yield test_vars
-    
+
     # Restore original environment
     for key in test_vars:
         if key in os.environ:
             del os.environ[key]
-    
+
     for key, value in original_env.items():
         os.environ[key] = value
 
@@ -91,7 +84,7 @@ server:
   port: 8080
   workers: 8
 """
-    
+
     config_path = temp_dir / "config.yaml"
     config_path.write_text(yaml_content)
     return config_path
@@ -116,7 +109,7 @@ host = "localhost"
 port = 9000
 workers = 16
 """
-    
+
     config_path = temp_dir / "config.toml"
     config_path.write_text(toml_content)
     return config_path

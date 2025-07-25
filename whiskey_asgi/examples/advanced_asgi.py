@@ -4,25 +4,25 @@ import json
 import time
 from typing import Dict, Optional
 
-from whiskey import Application, inject
-from whiskey_asgi import asgi_extension, Request
+from whiskey import inject
+from whiskey_asgi import Request, asgi_extension
 
 
 # Services
 class SessionService:
     """Simple in-memory session storage."""
-    
+
     def __init__(self):
         self.sessions: Dict[str, Dict] = {}
-    
+
     def get(self, session_id: str) -> Dict:
         """Get session data."""
         return self.sessions.get(session_id, {})
-    
+
     def set(self, session_id: str, data: Dict) -> None:
         """Set session data."""
         self.sessions[session_id] = data
-    
+
     def delete(self, session_id: str) -> None:
         """Delete session."""
         self.sessions.pop(session_id, None)
@@ -30,17 +30,17 @@ class SessionService:
 
 class UserService:
     """Mock user service."""
-    
+
     def __init__(self):
         self.users = {
             1: {"id": 1, "name": "Alice", "email": "alice@example.com"},
             2: {"id": 2, "name": "Bob", "email": "bob@example.com"},
         }
-    
+
     async def get_user(self, user_id: int) -> Optional[Dict]:
         """Get user by ID."""
         return self.users.get(user_id)
-    
+
     async def create_user(self, data: Dict) -> Dict:
         """Create a new user."""
         user_id = max(self.users.keys()) + 1
@@ -65,20 +65,20 @@ async def session_middleware(request: Request, call_next, sessions: SessionServi
     """Handle session cookies."""
     # Get session ID from cookie
     session_id = request.cookies.get("session_id", str(time.time()))
-    
+
     # Load session data
     session_data = sessions.get(session_id)
-    
+
     # Add session to request (in real app, would use request scope)
     request.session = session_data
     request.session_id = session_id
-    
+
     # Process request
     response = await call_next(request)
-    
+
     # Save session (in real app, would set cookie header)
     sessions.set(session_id, request.session)
-    
+
     return response
 
 
@@ -87,11 +87,11 @@ async def session_middleware(request: Request, call_next, sessions: SessionServi
 async def cors_middleware(request: Request, call_next):
     """Add CORS headers."""
     response = await call_next(request)
-    
+
     # In real implementation, would modify response headers
     # For now, just log
     print(f"Would add CORS headers for {request.path}")
-    
+
     return response
 
 
@@ -110,7 +110,7 @@ async def index():
             "GET /session": "Get session data",
             "POST /session": "Set session data",
             "GET /error": "Test error handling",
-        }
+        },
     }
 
 
@@ -140,11 +140,11 @@ async def create_user(request: Request, user_service: UserService):
         data = await request.json()
     except json.JSONDecodeError:
         return {"error": "Invalid JSON"}, 400
-    
+
     # Validate
     if not data.get("name") or not data.get("email"):
         return {"error": "Name and email are required"}, 400
-    
+
     user = await user_service.create_user(data)
     return user, 201
 
@@ -155,7 +155,7 @@ async def get_session(request: Request):
     """Get current session data."""
     return {
         "session_id": getattr(request, "session_id", None),
-        "data": getattr(request, "session", {})
+        "data": getattr(request, "session", {}),
     }
 
 
@@ -167,13 +167,13 @@ async def set_session(request: Request):
         data = await request.json()
     except json.JSONDecodeError:
         return {"error": "Invalid JSON"}, 400
-    
+
     # Update session
     if hasattr(request, "session"):
         request.session.update(data)
     else:
         request.session = data
-    
+
     return {"message": "Session updated", "data": request.session}
 
 
@@ -196,7 +196,7 @@ async def handle_errors(error: Exception):
 async def performance_middleware(request: Request, call_next):
     """Log request performance."""
     start = time.time()
-    
+
     try:
         response = await call_next(request)
         elapsed = time.time() - start

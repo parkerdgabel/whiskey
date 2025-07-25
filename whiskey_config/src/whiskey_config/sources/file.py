@@ -10,10 +10,10 @@ from .base import ConfigurationSource
 
 class FileSource(ConfigurationSource):
     """Configuration source that reads from files."""
-    
+
     def __init__(self, path: str, file_format: Optional[str] = None):
         """Initialize file source.
-        
+
         Args:
             path: Path to configuration file
             format: File format (json, yaml, toml). Auto-detected if None
@@ -22,7 +22,7 @@ class FileSource(ConfigurationSource):
         self.path = Path(path)
         self.format = file_format or self._detect_format()
         self._last_modified: Optional[float] = None
-    
+
     def _detect_format(self) -> str:
         """Detect file format from extension."""
         suffix = self.path.suffix.lower()
@@ -34,28 +34,29 @@ class FileSource(ConfigurationSource):
             return "toml"
         else:
             raise ValueError(f"Unknown file format for {self.path}")
-    
+
     async def load(self) -> dict[str, Any]:
         """Load configuration from file.
-        
+
         Returns:
             Dictionary containing configuration data
         """
         if not self.path.exists():
             return {}
-        
+
         # Update last modified time
         self._last_modified = os.path.getmtime(self.path)
-        
+
         # Read file content
         content = self.path.read_text()
-        
+
         # Parse based on format
         if self.format == "json":
             return json.loads(content)
         elif self.format == "yaml":
             try:
                 import yaml
+
                 return yaml.safe_load(content) or {}
             except ImportError:
                 raise ImportError(
@@ -64,10 +65,12 @@ class FileSource(ConfigurationSource):
         elif self.format == "toml":
             try:
                 import tomli
+
                 return tomli.loads(content)
             except ImportError:
                 try:
                     import tomllib  # Python 3.11+
+
                     return tomllib.loads(content)
                 except ImportError:
                     raise ImportError(
@@ -75,14 +78,14 @@ class FileSource(ConfigurationSource):
                     ) from None
         else:
             raise ValueError(f"Unsupported format: {self.format}")
-    
+
     def can_reload(self) -> bool:
         """File sources can be reloaded."""
         return True
-    
+
     async def reload(self) -> Optional[dict[str, Any]]:
         """Reload configuration if file has changed.
-        
+
         Returns:
             Updated configuration if changed, None otherwise
         """
@@ -92,9 +95,9 @@ class FileSource(ConfigurationSource):
                 self._last_modified = None
                 return {}
             return None
-        
+
         current_modified = os.path.getmtime(self.path)
         if self._last_modified is None or current_modified > self._last_modified:
             return await self.load()
-        
+
         return None

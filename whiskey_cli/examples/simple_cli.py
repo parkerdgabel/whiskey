@@ -1,16 +1,16 @@
 """Simple CLI example showing the basics."""
 
-from whiskey import Application, inject
+from whiskey import inject
 from whiskey_cli import cli_extension
 
 
 # Service
 class GreetingService:
     """Service that creates greetings."""
-    
+
     def greet(self, name: str) -> str:
         return f"Hello, {name}! Welcome to Whiskey CLI."
-    
+
     def farewell(self, name: str) -> str:
         return f"Goodbye, {name}! Thanks for using Whiskey."
 

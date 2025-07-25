@@ -12,24 +12,26 @@ Run this example:
 
 import asyncio
 from typing import Annotated
-from whiskey import Container, inject, provide, singleton, Inject
 
+from whiskey import Container, Inject, inject, provide, singleton
 
 # Step 1: Define your services
 # =============================
 
+
 @singleton  # This decorator ensures only one instance exists
 class Database:
     """A mock database service.
-    
+
     In a real application, this would connect to an actual database.
     The @singleton decorator ensures we reuse the same connection.
     """
+
     def __init__(self):
         # Expensive initialization happens only once
         self.connection = "Connected to DB"
         print("🗄️  Database initialized (singleton - only once!)")
-        
+
     async def query(self, sql: str) -> list[dict]:
         """Execute a database query."""
         print(f"📊 Executing: {sql}")
@@ -40,20 +42,21 @@ class Database:
 @provide  # This decorator registers the class with the default container
 class UserService:
     """Service for user-related operations.
-    
+
     Note: With the old pattern, we'd specify db: Database in __init__.
     With explicit injection, we use Annotated[Database, Inject()].
     """
+
     def __init__(self, db: Annotated[Database, Inject()]):
         # Whiskey automatically injects the Database instance
         self.db = db
         print("👤 UserService initialized")
-        
+
     async def get_user(self, user_id: int) -> dict | None:
         """Fetch a user by ID."""
         users = await self.db.query(f"SELECT * FROM users WHERE id = {user_id}")
         return users[0] if users else None
-    
+
     async def get_all_users(self) -> list[dict]:
         """Fetch all users."""
         return await self.db.query("SELECT * FROM users")
@@ -62,13 +65,14 @@ class UserService:
 # Step 2: Use dependency injection in functions
 # =============================================
 
+
 @inject
 async def process_user(
     user_id: int,  # Regular parameter - not injected
-    user_service: Annotated[UserService, Inject()]  # This will be injected!
+    user_service: Annotated[UserService, Inject()],  # This will be injected!
 ) -> dict | None:
     """Process a user with automatic dependency injection.
-    
+
     The @inject decorator analyzes the function signature and automatically
     provides any parameters marked with Annotated[T, Inject()].
     """
@@ -84,60 +88,60 @@ async def process_user(
 
 async def main():
     """Demonstrate different ways to use Whiskey's DI."""
-    
+
     # Example 1: Using decorators with the default container
     # ======================================================
     print("\n🚀 Example 1: Default Container with Decorators")
     print("=" * 50)
-    
+
     # The @provide and @singleton decorators already registered our services
     # The @inject decorator will automatically resolve dependencies
     result = await process_user(1)
     print(f"Result: {result}")
-    
+
     # Call again to see singleton behavior
     print("\nCalling again (note: Database NOT re-initialized)...")
     result2 = await process_user(1)
-    
+
     # Example 2: Using explicit container with dict-like API
     # ======================================================
     print("\n\n🎯 Example 2: Explicit Container with Dict-like API")
     print("=" * 50)
-    
+
     # Create a fresh container (independent of the default one)
     container = Container()
-    
+
     # Register services using dict-like syntax - it's just Python!
     container[Database] = Database  # Register the class (will be instantiated)
     container[UserService] = UserService  # Whiskey handles dependency injection
-    
+
     # Manually resolve and use services
     user_service = await container.resolve(UserService)
     user = await user_service.get_user(1)
     print(f"Found user: {user}")
-    
+
     # Check if a service is registered
     if Database in container:
         print("✓ Database is registered in the container")
-    
+
     # Example 3: Using factory functions for complex initialization
     # ============================================================
     print("\n\n🏭 Example 3: Factory Functions")
     print("=" * 50)
-    
+
     container = Container()
-    
+
     # Use a factory when you need custom initialization logic
     def create_database() -> Database:
         """Factory function for creating Database instances.
-        
+
         Useful when you need:
         - Configuration from environment
         - Complex initialization
         - Different implementations based on conditions
         """
         import os
-        
+
         db = Database()
         # Custom initialization based on environment
         if os.getenv("ENV") == "production":
@@ -145,25 +149,25 @@ async def main():
         else:
             db.connection = "Development DB Connection"
         return db
-    
+
     # Register the factory function (not the class!)
     container[Database] = create_database
     container[UserService] = UserService
-    
+
     # The factory will be called when Database is needed
     service = await container.resolve(UserService)
     print(f"DB connection: {service.db.connection}")
-    
+
     # Example 4: Demonstrating scope behavior
     # =======================================
     print("\n\n🔄 Example 4: Scope Behavior")
     print("=" * 50)
-    
+
     # Singleton scope - same instance always
     db1 = await container.resolve(Database)
     db2 = await container.resolve(Database)
     print(f"Singleton instances are same: {db1 is db2}")
-    
+
     # The UserService is transient (default) - new instance each time
     us1 = await container.resolve(UserService)
     us2 = await container.resolve(UserService)
@@ -182,9 +186,9 @@ if __name__ == "__main__":
     print("- Container dict-like API")
     print("- Factory functions")
     print("- Singleton vs transient scopes")
-    
+
     asyncio.run(main())
-    
+
     print("\n✨ Example completed!")
     print("\nNext steps:")
     print("- Check out 'application_example.py' for lifecycle management")

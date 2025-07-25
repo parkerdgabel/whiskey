@@ -1,16 +1,16 @@
 """Basic ASGI application example using Whiskey."""
 
-from whiskey import Application, inject
-from whiskey_asgi import asgi_extension, Request
+from whiskey import inject
+from whiskey_asgi import Request, asgi_extension
 
 
 # Service definitions
 class GreetingService:
     """A simple service that generates greetings."""
-    
+
     def __init__(self):
         self._counter = 0
-    
+
     def greet(self, name: str) -> str:
         self._counter += 1
         return f"Hello, {name}! (Request #{self._counter})"
@@ -72,7 +72,7 @@ async def injected_handler(request: Request, greeting_service: GreetingService):
                 k, v = item.split("=", 1)
                 params[k] = v
         name = params.get("name", name)
-    
+
     greeting = greeting_service.greet(name)
     return {"greeting": greeting}
 

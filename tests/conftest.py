@@ -1,14 +1,11 @@
 """Shared test fixtures and utilities."""
 
 import asyncio
-from dataclasses import dataclass
-from typing import Any
 
 import pytest
 
-from whiskey.core.container import Container
-from whiskey.core.application import Application
 from whiskey.core.builder import create_app
+from whiskey.core.container import Container
 
 
 @pytest.fixture
@@ -40,7 +37,7 @@ def app():
 # Test classes for dependency injection
 class SimpleService:
     """Simple service with no dependencies."""
-    
+
     def __init__(self):
         self.initialized = True
         self.value = "simple"
@@ -48,7 +45,7 @@ class SimpleService:
 
 class DependentService:
     """Service that depends on SimpleService."""
-    
+
     def __init__(self, simple: SimpleService):
         self.simple = simple
         self.value = "dependent"
@@ -56,21 +53,21 @@ class DependentService:
 
 class CircularServiceA:
     """Service A in circular dependency."""
-    
+
     def __init__(self, service_b: "CircularServiceB"):
         self.service_b = service_b
 
 
 class CircularServiceB:
     """Service B in circular dependency."""
-    
+
     def __init__(self, service_a: CircularServiceA):
         self.service_a = service_a
 
 
 class OptionalDependencyService:
     """Service with optional dependency."""
-    
+
     def __init__(self, simple: SimpleService | None = None):
         self.simple = simple
         self.has_dependency = simple is not None
@@ -78,11 +75,11 @@ class OptionalDependencyService:
 
 class AsyncInitService:
     """Service with async initialization."""
-    
+
     def __init__(self):
         self.initialized = False
         self.init_count = 0
-    
+
     async def initialize(self):
         await asyncio.sleep(0.01)
         self.initialized = True
@@ -91,11 +88,11 @@ class AsyncInitService:
 
 class DisposableService:
     """Service with disposal logic."""
-    
+
     def __init__(self):
         self.disposed = False
         self.dispose_count = 0
-    
+
     async def dispose(self):
         await asyncio.sleep(0.01)
         self.disposed = True
@@ -104,15 +101,15 @@ class DisposableService:
 
 class ComplexService:
     """Service with both initialization and disposal."""
-    
+
     def __init__(self, simple: SimpleService):
         self.simple = simple
         self.initialized = False
         self.disposed = False
-    
+
     async def initialize(self):
         self.initialized = True
-    
+
     async def dispose(self):
         self.disposed = True
 
