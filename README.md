@@ -21,15 +21,16 @@ Whiskey is a dependency injection framework designed for Python developers who v
 
 ```python
 from typing import Annotated
-from whiskey import Application, Container, Inject, inject
+from whiskey import Container, Inject, inject
+from whiskey.core.application import Whiskey as Application
 
 # Simple container usage
 container = Container()
 container[Database] = Database("postgresql://...")
 db = await container.resolve(Database)
 
-# Or use the Application class for rich features
-app = Application()
+# Or use the Whiskey class for rich features
+app = Application()  # Application is imported as Whiskey
 
 @app.component
 class EmailService:
@@ -178,15 +179,13 @@ class MemoryCache:
         self.data = {}
 
 # Scoped - different instance per scope
-@scoped("request")
+@scoped(scope_name="request")
 class RequestContext:
     def __init__(self):
         self.request_id = generate_id()
 
-# Use scopes
-async with container.scope("request"):
-    ctx = await container.resolve(RequestContext)
-    # Same instance within this scope
+# Note: Scope management requires custom implementation
+# as Container doesn't expose scope() method directly
 ```
 
 ### 4. Component Discovery
@@ -216,9 +215,9 @@ print(inspector.resolution_report(Service))   # Detailed analysis
 For full-featured applications with lifecycle management:
 
 ```python
-from whiskey import Application
+from whiskey.core.application import Whiskey
 
-app = Application()
+app = Whiskey()
 
 # Register components with metadata
 @app.component
@@ -258,8 +257,9 @@ AI/LLM application support with specialized scopes and utilities:
 
 ```python
 from whiskey_ai import ai_extension
+from whiskey.core.application import Whiskey
 
-app = Application()
+app = Whiskey()
 app.use(ai_extension)
 
 @app.agent("translator")
@@ -271,7 +271,7 @@ class TranslatorAgent:
         return await llm.complete(f"Translate to Spanish: {text}")
 
 # Scoped to conversation
-@scoped("conversation")
+@scoped(scope_name="conversation")
 class ConversationMemory:
     def __init__(self):
         self.messages = []
@@ -283,8 +283,9 @@ Build web applications with dependency injection:
 
 ```python
 from whiskey_asgi import asgi_extension
+from whiskey.core.application import Whiskey
 
-app = Application()
+app = Whiskey()
 app.use(asgi_extension)
 
 @app.get("/users/{user_id}")
@@ -314,8 +315,9 @@ Create CLI applications with automatic DI:
 
 ```python
 from whiskey_cli import cli_extension
+from whiskey.core.application import Whiskey
 
-app = Application()
+app = Whiskey()
 app.use(cli_extension)
 
 @app.command()
@@ -338,8 +340,9 @@ Configuration management with hot reloading:
 
 ```python
 from whiskey_config import config_extension, Setting
+from whiskey.core.application import Whiskey
 
-app = Application()
+app = Whiskey()
 app.use(config_extension)
 
 @dataclass
@@ -544,7 +547,7 @@ async def buggy_handler(data):
 Create your own extensions:
 
 ```python
-def metrics_extension(app: Application):
+def metrics_extension(app: Whiskey):
     """Add metrics collection to any Whiskey app."""
     
     # Add custom lifecycle phase
@@ -637,7 +640,7 @@ class EmailSender:
         self.client = smtp_client
 
 # Request scope for stateful contexts
-@scoped("request")
+@scoped(scope_name="request")
 class RequestContext:
     def __init__(self):
         self.user = None

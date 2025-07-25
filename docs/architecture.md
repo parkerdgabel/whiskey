@@ -95,7 +95,7 @@ Provides the decorator-based API for registration and injection.
 @provide     # Register with transient scope
 @singleton   # Register with singleton scope
 @factory(T)  # Register factory function
-@scoped("x") # Register with custom scope
+@scoped(scope_name="x") # Register with custom scope
 
 # Injection decorator
 @inject      # Auto-inject dependencies marked with Inject()
@@ -135,7 +135,7 @@ class Scope:
 Rich application framework built on top of the container.
 
 ```python
-class Application:
+class Whiskey:
     container: Container
     _components: dict[type, ComponentMetadata]
     _lifecycle_phases: list[str]
@@ -183,7 +183,7 @@ class ContainerInspector:
 Extensions are functions that configure an Application instance:
 
 ```python
-def my_extension(app: Application) -> None:
+def my_extension(app: Whiskey) -> None:
     # Add lifecycle phases
     app.add_lifecycle_phase("my_phase", after="startup")
     

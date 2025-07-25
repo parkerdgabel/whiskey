@@ -13,7 +13,8 @@ Run this example:
 
 import asyncio
 
-from whiskey import Container, create_app, inject, service, singleton
+from typing import Annotated
+from whiskey import Container, inject, Inject, provide, singleton
 
 # Step 1: Define Your Services
 # ============================
@@ -47,11 +48,11 @@ class Logger:
         print(f"📝 LOG: {message}")
 
 
-@service  # Register with default container
+@provide  # Register with default container
 class UserService:
     """Service for user operations."""
 
-    def __init__(self, db: Database, logger: Logger):
+    def __init__(self, db: Annotated[Database, Inject()], logger: Annotated[Logger, Inject()]):
         self.db = db
         self.logger = logger
         print("👤 UserService initialized")
@@ -73,7 +74,7 @@ class UserService:
 
 
 @inject
-async def process_users(user_service: UserService, logger: Logger) -> None:
+async def process_users(user_service: Annotated[UserService, Inject()], logger: Annotated[Logger, Inject()]) -> None:
     """Function that uses dependency injection."""
     logger.log("Starting user processing")
 
@@ -154,9 +155,9 @@ async def main():
     container = Container()
 
     # Fluent registration with method chaining
-    container.add(Database, Database).build()
-    container.add_singleton(Logger, Logger).build()
-    container.add(UserService, UserService).tagged("business").build()
+    container.add(Database).build()
+    container.add_singleton(Logger).build()
+    container.add(UserService).tagged("business").build()
 
     # Factory functions
     def create_configured_database() -> Database:
@@ -215,11 +216,11 @@ async def main():
     print("-" * 40)
 
     container = Container()
-    container.add_singleton(Database, Database).build()
-    container.add_singleton(Logger, Logger).build()
+    container.add(Database).as_singleton().build()
+    container.add(Logger).as_singleton().build()
 
     # Define a function that needs dependencies
-    def business_logic(db: Database, logger: Logger, user_id: int = 1) -> str:
+    def business_logic(db: Annotated[Database, Inject()], logger: Annotated[Logger, Inject()], user_id: int = 1) -> str:
         """Business logic function with DI."""
         logger.log(f"Processing user {user_id}")
         return f"Processed user {user_id} using {db.connection_string}"

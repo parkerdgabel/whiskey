@@ -74,20 +74,20 @@ inspector = container.inspect()
 services = inspector.list_services()
 ```
 
-##### `scope(name: str) -> ScopeManager`
-Create a scope context manager.
+##### `enter_scope(name: str) -> Scope | None`
+Enter a named scope (Note: Container scope management is limited).
 
-```python
-async with container.scope("request"):
-    service = await container.resolve(RequestScoped)
-```
+##### `exit_scope(name: str) -> None`
+Exit a named scope (Note: Container scope management is limited).
 
-### Application
+### Whiskey (Application)
 
 Rich IoC container for building applications.
 
 ```python
-class Application:
+from whiskey.core.application import Whiskey
+
+class Whiskey:
     """Rich IoC container for building any Python application."""
 ```
 
@@ -301,7 +301,7 @@ def create_database() -> Database:
 Register a class with a custom scope.
 
 ```python
-@scoped("request")
+@scoped(scope_name="request")
 class RequestContext:
     pass
 ```
@@ -412,7 +412,7 @@ components = discover_components(
 
 ### whiskey-ai
 
-#### `ai_extension(app: Application)`
+#### `ai_extension(app: Whiskey)`
 Adds AI/LLM capabilities to applications.
 
 #### Decorators
@@ -447,7 +447,7 @@ async def search_tool(query: str) -> str:
 
 ### whiskey-asgi
 
-#### `asgi_extension(app: Application)`
+#### `asgi_extension(app: Whiskey)`
 Adds ASGI web framework support.
 
 #### Route Decorators
@@ -481,7 +481,7 @@ async def cors_middleware(request: Request, call_next):
 
 ### whiskey-cli
 
-#### `cli_extension(app: Application)`
+#### `cli_extension(app: Whiskey)`
 Adds CLI application support.
 
 #### Command Registration

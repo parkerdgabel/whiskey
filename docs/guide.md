@@ -36,10 +36,11 @@ Let's build a simple application that demonstrates core concepts:
 
 ```python
 from typing import Annotated
-from whiskey import Application, Container, Inject, inject, singleton
+from whiskey import Container, Inject, inject, singleton
+from whiskey.core.application import Whiskey
 
 # 1. Create an application
-app = Application()
+app = Whiskey()
 
 # 2. Define your services
 @singleton
@@ -162,7 +163,7 @@ class EmailSender:
         self.sent_count = 0
 
 # Request-scoped (with whiskey-asgi)
-@scoped("request")
+@scoped(scope_name="request")
 class RequestContext:
     def __init__(self):
         self.user = None
@@ -200,7 +201,7 @@ Group related functionality into services:
 from typing import Annotated
 from whiskey import inject, Inject, scoped
 
-@scoped("request")
+@scoped(scope_name="request")
 class AuthService:
     def __init__(self,
                  db: Annotated[Database, Inject()],
@@ -225,10 +226,10 @@ Instead of manually registering each service, use discovery:
 
 ```python
 # app.py
-from whiskey import Application
+from whiskey.core.application import Whiskey
 
 def create_app():
-    app = Application()
+    app = Whiskey()
     
     # Discover and register all services
     app.discover("myapp.services", auto_register=True)
@@ -300,10 +301,11 @@ async def cleanup_old_sessions(
 Build web APIs with dependency injection:
 
 ```python
-from whiskey import Application, inject, Annotated, Inject
+from whiskey import inject, Annotated, Inject
+from whiskey.core.application import Whiskey
 from whiskey_asgi import asgi_extension
 
-app = Application()
+app = Whiskey()
 app.use(asgi_extension)
 
 # Define routes with DI
@@ -353,10 +355,11 @@ async def websocket_endpoint(
 Create command-line tools with automatic DI:
 
 ```python
-from whiskey import Application, inject, Annotated, Inject
+from whiskey import inject, Annotated, Inject
+from whiskey.core.application import Whiskey
 from whiskey_cli import cli_extension
 
-app = Application()
+app = Whiskey()
 app.use(cli_extension)
 
 # Commands with dependency injection
@@ -394,10 +397,11 @@ async def seed(
 Build AI-powered applications:
 
 ```python
-from whiskey import Application, inject, Annotated, Inject
+from whiskey import inject, Annotated, Inject
+from whiskey.core.application import Whiskey
 from whiskey_ai import ai_extension
 
-app = Application()
+app = Whiskey()
 app.use(ai_extension)
 
 # Configure LLM
@@ -447,10 +451,11 @@ Manage configuration with hot reloading:
 
 ```python
 from dataclasses import dataclass
-from whiskey import Application, inject
+from whiskey import inject
+from whiskey.core.application import Whiskey
 from whiskey_config import config_extension, Setting
 
-app = Application()
+app = Whiskey()
 app.use(config_extension)
 
 # Define configuration schema
@@ -548,7 +553,8 @@ Test complete application flows:
 ```python
 @pytest.fixture
 async def app():
-    app = Application()
+    from whiskey.core.application import Whiskey
+    app = Whiskey()
     
     # Use test configuration
     app.use(config_extension)
@@ -645,7 +651,7 @@ class EmailTemplateRenderer:
         return template.format(**data)
 
 # Request scope for request-specific state
-@scoped("request")
+@scoped(scope_name="request")
 class RequestLogger:
     def __init__(self):
         self.logs = []
@@ -749,7 +755,7 @@ container[Repository[User]] = UserRepository
 ### Unit of Work Pattern
 
 ```python
-@scoped("request")
+@scoped(scope_name="request")
 class UnitOfWork:
     def __init__(self, db: Annotated[Database, Inject()]):
         self.db = db
@@ -873,15 +879,13 @@ service = container.resolve_sync(MyService)  # ✅ In sync function
 
 # Solution: Check scope configuration
 @singleton  # ✅ One instance for app
-@scoped("request")  # ❌ New instance per request
+@scoped(scope_name="request")  # ❌ New instance per request
 class ConfigService:
     pass
 
-# Check active scopes
-async with container.scope("request"):
-    service1 = await container.resolve(RequestScoped)
-    service2 = await container.resolve(RequestScoped)
-    assert service1 is service2  # Same instance in scope
+# Note: Container doesn't expose scope() method directly
+# Scope management requires custom implementation or using
+# the internal _resolve_scoped method with proper context
 ```
 
 ### Debugging Tips
