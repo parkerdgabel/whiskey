@@ -11,6 +11,8 @@ import inspect
 from enum import Enum
 from typing import Any, Union, get_args, get_origin
 
+from .errors import TypeAnalysisError
+
 # Handle Python version differences
 try:
     from typing import Literal, get_type_hints
@@ -58,6 +60,18 @@ class InjectResult:
 
     def __repr__(self) -> str:
         return f"InjectResult({self.decision.value}, {self.type_hint}, '{self.reason}')"
+    
+    def __eq__(self, other) -> bool:
+        """Check equality based on all attributes."""
+        if not isinstance(other, InjectResult):
+            return False
+        return (
+            self.decision == other.decision
+            and self.type_hint == other.type_hint
+            and self.reason == other.reason
+            and self.inner_type == other.inner_type
+            and self.candidates == other.candidates
+        )
 
 
 class TypeAnalyzer:
@@ -195,11 +209,11 @@ class TypeAnalyzer:
             type_hint = param.annotation
 
         # Rule 1: Never inject if has non-None default
-        if param.default not in (param.empty, None):
-            return InjectResult(InjectDecision.NO, type_hint, "Has non-None default value")
+        if param.default not in (inspect.Parameter.empty, None):
+            return InjectResult(InjectDecision.NO, type_hint, "Has default value")
 
         # Handle missing annotations
-        if type_hint == param.empty or type_hint is None:
+        if type_hint == inspect.Parameter.empty or type_hint is None:
             return InjectResult(InjectDecision.NO, type_hint, "No type annotation")
 
         # Use cached result if available
@@ -252,10 +266,10 @@ class TypeAnalyzer:
 
         # Check if it's a class we could potentially instantiate
         if inspect.isclass(type_hint):
-            # For unregistered classes, we can still try to create them
-            # if they don't require parameters or all parameters can be injected
+            # For unregistered classes, be conservative and don't inject
+            # The container will handle auto-creation if needed
             return InjectResult(
-                InjectDecision.YES, type_hint, "Unregistered class (will attempt auto-creation)"
+                InjectDecision.NO, type_hint, "Not registered (auto-creation handled by container)"
             )
 
         # Default: don't inject unknown types
@@ -349,7 +363,7 @@ class TypeAnalyzer:
                 return InjectResult(
                     InjectDecision.ERROR,
                     type_hint,
-                    f"Ambiguous Union - multiple registered members: {registered_members}",
+                    f"Ambiguous Union type - multiple registered members: {registered_members}",
                     candidates=registered_members,
                 )
 
@@ -610,7 +624,11 @@ class TypeAnalyzer:
         Returns:
             Dict mapping parameter names to InjectResults
         """
-        sig = inspect.signature(func)
+        try:
+            sig = inspect.signature(func)
+        except (TypeError, ValueError) as e:
+            raise TypeAnalysisError(f"Cannot analyze non-callable object: {e}")
+        
         results = {}
 
         # Get type hints for better forward reference resolution
@@ -654,7 +672,7 @@ class TypeAnalyzer:
                 continue
 
             # If parameter has default, it's not required
-            if param.default != param.empty:
+            if param.default != inspect.Parameter.empty:
                 continue
 
             # Check if we can inject this parameter
@@ -710,7 +728,7 @@ class TypeAnalyzer:
 
             # Use type hint if available, otherwise annotation
             type_hint = type_hints.get(param_name, param.annotation)
-            if type_hint == param.empty:
+            if type_hint == inspect.Parameter.empty:
                 continue
 
             # Extract the actual type for checking
@@ -797,7 +815,7 @@ class TypeAnalyzer:
                         continue
 
                     type_hint = type_hints.get(param_name, param.annotation)
-                    if type_hint == param.empty:
+                    if type_hint == inspect.Parameter.empty:
                         continue
 
                     dependency_type = self._extract_dependency_type(type_hint)
@@ -858,8 +876,15 @@ def get_optional_inner(type_hint: Any) -> Any:
 
 
 def is_union(type_hint: Any) -> bool:
-    """Check if a type hint is a Union type."""
-    return get_origin(type_hint) is Union
+    """Check if a type hint is a Union type (excluding Optional)."""
+    origin = get_origin(type_hint)
+    if origin is Union:
+        # Check if it's Optional (Union with None)
+        args = get_args(type_hint)
+        if len(args) == 2 and type(None) in args:
+            return False  # It's Optional, not a general Union
+        return True
+    return False
 
 
 def is_generic_with_args(type_hint: Any) -> bool:
