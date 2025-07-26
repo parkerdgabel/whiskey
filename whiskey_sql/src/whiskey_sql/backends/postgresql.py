@@ -20,14 +20,14 @@ from whiskey_sql.exceptions import ConnectionError, QueryError
 T = TypeVar("T")
 
 
-async def create_pool(**config) -> asyncpg.Pool:
-    """Create asyncpg connection pool.
+async def create_pool(**config) -> PostgreSQLDatabase:
+    """Create PostgreSQL database with connection pool.
     
     Args:
         **config: Database configuration
         
     Returns:
-        asyncpg connection pool
+        PostgreSQL database instance
     """
     url = config["url"]
     pool_size = config.get("pool_size", 20)
@@ -42,7 +42,7 @@ async def create_pool(**config) -> asyncpg.Pool:
             command_timeout=pool_timeout,
             server_settings=server_settings,
         )
-        return pool
+        return PostgreSQLDatabase(pool)
     except Exception as e:
         raise ConnectionError(f"Failed to create PostgreSQL pool: {e}")
 

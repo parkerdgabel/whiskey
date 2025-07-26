@@ -394,15 +394,22 @@ app.configure_database(
 - Full feature support including LISTEN/NOTIFY
 - Array types, JSON/JSONB, custom types
 - Advisory locks, prepared statements
+- Native :param syntax converted to $1, $2
 
 ### MySQL (aiomysql)
-- Core features supported
-- JSON support, prepared statements
+- Full feature support including JSON functions
+- ENUM types, WITH ROLLUP grouping
+- Native :param syntax converted to %(name)s
+- Connection recycling for long-running applications
+- Streaming with SSDictCursor for large datasets
 
 ### SQLite (aiosqlite)
-- Development and testing
+- Perfect for development and testing
 - In-memory database support
-- Limited concurrent connections
+- File-based persistence
+- Native :param syntax support
+- Automatic foreign key enforcement
+- JSON1 extension support (SQLite 3.38+)
 
 ## Best Practices
 
@@ -415,6 +422,9 @@ app.configure_database(
 ## Examples
 
 See the `examples/` directory for complete examples:
+- `postgresql_example.py` - PostgreSQL with advanced features
+- `mysql_example.py` - MySQL with JSON and grouping
+- `sqlite_example.py` - SQLite for development/testing
 - `basic_crud.py` - Simple CRUD operations
 - `transactions.py` - Transaction patterns
 - `migrations.py` - Migration setup
