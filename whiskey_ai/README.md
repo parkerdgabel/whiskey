@@ -24,8 +24,7 @@ pip install whiskey-ai
 ## Quick Start
 
 ```python
-from typing import Annotated
-from whiskey import Application, Inject, inject
+from whiskey import Application, inject
 from whiskey_ai import ai_extension
 
 # Create app with AI extension
@@ -52,8 +51,8 @@ class AssistantAgent:
     async def process(
         self,
         message: str,
-        llm: Annotated[LLMClient, Inject()],
-        context: Annotated[ConversationContext, Inject()]
+        llm: LLMClient,
+        context: ConversationContext
     ) -> str:
         # Add user message to context
         context.add_message("user", message)
@@ -135,8 +134,8 @@ class ResearchAgent:
     async def research(
         self,
         topic: str,
-        llm: Annotated[LLMClient, Inject()],
-        search: Annotated[SearchService, Inject()]
+        llm: LLMClient,
+        search: SearchService
     ) -> dict:
         # Search for information
         results = await search.query(topic, sources=self.tools)
@@ -160,8 +159,8 @@ class WriterAgent:
     async def write_article(
         self,
         topic: str,
-        researcher: Annotated[ResearchAgent, Inject()],
-        llm: Annotated[LLMClient, Inject()]
+        researcher: ResearchAgent,
+        llm: LLMClient
     ) -> str:
         # Use another agent
         research = await researcher.research(topic)

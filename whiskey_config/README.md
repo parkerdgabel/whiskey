@@ -30,8 +30,7 @@ pip install whiskey-config[all]    # All formats
 
 ```python
 from dataclasses import dataclass
-from typing import Annotated
-from whiskey import Application, Inject, inject
+from whiskey import Application, inject
 from whiskey_config import config_extension, Setting
 
 # Create app with config extension

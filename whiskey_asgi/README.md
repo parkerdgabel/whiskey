@@ -23,8 +23,7 @@ pip install whiskey-asgi
 ## Quick Start
 
 ```python
-from typing import Annotated
-from whiskey import Application, Inject, inject
+from whiskey import Application, inject
 from whiskey_asgi import asgi_extension
 
 # Create app with ASGI extension
@@ -34,7 +33,7 @@ app.use(asgi_extension)
 # Define your services
 @app.component
 class UserService:
-    def __init__(self, db: Annotated[Database, Inject()]):
+    def __init__(self, db: Database):
         self.db = db
         
     async def get_user(self, user_id: int):
@@ -47,7 +46,7 @@ class UserService:
 @inject
 async def get_user(
     user_id: int,
-    service: Annotated[UserService, Inject()]
+    service: UserService
 ):
     user = await service.get_user(user_id)
     if not user:

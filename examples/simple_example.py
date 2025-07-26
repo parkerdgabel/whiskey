@@ -11,9 +11,8 @@ Run this example:
 """
 
 import asyncio
-from typing import Annotated
 
-from whiskey import Container, Inject, inject, provide, singleton
+from whiskey import Container, inject, provide, singleton
 
 # Step 1: Define your services
 # =============================
@@ -43,11 +42,11 @@ class Database:
 class UserService:
     """Service for user-related operations.
 
-    Note: With the old pattern, we'd specify db: Database in __init__.
-    With explicit injection, we use Annotated[Database, Inject()].
+    Whiskey automatically injects any type-hinted parameters
+    that aren't built-in types and don't have defaults.
     """
 
-    def __init__(self, db: Annotated[Database, Inject()]):
+    def __init__(self, db: Database):
         # Whiskey automatically injects the Database instance
         self.db = db
         print("👤 UserService initialized")
@@ -68,13 +67,13 @@ class UserService:
 
 @inject
 async def process_user(
-    user_id: int,  # Regular parameter - not injected
-    user_service: Annotated[UserService, Inject()],  # This will be injected!
+    user_id: int,  # Built-in type - not injected
+    user_service: UserService,  # Custom type - automatically injected!
 ) -> dict | None:
     """Process a user with automatic dependency injection.
 
     The @inject decorator analyzes the function signature and automatically
-    provides any parameters marked with Annotated[T, Inject()].
+    injects any custom types while leaving built-in types for manual passing.
     """
     user = await user_service.get_user(user_id)
     if user:

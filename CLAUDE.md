@@ -39,10 +39,39 @@ Whiskey is a simple, Pythonic dependency injection framework. The architecture i
 1. **Container** (`core/container.py`): Dict-like service registry with integrated dependency resolution
 2. **Scopes** (`core/scopes.py`): Simple context managers for service lifetimes
 
+### Pythonic Injection Approach
+
+Whiskey uses automatic injection based on type hints - NO `Annotated[T, Inject()]` needed:
+
+```python
+# Services are registered
+@singleton
+class Database:
+    def __init__(self):
+        self.connection = "postgresql://localhost/myapp"
+
+@component
+class UserService:
+    def __init__(self, db: Database):  # Automatically injected!
+        self.db = db
+
+# Functions use @inject decorator
+@inject
+async def process_user(user_id: int, service: UserService):
+    # user_id passed manually, service auto-injected
+    return await service.get_user(user_id)
+```
+
+**Injection Rules:**
+1. Parameters with type hints are injected (except built-ins like `str`, `int`, `dict`, etc.)
+2. Parameters with defaults are NOT injected
+3. Optional[T] is injected if T is registered, otherwise None
+4. Standard library types are NOT injected
+
 ### Decorator Flow
 
 Simple decorators that work with the default container:
-- `@provide`, `@singleton`, `@factory` → Register in default container
+- `@component`, `@singleton`, `@factory` → Register in default container
 - `@inject` → Auto-resolve parameters from container
 - `@scoped` → Register with custom scope
 

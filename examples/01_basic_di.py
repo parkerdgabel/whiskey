@@ -12,9 +12,8 @@ Run this example:
 """
 
 import asyncio
-from typing import Annotated
 
-from whiskey import Container, Inject, inject, provide, singleton
+from whiskey import Container, inject, provide, singleton
 
 # Step 1: Define Your Services
 # ============================
@@ -52,7 +51,7 @@ class Logger:
 class UserService:
     """Service for user operations."""
 
-    def __init__(self, db: Annotated[Database, Inject()], logger: Annotated[Logger, Inject()]):
+    def __init__(self, db: Database, logger: Logger):
         self.db = db
         self.logger = logger
         print("👤 UserService initialized")
@@ -74,7 +73,7 @@ class UserService:
 
 
 @inject
-async def process_users(user_service: Annotated[UserService, Inject()], logger: Annotated[Logger, Inject()]) -> None:
+async def process_users(user_service: UserService, logger: Logger) -> None:
     """Function that uses dependency injection."""
     logger.log("Starting user processing")
 
@@ -220,7 +219,7 @@ async def main():
     container.add(Logger).as_singleton().build()
 
     # Define a function that needs dependencies
-    def business_logic(db: Annotated[Database, Inject()], logger: Annotated[Logger, Inject()], user_id: int = 1) -> str:
+    def business_logic(db: Database, logger: Logger, user_id: int = 1) -> str:
         """Business logic function with DI."""
         logger.log(f"Processing user {user_id}")
         return f"Processed user {user_id} using {db.connection_string}"

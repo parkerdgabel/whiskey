@@ -14,14 +14,12 @@ Run this example:
 """
 
 import asyncio
-from typing import Annotated
 
 from whiskey import (
     Application,
     ApplicationConfig,
     Disposable,
     Initializable,
-    Inject,
 )
 
 # Step 1: Services with Rich Metadata
@@ -189,10 +187,10 @@ class UserService:
 
     def __init__(
         self,
-        db: Annotated[Database, Inject()],
-        cache: Annotated[CacheService, Inject()],
-        notifications: Annotated[NotificationService, Inject()],
-        metrics: Annotated[MetricsCollector, Inject()],
+        db: Database,
+        cache: CacheService,
+        notifications: NotificationService,
+        metrics: MetricsCollector,
     ):
         self.db = db
         self.cache = cache

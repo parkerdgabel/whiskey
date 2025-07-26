@@ -24,8 +24,7 @@ pip install whiskey-cli
 ## Quick Start
 
 ```python
-from typing import Annotated
-from whiskey import Application, Inject, inject
+from whiskey import Application, inject
 from whiskey_cli import cli_extension
 
 # Create app with CLI extension
