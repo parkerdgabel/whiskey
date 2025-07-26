@@ -6,7 +6,7 @@ dependency injection decisions for parameters.
 
 import asyncio
 import inspect
-from typing import Any, ForwardRef, Optional, Protocol, Union
+from typing import Any, ForwardRef, Optional, Protocol, Union, Literal, Callable, List, Dict, TypeVar
 from unittest.mock import Mock
 
 import pytest
@@ -57,6 +57,21 @@ class ServiceWithOptionals:
     def __init__(self, required: SimpleService, optional: Optional[DatabaseService] = None):
         self.required = required
         self.optional = optional
+
+
+# Protocol for testing
+class ServiceProtocol(Protocol):
+    def process(self) -> str:
+        ...
+
+
+# Generic types for testing
+T = TypeVar('T')
+
+
+class GenericService:
+    def __init__(self, value: T):
+        self.value = value
 
 
 class ServiceWithUnion:
@@ -573,3 +588,146 @@ class TestAsyncIntegration:
         assert "self" not in result
         assert "service" in result
         assert result["service"].decision == InjectDecision.YES
+
+
+class TestProtocolAnalysis:
+    """Test analysis of Protocol types."""
+
+    def test_analyze_protocol_type(self):
+        """Test analyzing Protocol types."""
+        analyzer = TypeAnalyzer()
+        
+        # Protocols can be injected if registered
+        result = analyzer._analyze_type_hint(ServiceProtocol)
+        # Without registry, it's treated as a regular class that can be auto-created
+        assert result.decision == InjectDecision.NO
+        
+        # With registry but not registered
+        registry = ServiceRegistry()
+        analyzer_with_registry = TypeAnalyzer(registry)
+        result = analyzer_with_registry._analyze_type_hint(ServiceProtocol)
+        assert result.decision == InjectDecision.NO
+        assert "Not registered" in result.reason
+
+    def test_is_protocol(self):
+        """Test _is_protocol method."""
+        analyzer = TypeAnalyzer()
+        
+        # ServiceProtocol inherits from Protocol
+        # But _is_protocol checks internal implementation details
+        # Let's test with actual typing.Protocol
+        from typing import Protocol as TypingProtocol
+        
+        # Test with typing constructs
+        assert not analyzer._is_protocol(SimpleService)
+        assert not analyzer._is_protocol(str)
+
+
+class TestLiteralAnalysis:
+    """Test analysis of Literal types."""
+
+    def test_analyze_literal_type(self):
+        """Test analyzing Literal types."""
+        analyzer = TypeAnalyzer()
+        
+        result = analyzer._analyze_type_hint(Literal["debug", "info", "error"])
+        assert result.decision == InjectDecision.NO
+        assert "Literal" in result.reason
+
+
+class TestCallableAnalysis:
+    """Test analysis of Callable types."""
+
+    def test_analyze_callable_type(self):
+        """Test analyzing Callable types."""
+        analyzer = TypeAnalyzer()
+        
+        # Test function type
+        def sample_func(x: int) -> str:
+            return str(x)
+        
+        result = analyzer._analyze_type_hint(type(sample_func))
+        assert result.decision == InjectDecision.NO
+
+
+class TestGenericAnalysis:
+    """Test analysis of generic types."""
+
+    def test_analyze_list_type(self):
+        """Test analyzing List types."""
+        analyzer = TypeAnalyzer()
+        
+        result = analyzer._analyze_type_hint(List[SimpleService])
+        assert result.decision == InjectDecision.NO
+        assert "Generic type list" in result.reason
+
+    def test_analyze_dict_type(self):
+        """Test analyzing Dict types."""
+        analyzer = TypeAnalyzer()
+        
+        result = analyzer._analyze_type_hint(Dict[str, SimpleService])
+        assert result.decision == InjectDecision.NO
+        assert "Generic type dict" in result.reason
+
+    def test_analyze_generic_service(self):
+        """Test analyzing generic service types."""
+        analyzer = TypeAnalyzer()
+        
+        # Test the base generic service
+        registry = ServiceRegistry()
+        analyzer = TypeAnalyzer(registry)
+        
+        result = analyzer._analyze_type_hint(GenericService)
+        # Not registered, so NO
+        assert result.decision == InjectDecision.NO
+
+
+class TestStdlibTypeDetection:
+    """Test standard library type detection."""
+
+    def test_is_stdlib_type(self):
+        """Test _is_stdlib_type method."""
+        analyzer = TypeAnalyzer()
+        
+        # Standard library types
+        assert analyzer._is_stdlib_type(str)
+        assert analyzer._is_stdlib_type(int)
+        assert analyzer._is_stdlib_type(list)
+        assert analyzer._is_stdlib_type(dict)
+        
+        # Custom types
+        assert not analyzer._is_stdlib_type(SimpleService)
+        assert not analyzer._is_stdlib_type(DatabaseService)
+
+
+class TestParameterAnalysisExtended:
+    """Extended tests for parameter analysis."""
+
+    def test_analyze_string_annotation(self):
+        """Test analyzing string type annotation."""
+        analyzer = TypeAnalyzer()
+        
+        # String annotations can be resolved if the class exists
+        result = analyzer._analyze_type_hint("SimpleService")
+        
+        # In test environment, SimpleService is available, so it gets resolved
+        assert result.decision == InjectDecision.NO
+        assert result.type_hint == SimpleService
+
+    def test_analyze_none_type(self):
+        """Test analyzing None type annotation."""
+        analyzer = TypeAnalyzer()
+        
+        # None type should not be injected
+        result = analyzer._analyze_type_hint(type(None))
+        
+        assert result.decision == InjectDecision.NO
+
+    def test_analyze_empty_parameter(self):
+        """Test analyzing parameter empty annotation."""
+        analyzer = TypeAnalyzer()
+        
+        # Test with inspect.Parameter.empty
+        result = analyzer._analyze_type_hint(inspect.Parameter.empty)
+        
+        assert result.decision == InjectDecision.NO
