@@ -431,59 +431,54 @@ class TestLifecycle:
             assert isinstance(instance, SimpleService)
 
 
-class TestMiddleware:
-    """Test middleware functionality."""
+class TestExtensions:
+    """Test extension functionality."""
 
-    def test_use_middleware(self):
-        """Test adding middleware."""
+    def test_use_extension(self):
+        """Test applying extensions."""
+        app = Whiskey()
+        applied = []
+
+        def extension1(app: Whiskey):
+            applied.append("ext1")
+            app.ext1_applied = True
+
+        def extension2(app: Whiskey):
+            applied.append("ext2")
+            app.ext2_applied = True
+
+        app.use(extension1)
+        app.use(extension2)
+
+        assert applied == ["ext1", "ext2"]
+        assert hasattr(app, "ext1_applied")
+        assert hasattr(app, "ext2_applied")
+
+    def test_extension_adds_functionality(self):
+        """Test extension adding new functionality."""
         app = Whiskey()
 
-        def middleware1(next_handler):
-            return next_handler
+        def auth_extension(app: Whiskey):
+            """Add authentication functionality."""
+            # Add new decorator
+            def require_auth(func):
+                def wrapper(*args, **kwargs):
+                    # Check auth here
+                    return func(*args, **kwargs)
+                return wrapper
+            
+            app.add_decorator("require_auth", require_auth)
+            
+            # Add new method
+            app.authenticate = lambda user, password: user == "admin" and password == "secret"
 
-        def middleware2(next_handler):
-            return next_handler
+        app.use(auth_extension)
 
-        app.use(middleware1)
-        app.use(middleware2)
-
-        assert len(app._middleware) == 2
-        assert middleware1 in app._middleware
-        assert middleware2 in app._middleware
-
-    async def test_middleware_chain(self):
-        """Test middleware chain execution."""
-        app = Whiskey()
-        calls = []
-
-        def tracking_middleware(name):
-            def middleware(next_handler):
-                async def handler(*args, **kwargs):
-                    calls.append(f"{name}_before")
-                    result = await next_handler(*args, **kwargs)
-                    calls.append(f"{name}_after")
-                    return result
-
-                return handler
-
-            return middleware
-
-        app.use(tracking_middleware("m1"))
-        app.use(tracking_middleware("m2"))
-
-        # Middleware would be applied to request handlers
-        # This is a simplified test of the pattern
-        async def base_handler():
-            calls.append("handler")
-            return "result"
-
-        # Apply middleware chain manually for testing
-        handler = base_handler
-        for mw in reversed(app._middleware):
-            handler = mw(handler)
-
-        await handler()
-        assert calls == ["m1_before", "m2_before", "handler", "m2_after", "m1_after"]
+        # Test new functionality
+        assert hasattr(app, "require_auth")
+        assert hasattr(app, "authenticate") 
+        assert app.authenticate("admin", "secret")
+        assert not app.authenticate("user", "wrong")
 
 
 class TestBuilderIntegration:

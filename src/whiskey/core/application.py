@@ -76,11 +76,6 @@ class Whiskey:
         else:
             self._error_handlers = {}
 
-        if hasattr(self.container, "_middleware"):
-            self._middleware = self.container._middleware
-        else:
-            self._middleware = []
-
         self._is_running = False
         # Add hooks for lifecycle compatibility
         self._hooks = {
@@ -626,11 +621,27 @@ class Whiskey:
     
     # Extension methods
     
-    def use(self, middleware: Callable) -> Whiskey:
-        """Add middleware to the application."""
-        self._middleware.append(middleware)
-        # Execute immediately if it's an extension function
-        middleware(self)
+    def use(self, extension: Callable[[Whiskey], None]) -> Whiskey:
+        """Apply an extension to the application.
+        
+        Extensions are functions that add functionality to the Whiskey instance.
+        They are executed immediately when called.
+        
+        Args:
+            extension: Function that takes a Whiskey instance and modifies it
+            
+        Returns:
+            Self for chaining
+            
+        Example:
+            def jobs_extension(app: Whiskey) -> None:
+                app.jobs = JobManager()
+                app.add_decorator("job", job_decorator)
+            
+            app = Whiskey()
+            app.use(jobs_extension)
+        """
+        extension(self)
         return self
     
     def on(self, event: str, handler: Callable = None) -> Union[Whiskey, Callable]:
