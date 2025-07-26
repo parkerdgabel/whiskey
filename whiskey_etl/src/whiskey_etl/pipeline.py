@@ -497,8 +497,20 @@ class PipelineManager:
         async def transform_generator():
             async for record in data_stream:
                 try:
-                    # Resolve and apply transform
-                    result = await self.container.resolve(transform, record=record)
+                    # Apply transform - check if it needs DI resolution
+                    import inspect
+                    sig = inspect.signature(transform)
+                    params = list(sig.parameters.values())
+                    
+                    # If transform only takes record parameter, call directly
+                    if len(params) == 1 and params[0].name == 'record':
+                        result = await transform(record)
+                    else:
+                        # Otherwise, use DI resolution
+                        from whiskey.core.decorators import inject
+                        injected_transform = inject(transform)
+                        result = await injected_transform(record)
+                    
                     if result is not None:
                         yield result
                 except Exception as e:
@@ -510,7 +522,14 @@ class PipelineManager:
                     for retry in range(pipeline.max_retries):
                         await asyncio.sleep(pipeline.retry_delay * (retry + 1))
                         try:
-                            result = await self.container.resolve(transform, record=record)
+                            # Apply transform again with same logic
+                            if len(params) == 1 and params[0].name == 'record':
+                                result = await transform(record)
+                            else:
+                                from whiskey.core.decorators import inject
+                                injected_transform = inject(transform)
+                                result = await injected_transform(record)
+                            
                             if result is not None:
                                 yield result
                                 break
@@ -561,8 +580,8 @@ class PipelineManager:
             context.metrics["records_processed"] += 1
             
             if len(batch) >= pipeline.batch_size:
-                # Load batch
-                await sink.load(batch)
+                # Load batch with config kwargs
+                await sink.load(batch, **context.config)
                 
                 # Call batch complete hook
                 batch_num += 1
@@ -573,7 +592,7 @@ class PipelineManager:
         
         # Load remaining records
         if batch:
-            await sink.load(batch)
+            await sink.load(batch, **context.config)
             batch_num += 1
             await pipeline.on_batch_complete(batch_num, len(batch))
     
