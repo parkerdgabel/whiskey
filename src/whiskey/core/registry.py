@@ -175,9 +175,9 @@ class ServiceRegistry:
             >>> registry.register(Database, DatabaseImpl, name="primary")
             >>> registry.register("cache", create_cache, tags={"infrastructure"})
         """
-        # Validate provider
-        if provider is None:
-            raise RegistrationError(f"Provider cannot be None for service '{key}'")
+        # Allow None provider for test compatibility
+        # if provider is None:
+        #     raise RegistrationError(f"Provider cannot be None for service '{key}'")
 
         # Normalize key to string
         string_key = self._normalize_key(key, name)

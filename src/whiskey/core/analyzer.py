@@ -365,20 +365,46 @@ class TypeAnalyzer:
         Returns:
             InjectResult with decision and context
         """
-        # Try to resolve the forward reference
+        # Try to resolve the forward reference more systematically
+        resolved_type = None
+        
         try:
-            # Get the frame where the annotation was defined
+            # Method 1: Walk the stack looking for the type in any frame's globals
             frame = inspect.currentframe()
             while frame:
-                # Look for the type in the frame's globals
                 if type_str in frame.f_globals:
-                    resolved_type = frame.f_globals[type_str]
-                    return self._analyze_type_hint(resolved_type)
+                    candidate = frame.f_globals[type_str]
+                    # Verify it's actually a class
+                    if inspect.isclass(candidate):
+                        resolved_type = candidate
+                        break
                 frame = frame.f_back
+                    
+            # Method 2: Try to resolve in loaded modules
+            if resolved_type is None:
+                import sys
+                frame = inspect.currentframe()
+                for _ in range(15):  # Look back more frames
+                    if frame is None:
+                        break
+                    module_name = frame.f_globals.get('__name__')
+                    if module_name and module_name in sys.modules:
+                        module = sys.modules[module_name]
+                        if hasattr(module, type_str):
+                            candidate = getattr(module, type_str)
+                            if inspect.isclass(candidate):
+                                resolved_type = candidate
+                                break
+                    frame = frame.f_back
 
-            # Try built-ins
-            if hasattr(__builtins__, type_str):
-                resolved_type = getattr(__builtins__, type_str)
+            # Method 3: Try built-ins
+            if resolved_type is None and hasattr(__builtins__, type_str):
+                candidate = getattr(__builtins__, type_str)
+                if inspect.isclass(candidate):
+                    resolved_type = candidate
+
+            # If we found a valid type, analyze it
+            if resolved_type is not None and inspect.isclass(resolved_type):
                 return self._analyze_type_hint(resolved_type)
 
         except Exception:
