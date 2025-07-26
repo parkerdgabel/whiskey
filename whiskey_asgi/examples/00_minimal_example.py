@@ -86,9 +86,14 @@ async def logging_middleware(request: Request, call_next):
     return response
 
 
-# Run with uvicorn
+# Run the application
 if __name__ == "__main__":
     # To run this example:
     # pip install uvicorn
     # python basic_app.py
-    app.run_asgi(host="127.0.0.1", port=8000)
+    
+    # New way: Use app.run() which automatically uses the ASGI runner
+    app.run()
+    
+    # Or explicitly use run_asgi for more control over host/port:
+    # app.run_asgi(host="127.0.0.1", port=8000)

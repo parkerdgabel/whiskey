@@ -8,9 +8,12 @@ import json
 import re
 from dataclasses import dataclass, field
 from re import Pattern
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 from .types import ASGIReceive, ASGISend, Scope
+
+if TYPE_CHECKING:
+    from whiskey import Whiskey
 
 
 @dataclass
@@ -265,7 +268,7 @@ class WebSocket:
 class ASGIManager:
     """Manages ASGI routes, middleware, and WebSockets."""
 
-    def __init__(self, app: Application):
+    def __init__(self, app: Whiskey):
         self.app = app
         self.routes: List[RouteMetadata] = []
         self.middleware: List[MiddlewareMetadata] = []
@@ -537,7 +540,7 @@ class ASGIHandler:
         )
 
 
-def asgi_extension(app: Application) -> None:
+def asgi_extension(app: Whiskey) -> None:
     """ASGI extension that adds web framework capabilities.
 
     This extension provides:
@@ -640,7 +643,13 @@ def asgi_extension(app: Application) -> None:
 
     # Helper methods
     def run_asgi(host: str = "127.0.0.1", port: int = 8000, **kwargs) -> None:
-        """Run the ASGI application with uvicorn."""
+        """Run the ASGI application with uvicorn.
+        
+        Args:
+            host: Host to bind to
+            port: Port to bind to
+            **kwargs: Additional arguments passed to uvicorn.run()
+        """
         try:
             import uvicorn
         except ImportError:
@@ -648,20 +657,12 @@ def asgi_extension(app: Application) -> None:
                 "uvicorn is required to run ASGI apps. Install with: pip install uvicorn"
             )
 
+        # The ASGI handler already manages lifecycle via the lifespan protocol
+        # So we can run uvicorn directly without additional lifecycle management
         uvicorn.run(app.asgi, host=host, port=port, **kwargs)
-
+    
+    # Register the ASGI runner with the new standardized API
+    app.register_runner("asgi", run_asgi)
+    
+    # Also make it available as a method for backward compatibility
     app.run_asgi = run_asgi
-
-    # Enhanced run method
-    original_run = app.run
-
-    def enhanced_run(main: Optional[Callable] = None) -> None:
-        """Enhanced run that can run ASGI server if no main provided."""
-        if main is None and hasattr(app, "_main_func"):
-            original_run()
-        elif main is None and hasattr(app, "asgi_manager"):
-            app.run_asgi()
-        else:
-            original_run(main)
-
-    app.run = enhanced_run
