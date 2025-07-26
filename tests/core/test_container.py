@@ -338,6 +338,7 @@ class TestResolution:
     def test_resolve_with_overrides(self, container):
         """Test resolution with overrides."""
         container.register(DatabaseService, DatabaseService)
+        container.register(CacheService, CacheService)  # Register cache service too
         container.register(ComplexService, ComplexService)
 
         # Resolve with override
