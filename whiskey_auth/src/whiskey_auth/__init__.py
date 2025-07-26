@@ -16,6 +16,13 @@ from whiskey_auth.core import (
 from whiskey_auth.extension import auth_extension
 from whiskey_auth.decorators import requires_auth, requires_permission, requires_role
 from whiskey_auth.password import PasswordHasher
+from whiskey_auth.testing import (
+    TestUser,
+    create_test_user,
+    MockAuthProvider,
+    AuthTestClient,
+    AuthTestContainer,
+)
 
 __all__ = [
     # Core
@@ -33,6 +40,12 @@ __all__ = [
     "requires_role",
     # Utilities
     "PasswordHasher",
+    # Testing
+    "TestUser",
+    "create_test_user",
+    "MockAuthProvider",
+    "AuthTestClient",
+    "AuthTestContainer",
 ]
 
 __version__ = "0.1.0"

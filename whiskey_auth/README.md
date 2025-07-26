@@ -338,36 +338,191 @@ async def handle_github_auth(user_info: dict) -> User:
 
 ## Testing
 
-Test authentication flows easily:
+Whiskey Auth provides comprehensive testing utilities to make testing authentication flows easy and maintainable.
+
+### Test User Creation
+
+Create test users with sensible defaults:
+
+```python
+from whiskey_auth import create_test_user
+
+# Basic user
+user = create_test_user()  # id=1, username="testuser"
+
+# Custom user
+admin = create_test_user(
+    id=2,
+    username="admin",
+    email="admin@example.com",
+    password="secure123",  # Will be hashed
+    permissions=["read", "write", "admin"],
+    roles=["admin"],
+    custom_field="value"  # Extra metadata
+)
+```
+
+### Mock Authentication Provider
+
+Test authentication without a real backend:
+
+```python
+from whiskey_auth import MockAuthProvider
+
+# Create mock provider with test users
+mock_auth = MockAuthProvider(users=[
+    create_test_user(username="alice", password="alice123"),
+    create_test_user(username="bob", password="bob123"),
+])
+
+# Test authentication
+user = await mock_auth.authenticate(username="alice", password="alice123")
+assert user.username == "alice"
+
+# Track calls
+assert len(mock_auth.authenticate_calls) == 1
+```
+
+### Auth Test Client
+
+Test protected endpoints easily:
+
+```python
+from whiskey_auth import AuthTestClient
+
+@pytest.fixture
+def client():
+    return AuthTestClient()
+
+async def test_protected_endpoint(client):
+    # Create test user
+    user = create_test_user(username="testuser", permissions=["write"])
+    
+    # Authenticate as user
+    client.authenticate_as(user)
+    
+    # Call protected function
+    @requires_permission("write")
+    async def create_post(title: str, user: CurrentUser):
+        return {"title": title, "author": user.username}
+    
+    result = await client.call(create_post, "Test Post")
+    assert result["author"] == "testuser"
+    
+    # Add permissions dynamically
+    client.with_permissions("admin")
+    
+    # Add roles
+    client.with_roles("moderator")
+```
+
+### Test Container
+
+Inject test users via DI container:
+
+```python
+from whiskey_auth import AuthTestContainer
+
+container = AuthTestContainer()
+
+# Set test user for injection
+user = create_test_user(username="injected")
+container.set_test_user(user)
+
+# Resolve CurrentUser anywhere
+resolved_user = await container.resolve(CurrentUser)
+assert resolved_user.username == "injected"
+```
+
+### Assertion Helpers
+
+Use convenient assertion helpers:
+
+```python
+from whiskey_auth.testing import (
+    assert_authenticated,
+    assert_not_authenticated,
+    assert_has_permission,
+    assert_lacks_permission,
+    assert_has_role,
+    assert_lacks_role,
+)
+
+# Test auth context
+auth_context = AuthContext(user=test_user)
+
+assert_authenticated(auth_context, test_user)
+assert_has_permission(auth_context, "read")
+assert_lacks_permission(auth_context, "admin")
+assert_has_role(auth_context, "editor")
+assert_lacks_role(auth_context, "admin")
+```
+
+### Complete Test Example
 
 ```python
 import pytest
-from whiskey_auth.testing import create_test_user
+from whiskey_auth import (
+    AuthTestClient,
+    create_test_user,
+    requires_auth,
+    requires_permission,
+    AuthenticationError,
+    AuthorizationError,
+)
 
-@pytest.fixture
-def test_user():
-    return create_test_user(
-        username="testuser",
-        permissions=["read", "write"],
-        roles=["editor"]
-    )
-
-async def test_protected_endpoint(app, test_user):
-    # Inject test user
-    from whiskey_auth.core import AuthContext
-    auth_context = AuthContext(user=test_user)
+class TestMyApplication:
+    @pytest.fixture
+    def client(self):
+        return AuthTestClient()
     
-    # Test endpoint
-    result = await protected_endpoint(__auth_context__=auth_context)
-    assert result["username"] == "testuser"
-
-async def test_authorization(app, test_user):
-    # Test without required permission
-    test_user.permissions = ["read"]
-    auth_context = AuthContext(user=test_user)
+    @pytest.fixture
+    def users(self):
+        return {
+            "reader": create_test_user(
+                username="reader",
+                permissions=["read"],
+                roles=["reader"]
+            ),
+            "admin": create_test_user(
+                username="admin", 
+                permissions=["read", "write", "admin"],
+                roles=["admin"]
+            ),
+        }
     
-    with pytest.raises(AuthorizationError):
-        await requires_write_permission(__auth_context__=auth_context)
+    @pytest.mark.asyncio
+    async def test_authentication_required(self, client):
+        """Test endpoint requires authentication."""
+        @requires_auth
+        async def protected(user: CurrentUser):
+            return user.username
+        
+        # Without auth
+        with pytest.raises(AuthenticationError):
+            await client.call(protected)
+        
+        # With auth
+        client.authenticate_as(create_test_user())
+        result = await client.call(protected)
+        assert result == "testuser"
+    
+    @pytest.mark.asyncio
+    async def test_permission_based_access(self, client, users):
+        """Test permission-based authorization."""
+        @requires_permission("write")
+        async def write_data(data: str, user: CurrentUser):
+            return {"written_by": user.username, "data": data}
+        
+        # Reader can't write
+        client.authenticate_as(users["reader"])
+        with pytest.raises(AuthorizationError):
+            await client.call(write_data, "content")
+        
+        # Admin can write
+        client.authenticate_as(users["admin"])
+        result = await client.call(write_data, "content")
+        assert result["written_by"] == "admin"
 ```
 
 ## Security Best Practices
@@ -385,6 +540,7 @@ async def test_authorization(app, test_user):
 See the `examples/` directory for complete examples:
 - `basic_auth.py` - Password authentication with roles and permissions
 - `jwt_auth.py` - JWT-based API authentication
+- `testing_auth.py` - Testing authentication flows with utilities
 - `web_app.py` - Full web application with sessions (coming soon)
 - `oauth_example.py` - Social login integration (coming soon)
 
