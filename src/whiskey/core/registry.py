@@ -1,7 +1,47 @@
-"""Service registry system for Whiskey's Pythonic DI redesign.
+"""Service metadata and registry system for dependency injection.
 
-This module provides the core service metadata and registry functionality
-that serves as the single source of truth for all registered services.
+This module implements the service registry, which serves as the single source
+of truth for all registered services and their metadata. It provides a clean
+abstraction over service registration, supporting multiple scopes, conditional
+registration, tagging, and named services.
+
+Classes:
+    Scope: Enumeration of service lifecycle scopes (singleton, transient, scoped)
+    ServiceDescriptor: Complete metadata for a registered service
+    ServiceRegistry: Central registry managing all service registrations
+
+Key Concepts:
+    - Services are identified by a key (string) which can be a type or custom name
+    - Each service has a scope determining its lifecycle
+    - Services can be tagged for categorization and filtering
+    - Named services allow multiple implementations of the same interface
+    - Conditional registration based on runtime conditions
+    - Metadata storage for additional service information
+
+Example:
+    >>> registry = ServiceRegistry()
+    >>> 
+    >>> # Register a singleton service
+    >>> descriptor = registry.register(
+    ...     Database,                    # key/type
+    ...     PostgresDatabase,           # implementation
+    ...     scope=Scope.SINGLETON,
+    ...     tags={'infrastructure', 'critical'},
+    ...     metadata={'version': '1.0'}
+    ... )
+    >>> 
+    >>> # Register named implementations
+    >>> registry.register(Cache, RedisCache, name='redis')
+    >>> registry.register(Cache, MemoryCache, name='memory')
+    >>> 
+    >>> # Query services
+    >>> db_descriptor = registry.get(Database)
+    >>> cache_descriptors = registry.get_all(Cache)
+    >>> tagged = registry.get_by_tag('critical')
+
+See Also:
+    - whiskey.core.container: Uses registry for service storage
+    - whiskey.core.analyzer: Type analysis for registration decisions
 """
 
 from __future__ import annotations

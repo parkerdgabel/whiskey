@@ -1,8 +1,53 @@
-"""Whiskey class for Whiskey's Pythonic DI framework.
+"""Rich IoC application framework with lifecycle management and events.
 
-This module provides the Whiskey class which serves as the main entry point
-for dependency injection applications, integrating with the fluent API and
-providing lifecycle management.
+This module provides the Whiskey class, which extends the basic Container
+with a complete application framework including lifecycle management, event
+handling, component discovery, and extension support. It serves as the main
+entry point for building full-featured dependency injection applications.
+
+Key Features:
+    - Complete application lifecycle (startup, ready, shutdown)
+    - Event-driven architecture with wildcard patterns
+    - Component decorators (@app.component, @app.singleton)
+    - Background task management (@app.task)
+    - Error handling (@app.on_error)
+    - Extension system for plugins
+    - Conditional registration based on environment
+
+Classes:
+    Whiskey: Main application class with rich IoC features
+
+Functions:
+    create_default_app: Create the default application instance
+    _conditional_decorator: Helper for conditional component registration
+
+Example:
+    >>> app = Whiskey()
+    >>> 
+    >>> # Register components with decorators
+    >>> @app.singleton
+    ... class Database:
+    ...     async def initialize(self):
+    ...         await self.connect()
+    >>> 
+    >>> @app.component
+    ... class EmailService:
+    ...     def __init__(self, db: Database):
+    ...         self.db = db
+    >>> 
+    >>> # Lifecycle hooks
+    >>> @app.on_startup
+    ... async def configure():
+    ...     print("Application starting...")
+    >>> 
+    >>> # Run the application
+    >>> async with app:
+    ...     service = await app.resolve(EmailService)
+    
+See Also:
+    - whiskey.core.container: Base container functionality
+    - whiskey.core.decorators: Global decorators
+    - whiskey.core.discovery: Component discovery system
 """
 
 from __future__ import annotations

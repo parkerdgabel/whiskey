@@ -1,12 +1,57 @@
-"""Scope management for controlling service lifecycles.
+"""Service lifecycle scope management with automatic cleanup.
 
-This module provides the scope system for Whiskey's dependency injection,
-allowing fine-grained control over when instances are created and destroyed.
+This module implements Whiskey's scope system, which controls service instance
+lifecycles and ensures proper resource management. Scopes define boundaries
+within which service instances are shared and when they should be cleaned up.
 
-Built-in scopes:
-    - singleton: One instance for the entire application lifetime
+Classes:
+    Scope: Base class for custom scope implementations
+    ContextVarScope: Thread-safe scope using Python's contextvars
+    ScopeType: Constants for built-in scope types
+    ScopeManager: Context manager for scope activation
+
+Built-in Scopes:
+    - singleton: One instance for entire application lifetime
     - transient: New instance for each resolution (default)
-    - Custom scopes can be created by extending the Scope class
+    - scoped: One instance per named scope (e.g., request, session)
+
+Scope Lifecycle:
+    1. Scope Entry: Context manager __enter__ or manual activation
+    2. Service Resolution: Instances cached within scope
+    3. Scope Exit: Automatic cleanup via __exit__
+    4. Resource Disposal: dispose() called on all instances
+
+Custom Scopes:
+    Create custom scopes by extending the Scope class:
+    - Override get/set for custom storage
+    - Implement cleanup logic in clear()
+    - Use context managers for activation
+
+Example:
+    >>> from whiskey.core.scopes import Scope, ScopeManager
+    >>> from whiskey import Container
+    >>> 
+    >>> # Built-in scope usage
+    >>> container = Container()
+    >>> container.scoped(RequestContext, scope_name='request')
+    >>> 
+    >>> # Activate scope
+    >>> with container.scope('request') as scope:
+    ...     ctx1 = await container.resolve(RequestContext)
+    ...     ctx2 = await container.resolve(RequestContext)
+    ...     assert ctx1 is ctx2  # Same instance within scope
+    >>> # ctx1 and ctx2 are disposed here
+    >>> 
+    >>> # Custom scope implementation
+    >>> class TenantScope(Scope):
+    ...     def __init__(self, tenant_id: str):
+    ...         super().__init__(f'tenant_{tenant_id}')
+    ...         self.tenant_id = tenant_id
+
+Thread Safety:
+    - ContextVarScope provides thread-local storage
+    - Each thread/task has isolated scope instances
+    - Safe for concurrent async operations
 """
 
 from __future__ import annotations

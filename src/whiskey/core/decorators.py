@@ -1,8 +1,56 @@
-"""Global convenience decorators for Whiskey's Pythonic DI redesign.
+"""Global decorators for service registration and dependency injection.
 
-This module provides global decorators that work with a default application
-instance, similar to Flask's approach. These decorators are convenient for
-simple applications that don't need explicit application management.
+This module provides Flask-style global decorators that work with a default
+application instance, making it easy to build simple applications without
+explicit application management. All decorators support both sync and async
+functions and handle automatic dependency injection based on type hints.
+
+Decorators:
+    @component: Register a transient service (new instance per resolution)
+    @singleton: Register a singleton service (one instance per app)
+    @factory: Register a factory function for service creation
+    @scoped: Register a scoped service (one instance per scope)
+    @inject: Enable automatic dependency injection for functions
+    
+    @on_startup: Register startup callbacks
+    @on_shutdown: Register shutdown callbacks  
+    @on_error: Register error handlers
+    
+    @when_env: Conditional registration based on environment variable
+    @when_debug: Register only in debug mode
+    @when_production: Register only in production
+
+Functions:
+    resolve: Synchronously resolve a service
+    resolve_async: Asynchronously resolve a service
+    call: Call a function with dependency injection
+    call_sync: Synchronously call with injection
+    invoke: Invoke a function with full injection
+    wrap_function: Wrap a function to enable injection
+    get_app: Get or create the default application
+    configure_app: Configure the default application
+
+Example:
+    >>> from whiskey import component, singleton, inject
+    >>> 
+    >>> @singleton
+    ... class Database:
+    ...     def __init__(self):
+    ...         self.connected = True
+    >>> 
+    >>> @component
+    ... class UserService:
+    ...     def __init__(self, db: Database):
+    ...         self.db = db  # Auto-injected
+    >>> 
+    >>> @inject
+    ... async def get_user(user_id: int, service: UserService):
+    ...     # user_id must be provided, service is auto-injected
+    ...     return await service.fetch_user(user_id)
+    
+Note:
+    These decorators use a default global application instance. For more
+    control or multiple applications, use app-specific decorators instead.
 """
 
 from __future__ import annotations

@@ -1,7 +1,44 @@
-"""Pythonic Container implementation for Whiskey's DI redesign.
+"""Service container with dict-like interface and automatic dependency resolution.
 
-This module provides the new Container class with a clean, dict-like interface
-and smart dependency resolution using the ServiceRegistry and TypeAnalyzer.
+This module implements Whiskey's core Container class, which serves as the central
+service registry and dependency resolver. The Container provides a Pythonic,
+dict-like interface for service registration while handling complex dependency
+graphs, circular dependency detection, and scope management automatically.
+
+Key Features:
+    - Dict-like syntax: container[Service] = implementation
+    - Automatic dependency injection based on type hints
+    - Scope management (singleton, transient, scoped)
+    - Circular dependency detection with clear error messages
+    - Async-first design with sync compatibility
+    - Performance optimizations with caching
+
+Classes:
+    Container: Main service container with automatic dependency resolution
+    
+Functions:
+    get_current_container: Get the current container from context
+    set_current_container: Set the current container in context
+
+Example:
+    >>> container = Container()
+    >>> 
+    >>> # Register services using dict syntax
+    >>> container[Database] = PostgresDatabase
+    >>> container['cache'] = RedisCache()
+    >>> 
+    >>> # Register with specific scopes
+    >>> container.singleton(Logger)
+    >>> container.scoped(RequestContext, scope_name='request')
+    >>> 
+    >>> # Resolve with automatic dependency injection
+    >>> service = await container.resolve(UserService)
+    >>> # UserService dependencies are automatically resolved
+    
+See Also:
+    - whiskey.core.registry: Service metadata and registration
+    - whiskey.core.analyzer: Type analysis for injection decisions
+    - whiskey.core.scopes: Lifecycle scope management
 """
 
 from __future__ import annotations

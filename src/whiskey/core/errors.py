@@ -1,7 +1,44 @@
-"""Custom exception types for Whiskey's DI system.
+"""Exception hierarchy for clear error reporting in dependency injection.
 
-This module defines clear, specific exceptions for different types of
-dependency injection failures, making debugging easier for developers.
+This module defines a comprehensive exception hierarchy for Whiskey's dependency
+injection system. Each exception type represents a specific failure mode with
+clear error messages and contextual information to aid debugging.
+
+Exception Hierarchy:
+    WhiskeyError: Base exception for all Whiskey errors
+    ├── ResolutionError: Service resolution failures
+    │   └── CircularDependencyError: Circular dependency detected
+    ├── RegistrationError: Service registration failures
+    ├── InjectionError: Dependency injection failures
+    ├── ScopeError: Scope-related failures
+    ├── ConfigurationError: Configuration failures
+    └── TypeAnalysisError: Type hint analysis failures
+
+Usage Patterns:
+    Each exception includes relevant context:
+    - ResolutionError: service_key, cause
+    - CircularDependencyError: dependency cycle
+    - InjectionError: parameter_name, type_hint
+    - TypeAnalysisError: problematic type_hint
+
+Example:
+    >>> try:
+    ...     service = await container.resolve(UnregisteredService)
+    ... except ResolutionError as e:
+    ...     print(f"Failed to resolve: {e.service_key}")
+    ...     if e.cause:
+    ...         print(f"Underlying cause: {e.cause}")
+    >>> 
+    >>> try:
+    ...     container.register(Service, invalid_provider)
+    ... except RegistrationError as e:
+    ...     print(f"Registration failed: {e}")
+
+Best Practices:
+    - Catch specific exceptions when possible
+    - Use WhiskeyError to catch all framework errors
+    - Check exception attributes for debugging context
+    - Let exceptions bubble up with clear messages
 """
 
 from __future__ import annotations

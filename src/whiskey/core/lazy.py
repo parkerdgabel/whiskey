@@ -1,7 +1,73 @@
-"""Lazy resolution support for Whiskey.
+"""Lazy dependency resolution for improved performance and flexibility.
 
-This module provides the Lazy wrapper type that enables deferred dependency
-resolution, allowing dependencies to be resolved only when first accessed.
+This module implements lazy resolution patterns that defer service instantiation
+until first access. This is crucial for breaking circular dependencies, improving
+startup performance, and handling optional dependencies elegantly.
+
+Classes:
+    Lazy[T]: Generic wrapper for lazy dependency resolution
+    LazyDescriptor[T]: Property descriptor for class-level lazy attributes
+
+Functions:
+    lazy_inject: Create a lazy dependency for manual injection
+
+Key Benefits:
+    - Break circular dependencies without restructuring
+    - Improve startup time by deferring expensive initializations
+    - Handle optional dependencies that may not be used
+    - Reduce memory usage for rarely-used services
+    - Enable conditional dependency resolution
+
+Usage Patterns:
+    1. Automatic Injection:
+       Services with Lazy[T] type hints are automatically wrapped
+    
+    2. Manual Creation:
+       Use lazy_inject() for explicit lazy dependencies
+    
+    3. Class Properties:
+       Use LazyDescriptor for lazy class attributes
+    
+    4. Resolution Control:
+       Access .value property to trigger resolution
+
+Example:
+    >>> from whiskey import Lazy, singleton, component, inject
+    >>> 
+    >>> @singleton
+    ... class ExpensiveService:
+    ...     def __init__(self):
+    ...         print("Expensive initialization!")
+    ...         self.data = load_large_dataset()
+    >>> 
+    >>> @component
+    ... class OptimizedService:
+    ...     def __init__(self, lazy_expensive: Lazy[ExpensiveService]):
+    ...         self._expensive = lazy_expensive
+    ...         print("Service created without loading expensive data")
+    ...     
+    ...     def process_if_needed(self, condition: bool):
+    ...         if condition:
+    ...             # Only now is ExpensiveService initialized
+    ...             return self._expensive.value.process()
+    ...         return "Skipped expensive operation"
+    >>> 
+    >>> # Circular dependency example
+    >>> @component
+    ... class ServiceA:
+    ...     def __init__(self, b: Lazy['ServiceB']):
+    ...         self.b = b
+    >>> 
+    >>> @component  
+    ... class ServiceB:
+    ...     def __init__(self, a: ServiceA):
+    ...         self.a = a
+
+Performance Considerations:
+    - First access incurs resolution cost
+    - Subsequent accesses are direct property access
+    - Thread-safe resolution with proper locking
+    - Weak references prevent container leaks
 """
 
 from __future__ import annotations

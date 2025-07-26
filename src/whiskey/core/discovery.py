@@ -1,13 +1,76 @@
-"""Component discovery and introspection for automatic registration.
+"""Automatic component discovery and registration from Python modules.
 
-This module provides utilities for discovering components in modules
-and packages, enabling automatic registration and reducing boilerplate.
+This module implements component discovery mechanisms that automatically find
+and register services from Python modules and packages. It reduces boilerplate
+by eliminating manual registration while providing fine-grained control over
+what gets discovered and how it's registered.
 
-Key features:
-    - Module and package scanning
-    - Filtering by predicate or decorator
-    - Automatic registration
-    - Introspection and debugging tools
+Classes:
+    ComponentInfo: Metadata about discovered components
+    DiscoveryOptions: Configuration for discovery process
+    ComponentDiscovery: Main discovery engine
+
+Functions:
+    discover_components: Find components in modules/packages
+    is_component: Check if object has component markers
+    get_component_metadata: Extract registration metadata
+    auto_register: Register discovered components
+
+Discovery Methods:
+    1. Decorator-based: Find classes marked with @component, @singleton
+    2. Naming convention: Classes ending with Service, Repository, etc.
+    3. Base class: Classes inheriting from specific interfaces
+    4. Custom predicates: Any callable returning bool
+
+Features:
+    - Recursive package scanning with exclusion patterns
+    - Module lazy loading to reduce import overhead
+    - Duplicate detection with conflict resolution
+    - Registration verification and validation
+    - Discovery caching for performance
+    - Detailed discovery reports
+
+Example:
+    >>> from whiskey import Whiskey
+    >>> from whiskey.core.discovery import discover_components
+    >>> 
+    >>> app = Whiskey()
+    >>> 
+    >>> # Discover by decorator
+    >>> components = discover_components(
+    ...     'myapp.services',
+    ...     predicate=lambda obj: hasattr(obj, '_whiskey_component'),
+    ...     recursive=True
+    ... )
+    >>> 
+    >>> # Auto-register discovered components
+    >>> for component in components:
+    ...     app.container.register(component.cls, scope=component.scope)
+    >>> 
+    >>> # Using application's discover method
+    >>> app.discover(
+    ...     'myapp',
+    ...     decorator_name='_component',
+    ...     auto_register=True,
+    ...     exclude=['tests', '__pycache__']
+    ... )
+    >>> 
+    >>> # Custom discovery predicate
+    >>> def is_repository(cls):
+    ...     return (
+    ...         inspect.isclass(cls) and 
+    ...         cls.__name__.endswith('Repository') and
+    ...         hasattr(cls, 'find_by_id')
+    ...     )
+    >>> 
+    >>> app.discover('myapp.data', predicate=is_repository)
+
+Best Practices:
+    - Use consistent naming conventions
+    - Group related components in modules
+    - Exclude test and development modules
+    - Verify discovered components before production
+    - Cache discovery results in production
 """
 
 from __future__ import annotations

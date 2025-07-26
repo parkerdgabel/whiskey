@@ -1,7 +1,57 @@
-"""Type definitions and protocols for the Whiskey framework.
+"""Type definitions, protocols, and interfaces for lifecycle management.
 
-This module defines the core protocols (interfaces) used throughout
-Whiskey for lifecycle management and other cross-cutting concerns.
+This module defines the core protocols and type definitions used throughout
+the Whiskey framework. It provides standard interfaces for service lifecycle
+management, allowing services to hook into initialization and disposal phases.
+
+Classes:
+    Inject: DEPRECATED - Legacy marker for explicit injection
+    Initializable: Protocol for services requiring async initialization
+    Disposable: Protocol for services requiring cleanup
+
+Protocols:
+    The module uses Python's Protocol feature (PEP 544) to define structural
+    interfaces that services can implement without explicit inheritance. This
+    provides duck-typing with static type checking support.
+
+Lifecycle Patterns:
+    Services can implement these protocols to participate in lifecycle:
+    
+    1. Initialization (Initializable):
+       - Called during app startup or first resolution
+       - Used for async setup (connections, resource allocation)
+       - Failures prevent service usage
+    
+    2. Disposal (Disposable):
+       - Called during app shutdown or scope cleanup
+       - Used for resource cleanup (closing connections, flushing)
+       - Should be idempotent and handle multiple calls
+
+Example:
+    >>> from whiskey.core.types import Initializable, Disposable
+    >>> 
+    >>> @singleton
+    ... class DatabasePool(Initializable, Disposable):
+    ...     def __init__(self, config: Config):
+    ...         self.config = config
+    ...         self.pool = None
+    ...     
+    ...     async def initialize(self):
+    ...         # Create connection pool on startup
+    ...         self.pool = await create_pool(
+    ...             dsn=self.config.database_url,
+    ...             min_size=10,
+    ...             max_size=20
+    ...         )
+    ...     
+    ...     async def dispose(self):
+    ...         # Clean up connections on shutdown
+    ...         if self.pool:
+    ...             await self.pool.close()
+
+Note:
+    The @runtime_checkable decorator allows isinstance() checks against
+    protocols at runtime, enabling dynamic lifecycle management.
 """
 
 from typing import Protocol, runtime_checkable
