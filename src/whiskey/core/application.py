@@ -621,27 +621,28 @@ class Whiskey:
     
     # Extension methods
     
-    def use(self, extension: Callable[[Whiskey], None]) -> Whiskey:
-        """Apply an extension to the application.
+    def use(self, extension: Callable[..., None], **kwargs) -> Whiskey:
+        """Apply an extension to the application with optional configuration.
         
         Extensions are functions that add functionality to the Whiskey instance.
         They are executed immediately when called.
         
         Args:
-            extension: Function that takes a Whiskey instance and modifies it
+            extension: Function that takes a Whiskey instance and optional kwargs
+            **kwargs: Configuration options passed to the extension
             
         Returns:
             Self for chaining
             
         Example:
-            def jobs_extension(app: Whiskey) -> None:
-                app.jobs = JobManager()
+            def jobs_extension(app: Whiskey, worker_pool_size: int = 4, **kwargs) -> None:
+                app.jobs = JobManager(worker_pool_size=worker_pool_size)
                 app.add_decorator("job", job_decorator)
             
             app = Whiskey()
-            app.use(jobs_extension)
+            app.use(jobs_extension, worker_pool_size=8, auto_start=False)
         """
-        extension(self)
+        extension(self, **kwargs)
         return self
     
     def on(self, event: str, handler: Callable = None) -> Union[Whiskey, Callable]:

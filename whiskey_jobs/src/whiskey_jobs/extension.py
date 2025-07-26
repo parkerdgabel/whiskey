@@ -14,6 +14,9 @@ from .types import JobPriority
 def configure_jobs(**kwargs) -> Callable[[Any], None]:
     """Configure the jobs extension with custom settings.
     
+    .. deprecated:: 0.2.0
+        Use app.use(jobs_extension, **kwargs) instead.
+    
     Args:
         worker_pool_size: Number of workers in the pool (default: 4)
         worker_concurrency: Concurrent jobs per worker (default: 10)
@@ -24,18 +27,29 @@ def configure_jobs(**kwargs) -> Callable[[Any], None]:
         Configured extension function
         
     Example:
+        # Old way (deprecated):
         app.use(configure_jobs(worker_pool_size=8, auto_start=False))
+        
+        # New way:
+        app.use(jobs_extension, worker_pool_size=8, auto_start=False)
     """
-    def configured_extension(app: Any) -> None:
-        # Store config on app
-        app._jobs_config = kwargs
+    def configured_extension(app: Any, **inner_kwargs) -> None:
+        # Merge kwargs
+        config = {**kwargs, **inner_kwargs}
         # Apply extension
-        jobs_extension(app)
+        jobs_extension(app, **config)
     
     return configured_extension
 
 
-def jobs_extension(app: Any) -> None:
+def jobs_extension(
+    app: Any,
+    worker_pool_size: int = 4,
+    worker_concurrency: int = 10,
+    use_priority_queues: bool = True,
+    auto_start: bool = True,
+    **kwargs
+) -> None:
     """Jobs extension that adds background job execution capabilities.
     
     This extension provides:
@@ -46,9 +60,17 @@ def jobs_extension(app: Any) -> None:
     - Full dependency injection support
     - Job monitoring and statistics
     
+    Args:
+        app: Whiskey instance
+        worker_pool_size: Number of workers in the pool (default: 4)
+        worker_concurrency: Concurrent jobs per worker (default: 10)
+        use_priority_queues: Use priority queues instead of FIFO (default: True)
+        auto_start: Automatically start job manager on app startup (default: True)
+        **kwargs: Additional configuration options
+    
     Example:
         app = Whiskey()
-        app.use(jobs_extension)
+        app.use(jobs_extension, worker_pool_size=8, auto_start=False)
         
         @app.job(queue="emails", priority=JobPriority.HIGH)
         async def send_email(to: str, subject: str, email_service: EmailService):
@@ -74,16 +96,7 @@ def jobs_extension(app: Any) -> None:
                    .add("generate_thumbnail", size="small") \\
                    .add("notify_user") \\
                    .enqueue()
-    
-    Args:
-        app: Whiskey instance
     """
-    # Get configuration from app metadata or use defaults
-    config = getattr(app, '_jobs_config', {})
-    worker_pool_size = config.get('worker_pool_size', 4)
-    worker_concurrency = config.get('worker_concurrency', 10)
-    use_priority_queues = config.get('use_priority_queues', True)
-    auto_start = config.get('auto_start', True)
     
     # Create job manager
     manager = JobManager(

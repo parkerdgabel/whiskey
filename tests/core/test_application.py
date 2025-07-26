@@ -439,11 +439,11 @@ class TestExtensions:
         app = Whiskey()
         applied = []
 
-        def extension1(app: Whiskey):
+        def extension1(app: Whiskey, **kwargs):
             applied.append("ext1")
             app.ext1_applied = True
 
-        def extension2(app: Whiskey):
+        def extension2(app: Whiskey, **kwargs):
             applied.append("ext2")
             app.ext2_applied = True
 
@@ -458,7 +458,7 @@ class TestExtensions:
         """Test extension adding new functionality."""
         app = Whiskey()
 
-        def auth_extension(app: Whiskey):
+        def auth_extension(app: Whiskey, **kwargs):
             """Add authentication functionality."""
             # Add new decorator
             def require_auth(func):
@@ -479,6 +479,35 @@ class TestExtensions:
         assert hasattr(app, "authenticate") 
         assert app.authenticate("admin", "secret")
         assert not app.authenticate("user", "wrong")
+    
+    def test_extension_with_kwargs(self):
+        """Test extension with configuration kwargs."""
+        app = Whiskey()
+        
+        def configurable_extension(app: Whiskey, prefix: str = "default_", 
+                                   enable_logging: bool = False, **kwargs):
+            """Extension that accepts configuration."""
+            app.config = {
+                "prefix": prefix,
+                "enable_logging": enable_logging,
+                "extra": kwargs
+            }
+            
+            # Add method using config
+            def get_prefixed(name: str) -> str:
+                return f"{prefix}{name}"
+            
+            app.get_prefixed = get_prefixed
+        
+        # Use extension with custom config
+        app.use(configurable_extension, prefix="custom_", enable_logging=True, 
+                custom_option="value")
+        
+        # Test configuration was applied
+        assert app.config["prefix"] == "custom_"
+        assert app.config["enable_logging"] is True
+        assert app.config["extra"]["custom_option"] == "value"
+        assert app.get_prefixed("test") == "custom_test"
 
 
 class TestBuilderIntegration:

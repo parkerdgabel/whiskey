@@ -28,6 +28,15 @@ class TestJobsExtension:
         # Check JobPriority is available
         assert app.JobPriority is JobPriority
     
+    def test_extension_with_kwargs(self):
+        """Test extension with kwargs configuration."""
+        app = Whiskey()
+        app.use(jobs_extension, worker_pool_size=8, auto_start=False)
+        
+        # Check components are added
+        assert hasattr(app, "jobs")
+        assert app.jobs.worker_pool.size == 8
+    
     def test_job_decorator(self, app_with_jobs: Whiskey):
         """Test @app.job decorator."""
         @app_with_jobs.job(
