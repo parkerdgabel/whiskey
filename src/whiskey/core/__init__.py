@@ -2,7 +2,7 @@
 
 from whiskey.core.analyzer import InjectDecision, TypeAnalyzer
 from whiskey.core.application import Whiskey
-from whiskey.core.builder import WhiskeyBuilder, create_app
+# Builder pattern removed - use Whiskey() directly
 from whiskey.core.container import Container, get_current_container, set_current_container
 from whiskey.core.decorators import (
     component,
@@ -42,8 +42,7 @@ __all__ = [
     "set_current_container",
     # Application
     "Whiskey",
-    "WhiskeyBuilder",
-    "create_app",
+    # Builder classes removed - use direct instantiation
     # Global decorators
     "component",
     "singleton",

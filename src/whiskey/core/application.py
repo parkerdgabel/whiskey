@@ -11,7 +11,6 @@ import asyncio
 import inspect
 from typing import Any, Callable, Type, TypeVar, Union
 
-from .builder import WhiskeyBuilder, create_app
 from .container import Container
 from .errors import ConfigurationError
 from .registry import Scope
@@ -84,19 +83,20 @@ class Whiskey:
             "tasks": []
         }
 
-    @classmethod
-    def builder(cls) -> WhiskeyBuilder:
-        """Create a new WhiskeyBuilder for fluent configuration.
+    # Builder pattern removed - use Whiskey() or Whiskey.create() directly
 
+    @classmethod
+    def create(cls, container: Container = None, name: str = None) -> 'Whiskey':
+        """Create a new Whiskey application.
+        
+        Args:
+            container: Optional Container instance (creates new one if None)
+            name: Optional name for the application
+            
         Returns:
-            WhiskeyBuilder instance
+            New Whiskey instance
         """
-        return create_app()
-
-    @classmethod
-    def create(cls) -> WhiskeyBuilder:
-        """Alias for builder() method."""
-        return cls.builder()
+        return cls(container=container, name=name)
 
     # Direct registration methods
     

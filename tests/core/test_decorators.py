@@ -83,7 +83,7 @@ class TestGlobalAppManagement:
             nonlocal config_called, received_app
             config_called = True
             received_app = app
-            app.container.add_singleton("test_config", "configured").build()
+            app.container.singleton("test_config", "configured")
 
         configure_app(config_func)
 

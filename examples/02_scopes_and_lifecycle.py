@@ -14,7 +14,8 @@ Run this example:
 import asyncio
 from contextlib import asynccontextmanager
 
-from whiskey import Container, create_app, service, singleton
+from whiskey import Container, component, singleton
+from whiskey.core.application import Whiskey
 
 # Step 1: Define Services with Different Scopes
 # ==============================================
@@ -51,7 +52,7 @@ class RequestContext:
         return self.data.get(key, "")
 
 
-@service
+@component
 class UserRepository:
     """Data access layer - transient by default."""
 
@@ -65,7 +66,7 @@ class UserRepository:
         return {"id": user_id, "name": f"User{user_id}", "query": result}
 
 
-@service
+@component
 class UserService:
     """Business logic - uses repository."""
 
@@ -90,7 +91,7 @@ async def demonstrate_singleton_vs_transient():
 
     # Register with explicit scopes
     container.singleton(DatabaseConnection)
-    container.register(UserRepository)  # Transient by default
+    container.register(UserRepository, UserRepository)  # Transient by default
 
     print("\nResolving services multiple times...")
 
@@ -121,7 +122,7 @@ async def demonstrate_scoped_services():
     # Register services with different scopes
     container.singleton(DatabaseConnection)
     container.scoped(RequestContext, scope_name="request")
-    container.register(UserService)
+    container.register(UserService, UserService)
 
     @asynccontextmanager
     async def request_scope():
@@ -177,17 +178,12 @@ async def demonstrate_application_lifecycle():
         shutdown_called = True
         print("🛑 Application shutting down...")
 
-    # Create application with lifecycle hooks
-    app = (
-        create_app()
-        .singleton(DatabaseConnection, DatabaseConnection)
-        .build()
-        .service(UserRepository, UserRepository)
-        .build()
-        .on_startup(on_startup)
-        .on_shutdown(on_shutdown)
-        .build_app()
-    )
+    # Create application with lifecycle hooks (builder removed)
+    app = Whiskey()
+    app.singleton(DatabaseConnection)
+    app.component(UserRepository)
+    app.on_startup(on_startup)
+    app.on_shutdown(on_shutdown)
 
     print("\nUsing application with lifecycle management:")
 
@@ -212,9 +208,9 @@ async def demonstrate_performance_monitoring():
 
     container = Container()
     container.singleton(DatabaseConnection)
-    container.register(UserRepository)
-    container.register(UserService)
-    container.register(RequestContext)
+    container.register(UserRepository, UserRepository)
+    container.register(UserService, UserService)
+    container.register(RequestContext, RequestContext)
 
     # Monitor performance
     with PerformanceMonitor() as metrics:

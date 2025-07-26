@@ -49,7 +49,7 @@ __version__ = "0.1.0"
 
 # Core exports
 from whiskey.core.application import Whiskey
-from whiskey.core.builder import create_app
+# Builder pattern removed - use Whiskey() directly
 from whiskey.core.container import Container
 from whiskey.core.decorators import (
     call,
@@ -93,7 +93,7 @@ __all__ = [
     # Application Framework
     "Whiskey",
     "Application",  # Legacy alias
-    "create_app",
+    # "create_app",  # Removed - use Whiskey() directly
     # Scopes
     "Scope",
     "ContextVarScope",

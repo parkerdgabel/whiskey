@@ -330,12 +330,14 @@ This section covers the API simplification changes made to make Whiskey more Pyt
 
 **Old:**
 ```python
+# Builder pattern has been completely removed
 container.add(Service).as_singleton().tagged("core").build()
 container.add_singleton(Database).build()
 ```
 
 **New:**
 ```python
+# Direct registration methods
 container.singleton(Service, tags={"core"})
 container.singleton(Database)
 ```

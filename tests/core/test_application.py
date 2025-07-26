@@ -6,7 +6,7 @@ from typing import Optional
 import pytest
 
 from whiskey import Container, Scope, Whiskey
-from whiskey.core.builder import ComponentBuilder, WhiskeyBuilder
+# Builder imports removed - using direct instantiation
 from whiskey.core.errors import ResolutionError
 from whiskey.core.types import Disposable, Initializable
 
@@ -540,14 +540,11 @@ class TestBuilderIntegration:
         """Test accessing container builder."""
         app = Whiskey()
 
-        # Instance builder property removed, but classmethod builder() still exists
-        # for creating apps via Whiskey.builder().build_app()
-        assert hasattr(Whiskey, 'builder')  # Class method exists
-        assert callable(Whiskey.builder)  # It's callable
-        
-        # Create app using classmethod
-        builder = Whiskey.builder()
-        assert isinstance(builder, WhiskeyBuilder)
+        # Builder pattern completely removed
+        assert not hasattr(Whiskey, 'builder')
+        # Use direct instantiation or Whiskey.create()
+        app = Whiskey.create()
+        assert isinstance(app, Whiskey)
 
     def test_build_method(self):
         """Test build() method."""

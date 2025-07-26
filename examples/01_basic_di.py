@@ -19,6 +19,7 @@ from whiskey import Container, inject, provide, singleton
 # ============================
 
 
+@provide  # Register with default container  
 class Database:
     """A simple database service."""
 
@@ -154,9 +155,9 @@ async def main():
     container = Container()
 
     # Direct registration (builder pattern removed for cleaner API)
-    container.register(Database)
+    container.register(Database, Database)
     container.singleton(Logger)
-    container.register(UserService, tags={"business"})
+    container.register(UserService, UserService, tags={"business"})
 
     # Factory functions
     def create_configured_database() -> Database:
@@ -171,7 +172,7 @@ async def main():
             return Database("sqlite:///dev.db")
 
     # Register the factory
-    container.add_factory("database", create_configured_database).build()
+    container.factory("database", create_configured_database)
 
     # Each resolution calls the factory for transient services
     user_service1 = await container.resolve(UserService)
@@ -188,17 +189,12 @@ async def main():
     print("\n\n5. Application Builder")
     print("-" * 25)
 
-    # Fluent application configuration
-    app = (
-        create_app()
-        .singleton(Database, Database)
-        .build()
-        .singleton(Logger, Logger)
-        .build()
-        .service(UserService, UserService)
-        .build()
-        .build_app()
-    )
+    # Direct application configuration (builder removed)
+    from whiskey.core.application import Whiskey
+    app = Whiskey()
+    app.singleton(Database)
+    app.singleton(Logger)
+    app.component(UserService)
 
     # Use the application
     async with app:
