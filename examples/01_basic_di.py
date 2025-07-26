@@ -215,8 +215,8 @@ async def main():
     print("-" * 40)
 
     container = Container()
-    container.add(Database).as_singleton().build()
-    container.add(Logger).as_singleton().build()
+    container.singleton(Database)
+    container.singleton(Logger)
 
     # Define a function that needs dependencies
     def business_logic(db: Database, logger: Logger, user_id: int = 1) -> str:

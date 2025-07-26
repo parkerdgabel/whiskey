@@ -214,7 +214,7 @@ async def demonstrate_performance_monitoring():
     container.singleton(DatabaseConnection)
     container.register(UserRepository)
     container.register(UserService)
-    container.add(RequestContext, RequestContext).build()
+    container.register(RequestContext)
 
     # Monitor performance
     with PerformanceMonitor() as metrics:
