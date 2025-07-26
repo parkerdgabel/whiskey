@@ -52,20 +52,32 @@ class ScheduledJob:
         now = datetime.now(timezone.utc)
         
         # Check date constraints
-        if self.metadata.start_date and now < self.metadata.start_date:
-            # Job hasn't started yet
-            if self.metadata.interval:
-                self._next_run = self.metadata.start_date
-            else:
-                # For cron, find first run after start date
-                self._cron.set_current(self.metadata.start_date)
-                self._next_run = self._cron.get_next(datetime)
-            return
+        if self.metadata.start_date:
+            # Ensure start_date is timezone-aware
+            start_date = self.metadata.start_date
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=timezone.utc)
+            
+            if now < start_date:
+                # Job hasn't started yet
+                if self.metadata.interval:
+                    self._next_run = start_date
+                else:
+                    # For cron, find first run after start date
+                    self._cron.set_current(start_date)
+                    self._next_run = self._cron.get_next(datetime)
+                return
         
-        if self.metadata.end_date and now > self.metadata.end_date:
-            # Job has ended
-            self._next_run = None
-            return
+        if self.metadata.end_date:
+            # Ensure end_date is timezone-aware
+            end_date = self.metadata.end_date
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=timezone.utc)
+            
+            if now > end_date:
+                # Job has ended
+                self._next_run = None
+                return
         
         # Calculate based on schedule type
         if self.metadata.interval:

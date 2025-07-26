@@ -35,7 +35,7 @@ class JobMetadata:
     func: Callable
     name: str
     queue: str = "default"
-    priority: JobPriority = JobPriority.NORMAL
+    priority: Union[JobPriority, int] = JobPriority.NORMAL
     max_retries: int = 3
     retry_delay: float = 60.0  # seconds
     timeout: Optional[float] = None  # seconds
@@ -73,6 +73,12 @@ class JobResult:
     completed_at: Optional[datetime] = None
     duration: Optional[float] = None  # seconds
     retry_count: int = 0
+    
+    def __post_init__(self):
+        """Calculate duration if not provided."""
+        if self.duration is None and self.started_at and self.completed_at:
+            delta = self.completed_at - self.started_at
+            self.duration = delta.total_seconds()
     
     @property
     def is_success(self) -> bool:

@@ -8,7 +8,6 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "whiskey",
     "croniter>=1.3.0",  # For cron scheduling
 ]
 
@@ -44,3 +43,6 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[tool.uv.sources]
+whiskey = { workspace = true }

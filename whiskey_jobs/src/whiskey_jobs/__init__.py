@@ -8,18 +8,21 @@ This extension provides:
 - Job monitoring and metrics
 """
 
-from .extension import jobs_extension
+from .extension import configure_jobs, jobs_extension
 from .job import Job, JobResult, JobStatus
 from .manager import JobManager
 from .queue import JobQueue, PriorityQueue
 from .scheduler import JobScheduler
+from .types import JobPriority
 from .worker import JobWorker
 
 __all__ = [
     "jobs_extension",
+    "configure_jobs",
     "Job",
     "JobResult",
     "JobStatus",
+    "JobPriority",
     "JobManager",
     "JobQueue",
     "PriorityQueue",

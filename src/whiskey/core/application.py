@@ -629,6 +629,8 @@ class Whiskey:
     def use(self, middleware: Callable) -> Whiskey:
         """Add middleware to the application."""
         self._middleware.append(middleware)
+        # Execute immediately if it's an extension function
+        middleware(self)
         return self
     
     def on(self, event: str, handler: Callable = None) -> Union[Whiskey, Callable]:

@@ -45,6 +45,7 @@ class JobManager:
             self.queues,
             size=worker_pool_size,
             concurrency_per_worker=worker_concurrency,
+            result_callback=self._store_job_result,
         )
         
         # Job tracking
@@ -81,6 +82,15 @@ class JobManager:
         await self.worker_pool.stop()
         
         logger.info("Job manager stopped")
+    
+    def _store_job_result(self, job_id: str, result: JobResult) -> None:
+        """Store a job result.
+        
+        Args:
+            job_id: Job ID
+            result: Job result
+        """
+        self._job_results[job_id] = result
     
     def register_job(
         self,

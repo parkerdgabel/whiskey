@@ -6,7 +6,7 @@ import asyncio
 import traceback
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 from .types import JobMetadata, JobPriority, JobResult, JobStatus
 
@@ -57,14 +57,14 @@ class Job:
         return self.metadata.queue
     
     @property
-    def priority(self) -> JobPriority:
+    def priority(self) -> Union[JobPriority, int]:
         """Get job priority."""
         return self.metadata.priority
     
     @property
     def duration(self) -> Optional[float]:
         """Get job execution duration in seconds."""
-        if self.started_at and self.completed_at:
+        if self.started_at is not None and self.completed_at is not None:
             delta = self.completed_at - self.started_at
             return delta.total_seconds()
         return None

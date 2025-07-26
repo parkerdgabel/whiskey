@@ -11,13 +11,31 @@ from .manager import JobManager
 from .types import JobPriority
 
 
-def jobs_extension(
-    app: Any,
-    worker_pool_size: int = 4,
-    worker_concurrency: int = 10,
-    use_priority_queues: bool = True,
-    auto_start: bool = True,
-) -> None:
+def configure_jobs(**kwargs) -> Callable[[Any], None]:
+    """Configure the jobs extension with custom settings.
+    
+    Args:
+        worker_pool_size: Number of workers in the pool (default: 4)
+        worker_concurrency: Concurrent jobs per worker (default: 10)
+        use_priority_queues: Use priority queues instead of FIFO (default: True)
+        auto_start: Automatically start job manager on app startup (default: True)
+        
+    Returns:
+        Configured extension function
+        
+    Example:
+        app.use(configure_jobs(worker_pool_size=8, auto_start=False))
+    """
+    def configured_extension(app: Any) -> None:
+        # Store config on app
+        app._jobs_config = kwargs
+        # Apply extension
+        jobs_extension(app)
+    
+    return configured_extension
+
+
+def jobs_extension(app: Any) -> None:
     """Jobs extension that adds background job execution capabilities.
     
     This extension provides:
@@ -58,12 +76,15 @@ def jobs_extension(
                    .enqueue()
     
     Args:
-        app: Whiskey application instance
-        worker_pool_size: Number of workers in the pool
-        worker_concurrency: Concurrent jobs per worker
-        use_priority_queues: Use priority queues instead of FIFO
-        auto_start: Automatically start job manager on app startup
+        app: Whiskey instance
     """
+    # Get configuration from app metadata or use defaults
+    config = getattr(app, '_jobs_config', {})
+    worker_pool_size = config.get('worker_pool_size', 4)
+    worker_concurrency = config.get('worker_concurrency', 10)
+    use_priority_queues = config.get('use_priority_queues', True)
+    auto_start = config.get('auto_start', True)
+    
     # Create job manager
     manager = JobManager(
         app.container,
@@ -105,9 +126,7 @@ def jobs_extension(
                 user = await user_service.get_user(user_id)
                 # Send email...
         """
-        # Convert int to JobPriority if needed
-        if isinstance(priority, int):
-            priority = JobPriority(priority)
+        # Keep priority as-is (JobPriority enum or int)
         
         def decorator(func: Callable) -> Callable:
             # Register job
@@ -179,9 +198,7 @@ def jobs_extension(
             async def daily_report(reporting_service: ReportingService):
                 await reporting_service.generate_daily_report()
         """
-        # Convert int to JobPriority if needed
-        if isinstance(priority, int):
-            priority = JobPriority(priority)
+        # Keep priority as-is (JobPriority enum or int)
         
         def decorator(func: Callable) -> Callable:
             # Register scheduled job
@@ -258,6 +275,11 @@ def jobs_extension(
     app.add_decorator("job", job)
     app.add_decorator("scheduled_job", scheduled_job)
     app.add_decorator("periodic_job", periodic_job)
+    
+    # Also add as attributes for direct access
+    app.job = job
+    app.scheduled_job = scheduled_job
+    app.periodic_job = periodic_job
     
     # Add JobPriority to app for convenience
     app.JobPriority = JobPriority
@@ -354,30 +376,31 @@ def jobs_extension(
                 except TimeoutError:
                     print("Job timed out")
     
-    # Enhanced run method
-    original_run = app.run
-    
-    def enhanced_run(main: Optional[Callable] = None) -> None:
-        """Enhanced run that starts job manager."""
-        if main is None and hasattr(app, "_main_func"):
-            original_run()
-        else:
-            # Wrap main to start/stop job manager
-            async def wrapped_main():
-                async with app:
-                    if main:
-                        if asyncio.iscoroutinefunction(main):
-                            await main()
+    # Enhanced run method (only if app has run)
+    if hasattr(app, 'run'):
+        original_run = app.run
+        
+        def enhanced_run(main: Optional[Callable] = None) -> None:
+            """Enhanced run that starts job manager."""
+            if main is None and hasattr(app, "_main_func"):
+                original_run()
+            else:
+                # Wrap main to start/stop job manager
+                async def wrapped_main():
+                    async with app:
+                        if main:
+                            if asyncio.iscoroutinefunction(main):
+                                await main()
+                            else:
+                                main()
                         else:
-                            main()
-                    else:
-                        # Keep running for job processing
-                        print("Job system running. Press Ctrl+C to stop.")
-                        try:
-                            await asyncio.Event().wait()
-                        except KeyboardInterrupt:
-                            print("\nShutting down...")
-            
-            asyncio.run(wrapped_main())
-    
-    app.run = enhanced_run
+                            # Keep running for job processing
+                            print("Job system running. Press Ctrl+C to stop.")
+                            try:
+                                await asyncio.Event().wait()
+                            except KeyboardInterrupt:
+                                print("\nShutting down...")
+                
+                asyncio.run(wrapped_main())
+        
+        app.run = enhanced_run

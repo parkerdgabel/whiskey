@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from .job import Job
 from .queue import MultiQueue
@@ -22,6 +22,7 @@ class JobWorker:
         queues: MultiQueue,
         name: str = "worker",
         concurrency: int = 10,
+        result_callback: Optional[Callable[[str, JobResult], None]] = None,
     ):
         """Initialize a job worker.
         
@@ -30,11 +31,13 @@ class JobWorker:
             queues: MultiQueue instance
             name: Worker name
             concurrency: Maximum concurrent jobs
+            result_callback: Optional callback to store job results
         """
         self.container = container
         self.queues = queues
         self.name = name
         self.concurrency = concurrency
+        self.result_callback = result_callback
         
         # Worker state
         self._running = False
@@ -43,8 +46,8 @@ class JobWorker:
         self._failed_count = 0
         self._current_jobs: Dict[str, Job] = {}
         
-        # Queues to monitor
-        self._monitored_queues: List[str] = ["default"]
+        # Queues to monitor - monitor all queues by default
+        self._monitored_queues: List[str] = []
     
     def monitor_queues(self, *queue_names: str) -> None:
         """Set which queues this worker should monitor.
@@ -62,10 +65,9 @@ class JobWorker:
         self._running = True
         logger.info(f"Worker {self.name} started (concurrency={self.concurrency})")
         
-        # Start queue monitoring tasks
-        for queue_name in self._monitored_queues:
-            task = asyncio.create_task(self._monitor_queue(queue_name))
-            self._tasks.add(task)
+        # Start a single monitoring task that checks all queues
+        task = asyncio.create_task(self._monitor_all_queues())
+        self._tasks.add(task)
     
     async def stop(self) -> None:
         """Stop the worker gracefully."""
@@ -92,6 +94,36 @@ class JobWorker:
             f"Worker {self.name} stopped. "
             f"Processed: {self._processed_count}, Failed: {self._failed_count}"
         )
+    
+    async def _monitor_all_queues(self) -> None:
+        """Monitor all queues for jobs."""
+        semaphore = asyncio.Semaphore(self.concurrency)
+        logger.info(f"Worker {self.name} monitoring all queues")
+        
+        while self._running:
+            try:
+                # Check all available queues for jobs
+                job = None
+                for queue_name in self.queues.list_queues():
+                    queue = await self.queues.get_queue(queue_name)
+                    job = await queue.pop()
+                    if job:
+                        break
+                
+                if job:
+                    # Process job asynchronously
+                    asyncio.create_task(
+                        self._process_job_with_semaphore(job, semaphore)
+                    )
+                else:
+                    # No jobs available, wait a bit
+                    await asyncio.sleep(0.1)
+                    
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error monitoring queues: {e}")
+                await asyncio.sleep(1)  # Brief pause before retry
     
     async def _monitor_queue(self, queue_name: str) -> None:
         """Monitor a queue for jobs.
@@ -133,11 +165,8 @@ class JobWorker:
             job: Job to process
             semaphore: Concurrency semaphore
         """
-        try:
+        async with semaphore:
             await self._process_job(job)
-        finally:
-            # Semaphore is automatically released when context exits
-            pass
     
     async def _process_job(self, job: Job) -> JobResult:
         """Process a single job.
@@ -183,6 +212,10 @@ class JobWorker:
                     if job._on_failure:
                         await self.queues.push(job._on_failure)
             
+            # Store result if callback provided
+            if self.result_callback:
+                self.result_callback(job.job_id, result)
+            
             return result
             
         except Exception as e:
@@ -216,6 +249,7 @@ class WorkerPool:
         queues: MultiQueue,
         size: int = 4,
         concurrency_per_worker: int = 10,
+        result_callback: Optional[Callable[[str, JobResult], None]] = None,
     ):
         """Initialize a worker pool.
         
@@ -224,11 +258,13 @@ class WorkerPool:
             queues: MultiQueue instance
             size: Number of workers
             concurrency_per_worker: Concurrent jobs per worker
+            result_callback: Optional callback to store job results
         """
         self.container = container
         self.queues = queues
         self.size = size
         self.concurrency_per_worker = concurrency_per_worker
+        self.result_callback = result_callback
         
         self._workers: List[JobWorker] = []
         self._running = False
@@ -247,6 +283,7 @@ class WorkerPool:
                 self.queues,
                 name=f"worker-{i}",
                 concurrency=self.concurrency_per_worker,
+                result_callback=self.result_callback,
             )
             self._workers.append(worker)
             await worker.start()

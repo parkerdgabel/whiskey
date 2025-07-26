@@ -1,0 +1,1 @@
+"""Tests for whiskey_jobs extension."""
