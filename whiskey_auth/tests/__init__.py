@@ -1,0 +1,1 @@
+"""Whiskey Auth tests."""
