@@ -2,13 +2,13 @@
 
 import uuid
 
-from whiskey import inject
+from whiskey import Whiskey, inject
 from whiskey_ai import LLMClient, MockLLMClient, ai_extension
 from whiskey_ai.conversation import ChatSession, ConversationManager
 from whiskey_asgi import Request, asgi_extension
 
 # Create application
-app = Application()
+app = Whiskey()
 app.use(ai_extension)
 app.use(asgi_extension)
 

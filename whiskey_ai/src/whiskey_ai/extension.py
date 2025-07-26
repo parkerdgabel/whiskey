@@ -6,16 +6,19 @@ import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
-    Dict,
-    List,
     Literal,
-    Optional,
     Protocol,
-    Union,
     runtime_checkable,
 )
+
+from whiskey import Container
+from whiskey.core.scopes import ContextVarScope
+
+if TYPE_CHECKING:
+    from whiskey import Whiskey
 
 
 # OpenAI-compatible types
@@ -24,8 +27,8 @@ class Function:
     """OpenAI function definition."""
 
     name: str
-    description: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
+    description: str | None = None
+    parameters: dict[str, Any] | None = None
 
 
 @dataclass
@@ -65,10 +68,10 @@ class Message:
     """OpenAI-compatible message."""
 
     role: Literal["system", "user", "assistant", "function", "tool"]
-    content: Optional[str] = None
-    name: Optional[str] = None
-    function_call: Optional[FunctionCall] = None
-    tool_calls: Optional[List[ToolCall]] = None
+    content: str | None = None
+    name: str | None = None
+    function_call: FunctionCall | None = None
+    tool_calls: list[ToolCall] | None = None
 
 
 @dataclass
@@ -86,8 +89,8 @@ class Choice:
 
     index: int
     message: Message
-    finish_reason: Optional[str]
-    logprobs: Optional[Any] = None
+    finish_reason: str | None
+    logprobs: Any | None = None
 
 
 @dataclass
@@ -96,21 +99,21 @@ class ChatCompletion:
 
     id: str
     model: str
-    choices: List[Choice]
+    choices: list[Choice]
     usage: Usage
     object: str = "chat.completion"
     created: int = field(default_factory=lambda: int(time.time()))
-    system_fingerprint: Optional[str] = None
+    system_fingerprint: str | None = None
 
 
 @dataclass
 class Delta:
     """Streaming message delta."""
 
-    content: Optional[str] = None
-    function_call: Optional[FunctionCall] = None
-    tool_calls: Optional[List[ToolCall]] = None
-    role: Optional[str] = None
+    content: str | None = None
+    function_call: FunctionCall | None = None
+    tool_calls: list[ToolCall] | None = None
+    role: str | None = None
 
 
 @dataclass
@@ -119,8 +122,8 @@ class StreamChoice:
 
     index: int
     delta: Delta
-    finish_reason: Optional[str] = None
-    logprobs: Optional[Any] = None
+    finish_reason: str | None = None
+    logprobs: Any | None = None
 
 
 @dataclass
@@ -129,10 +132,10 @@ class ChatCompletionChunk:
 
     id: str
     model: str
-    choices: List[StreamChoice]
+    choices: list[StreamChoice]
     object: str = "chat.completion.chunk"
     created: int = field(default_factory=lambda: int(time.time()))
-    system_fingerprint: Optional[str] = None
+    system_fingerprint: str | None = None
 
 
 @dataclass
@@ -140,7 +143,7 @@ class Embedding:
     """Single embedding."""
 
     index: int
-    embedding: List[float]
+    embedding: list[float]
     object: str = "embedding"
 
 
@@ -148,7 +151,7 @@ class Embedding:
 class EmbeddingResponse:
     """OpenAI-compatible embedding response."""
 
-    data: List[Embedding]
+    data: list[Embedding]
     model: str
     usage: Usage
     object: str = "list"
@@ -163,25 +166,25 @@ class ChatCompletions(Protocol):
         self,
         *,
         model: str,
-        messages: List[Dict[str, Any]],
-        temperature: Optional[float] = 1.0,
-        top_p: Optional[float] = 1.0,
-        n: Optional[int] = 1,
-        stream: Optional[bool] = False,
-        stop: Optional[Union[str, List[str]]] = None,
-        max_tokens: Optional[int] = None,
-        presence_penalty: Optional[float] = 0.0,
-        frequency_penalty: Optional[float] = 0.0,
-        logit_bias: Optional[Dict[str, float]] = None,
-        user: Optional[str] = None,
-        functions: Optional[List[Dict[str, Any]]] = None,
-        function_call: Optional[Union[str, Dict[str, Any]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
-        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-        response_format: Optional[Dict[str, Any]] = None,
-        seed: Optional[int] = None,
-        **kwargs,
-    ) -> Union[ChatCompletion, AsyncIterator[ChatCompletionChunk]]:
+        messages: list[dict[str, Any]],
+        temperature: float | None = 1.0,
+        top_p: float | None = 1.0,
+        n: int | None = 1,
+        stream: bool | None = False,
+        stop: str | list[str] | None = None,
+        max_tokens: int | None = None,
+        presence_penalty: float | None = 0.0,
+        frequency_penalty: float | None = 0.0,
+        logit_bias: dict[str, float] | None = None,
+        user: str | None = None,
+        functions: list[dict[str, Any]] | None = None,
+        function_call: str | dict[str, Any] | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        response_format: dict[str, Any] | None = None,
+        seed: int | None = None,
+        **kwargs: Any,
+    ) -> ChatCompletion | AsyncIterator[ChatCompletionChunk]:
         """Create a chat completion."""
         ...
 
@@ -194,11 +197,11 @@ class Embeddings(Protocol):
         self,
         *,
         model: str,
-        input: Union[str, List[str]],
-        encoding_format: Optional[Literal["float", "base64"]] = "float",
-        dimensions: Optional[int] = None,
-        user: Optional[str] = None,
-        **kwargs,
+        input: str | list[str],
+        encoding_format: Literal["float", "base64"] | None = "float",
+        dimensions: int | None = None,
+        user: str | None = None,
+        **kwargs: Any,
     ) -> EmbeddingResponse:
         """Create embeddings."""
         ...
@@ -212,75 +215,103 @@ class LLMClient(Protocol):
     embeddings: Embeddings
 
 
-# Manager classes
+# Manager classes using Whiskey's dict-like patterns
 class ModelManager:
-    """Manages LLM model implementations."""
+    """Manages LLM model implementations using Whiskey's container patterns."""
 
-    def __init__(self):
-        self.models: Dict[str, type] = {}
-        self.instances: Dict[str, LLMClient] = {}
+    def __init__(self, container: Container = None):
+        self.container = container or Container()
+        # Use container's dict-like API for model classes
+        self._model_classes: dict[str, type] = {}
 
     def register(self, name: str, model_class: type) -> None:
         """Register a model implementation."""
-        self.models[name] = model_class
+        self._model_classes[name] = model_class
+        # Also register in container with tag for discoverability
+        self.container[f"ai.model.{name}"] = model_class
 
     def get(self, name: str) -> LLMClient:
-        """Get a model instance."""
-        if name not in self.instances:
-            raise ValueError(f"Model '{name}' not configured")
-        return self.instances[name]
+        """Get a configured model instance from the container."""
+        key = f"ai.model.instance.{name}"
+        if key not in self.container:
+            raise ValueError(f"Model '{name}' not configured. Use configure() first.")
+        return self.container[key]
 
     def configure(self, name: str, **kwargs) -> None:
-        """Configure a model instance."""
-        if name not in self.models:
+        """Configure and instantiate a model."""
+        if name not in self._model_classes:
             raise ValueError(f"Model '{name}' not registered")
-        self.instances[name] = self.models[name](**kwargs)
+        
+        # Create instance and store in container
+        instance = self._model_classes[name](**kwargs)
+        self.container[f"ai.model.instance.{name}"] = instance
+        
+        # Also register as the default LLMClient if it's the first one
+        if LLMClient not in self.container:
+            self.container[LLMClient] = instance
 
 
 class ToolManager:
-    """Manages tools/functions for LLMs."""
+    """Manages tools/functions for LLMs using container patterns."""
 
-    def __init__(self):
-        self.tools: Dict[str, Callable] = {}
-        self.schemas: Dict[str, Dict[str, Any]] = {}
+    def __init__(self, container: Container = None):
+        self.container = container or Container()
 
-    def register(self, tool: Callable, schema: Dict[str, Any]) -> None:
+    def register(self, tool: Callable, schema: dict[str, Any]) -> None:
         """Register a tool with its schema."""
         name = schema["function"]["name"]
-        self.tools[name] = tool
-        self.schemas[name] = schema
+        # Store tool and schema as raw values to avoid container resolution
+        # We'll use a wrapper object to prevent the container from trying to call the function
+        tool_wrapper = {"tool": tool, "is_ai_tool": True}
+        schema_wrapper = {"schema": schema, "is_ai_tool_schema": True}
+        self.container[f"ai.tool.{name}"] = tool_wrapper
+        self.container[f"ai.tool.schema.{name}"] = schema_wrapper
 
-    def get(self, name: str) -> Optional[Callable]:
+    def get(self, name: str) -> Callable | None:
         """Get a tool by name."""
-        return self.tools.get(name)
+        key = f"ai.tool.{name}"
+        if key in self.container:
+            wrapper = self.container[key]
+            return wrapper["tool"] if isinstance(wrapper, dict) and "tool" in wrapper else None
+        return None
 
-    def get_schema(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_schema(self, name: str) -> dict[str, Any] | None:
         """Get a tool's schema."""
-        return self.schemas.get(name)
+        key = f"ai.tool.schema.{name}"
+        if key in self.container:
+            wrapper = self.container[key]
+            return wrapper["schema"] if isinstance(wrapper, dict) and "schema" in wrapper else None
+        return None
 
-    def all_schemas(self) -> List[Dict[str, Any]]:
+    def all_schemas(self) -> list[dict[str, Any]]:
         """Get all tool schemas."""
-        return list(self.schemas.values())
+        # Find all schema keys and return their values
+        schemas = []
+        for key, value in self.container.items():
+            if isinstance(key, str) and key.startswith("ai.tool.schema.") and isinstance(value, dict) and "schema" in value:
+                schemas.append(value["schema"])
+        return schemas
 
 
 class AgentManager:
-    """Manages AI agents."""
+    """Manages AI agents using Whiskey's container."""
 
-    def __init__(self):
-        self.agents: Dict[str, type] = {}
-        self.instances: Dict[str, Any] = {}
+    def __init__(self, container: Container = None):
+        self.container = container or Container()
 
     def register(self, name: str, agent_class: type) -> None:
-        """Register an agent class."""
-        self.agents[name] = agent_class
+        """Register an agent class in the container."""
+        # Store agent class with consistent key pattern
+        self.container[f"ai.agent.{name}"] = agent_class
+        # Also register by class type for injection
+        self.container[agent_class] = agent_class
 
     def get(self, name: str) -> Any:
-        """Get an agent instance."""
-        return self.instances.get(name)
+        """Get an agent class (not instance) by name."""
+        key = f"ai.agent.{name}"
+        return self.container[key] if key in self.container else None
 
 
-# Conversation scope
-from whiskey.core.scopes import ContextVarScope
 
 
 class ConversationScope(ContextVarScope):
@@ -290,7 +321,7 @@ class ConversationScope(ContextVarScope):
         super().__init__("conversation")
 
 
-def ai_extension(app: Application) -> None:
+def ai_extension(app: Whiskey) -> None:
     """AI extension that adds LLM capabilities to Whiskey applications.
 
     This extension provides:
@@ -333,23 +364,31 @@ def ai_extension(app: Application) -> None:
             )
             return response.model_dump()
     """
-    # Create managers
-    model_manager = ModelManager()
-    tool_manager = ToolManager()
-    agent_manager = AgentManager()
+    # Create managers using the app's container
+    model_manager = ModelManager(app.container)
+    tool_manager = ToolManager(app.container)
+    agent_manager = AgentManager(app.container)
 
     # Store managers in app
     app.model_manager = model_manager
     app.tool_manager = tool_manager
     app.agent_manager = agent_manager
 
-    # Add conversation scope
-    app.add_scope("conversation", ConversationScope)
+    # Register conversation scope as a singleton service
+    # This allows it to be injected and used throughout the app
+    conversation_scope = ConversationScope()
+    app.singleton(conversation_scope, key="conversation_scope")
+    app.singleton(conversation_scope, key=ConversationScope)
 
-    # Register managers as services
+    # Register managers as singleton services using dict-like API
     app.container[ModelManager] = model_manager
     app.container[ToolManager] = tool_manager
     app.container[AgentManager] = agent_manager
+    
+    # Also register by string key for easier access
+    app.container["model_manager"] = model_manager
+    app.container["tool_manager"] = tool_manager
+    app.container["agent_manager"] = agent_manager
 
     # Model decorator
     def model(name: str):
@@ -368,7 +407,7 @@ def ai_extension(app: Application) -> None:
     app.add_decorator("model", model)
 
     # Tool decorator
-    def tool(name: Optional[str] = None, description: Optional[str] = None):
+    def tool(name: str | None = None, description: str | None = None):
         """Decorator to register a tool/function for LLMs.
 
         The decorated function should have type hints for parameters
@@ -389,15 +428,15 @@ def ai_extension(app: Application) -> None:
                 # Infer type from annotation
                 param_type = "string"  # default
                 if param.annotation != inspect.Parameter.empty:
-                    if param.annotation == int:
+                    if param.annotation is int:
                         param_type = "integer"
-                    elif param.annotation == float:
+                    elif param.annotation is float:
                         param_type = "number"
-                    elif param.annotation == bool:
+                    elif param.annotation is bool:
                         param_type = "boolean"
-                    elif param.annotation == list or param.annotation == List:
+                    elif param.annotation is list:
                         param_type = "array"
-                    elif param.annotation == dict or param.annotation == Dict:
+                    elif param.annotation is dict:
                         param_type = "object"
 
                 parameters["properties"][param_name] = {

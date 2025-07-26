@@ -1,11 +1,11 @@
 """Simple chat application using Whiskey AI extension."""
 
-from whiskey import inject
-from whiskey_ai import LLMClient, MockLLMClient, ai_extension
-from whiskey_asgi import Request, asgi_extension
+from whiskey import Whiskey, inject
+from whiskey_ai import LLMClient, MockLLMClient, ToolManager, ai_extension
+from whiskey_asgi import Request, StreamingResponse, asgi_extension
 
 # Create application
-app = Application()
+app = Whiskey()
 app.use(ai_extension)
 app.use(asgi_extension)
 
@@ -68,13 +68,11 @@ async def stream_chat(request: Request, client: LLMClient):
         yield "data: [DONE]\n\n"
 
     # Return streaming response
-    from whiskey_asgi.extension import StreamingResponse
-
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 # Chat with tools
-@app.tool("get_weather")
+@app.tool(name="get_weather")
 def get_weather(location: str, unit: str = "celsius") -> dict:
     """Get the current weather for a location."""
     # Mock weather data
@@ -88,7 +86,7 @@ def get_weather(location: str, unit: str = "celsius") -> dict:
 
 @app.post("/chat/tools")
 @inject
-async def chat_with_tools(request: Request, client: LLMClient, tools: "ToolManager"):
+async def chat_with_tools(request: Request, client: LLMClient, tools: ToolManager):
     """Chat endpoint with tool support."""
     from whiskey_ai.tools import ToolExecutor
 
