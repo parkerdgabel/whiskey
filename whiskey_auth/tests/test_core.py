@@ -16,7 +16,7 @@ from whiskey_auth.core import AuthContext
 
 
 @dataclass
-class TestUser:
+class MockUser:
     id: int
     username: str
     is_active: bool = True
@@ -93,17 +93,17 @@ class TestAuthCore:
         assert not context.has_role("admin")
         
         # Test authenticated context
-        user = TestUser(id=1, username="alice")
+        user = MockUser(id=1, username="alice")
         context = AuthContext(user=user)
         assert context.is_authenticated
         
         # Test with inactive user
-        inactive_user = TestUser(id=2, username="bob", is_active=False)
+        inactive_user = MockUser(id=2, username="bob", is_active=False)
         context = AuthContext(user=inactive_user)
         assert not context.is_authenticated
         
         # Test permissions
-        user_with_perms = TestUser(
+        user_with_perms = MockUser(
             id=3,
             username="charlie",
             permissions=["read", "write"]
@@ -114,7 +114,7 @@ class TestAuthCore:
         assert not context.has_permission("delete")
         
         # Test roles
-        user_with_roles = TestUser(
+        user_with_roles = MockUser(
             id=4,
             username="diana",
             roles=["admin", "moderator"]
@@ -197,9 +197,14 @@ class TestWhiskeyIntegration:
     def test_extension_setup(self):
         """Test auth extension setup."""
         app = Whiskey()
+        
+        # Before extension
+        assert not hasattr(app, "user_model")
+        
+        # Apply extension
         app.use(auth_extension)
         
-        # Check that methods are added
+        # After extension - check that methods are added
         assert hasattr(app, "user_model")
         assert hasattr(app, "auth_provider")
         assert hasattr(app, "permissions")

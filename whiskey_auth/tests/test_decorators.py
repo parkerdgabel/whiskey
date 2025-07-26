@@ -8,12 +8,14 @@ from whiskey_auth import (
     AuthenticationError,
     AuthorizationError,
     CurrentUser,
+    create_test_user,
+    AuthTestClient,
+)
+from whiskey_auth.decorators import (
     requires_auth,
     requires_permission,
     requires_role,
     requires_all_permissions,
-    create_test_user,
-    AuthTestClient,
 )
 
 

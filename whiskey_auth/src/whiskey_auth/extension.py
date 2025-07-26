@@ -5,8 +5,7 @@ from __future__ import annotations
 import inspect
 from typing import Any, Callable, Type, TypeVar, get_args, get_origin
 
-from whiskey import Whiskey, singleton
-from whiskey.core.context import Context
+from whiskey import Whiskey, singleton, Container
 
 from whiskey_auth.core import (
     AuthContext,
@@ -219,7 +218,7 @@ def _register_current_user_resolver(app: Whiskey) -> None:
     
     This allows CurrentUser to be injected into functions and classes.
     """
-    async def resolve_current_user(container: Context) -> User | None:
+    async def resolve_current_user(container: Container) -> User | None:
         """Resolve current user from auth context."""
         try:
             auth_context = await container.resolve(AuthContext)
