@@ -151,6 +151,7 @@ class Whiskey:
                 condition=condition,
                 tags=tags or set(),
                 lazy=lazy,
+                allow_override=True,  # Allow decorators to override registrations
             )
 
             return cls
@@ -242,6 +243,7 @@ class Whiskey:
                 condition=condition,
                 tags=tags or set(),
                 lazy=lazy,
+                allow_override=True,  # Allow decorators to override registrations
             )
 
             return func

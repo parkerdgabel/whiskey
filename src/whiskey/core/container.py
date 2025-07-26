@@ -624,6 +624,7 @@ class Container:
         *,
         scope: Scope = Scope.TRANSIENT,
         name: str = None,
+        allow_override: bool = False,
         **kwargs,
     ) -> ServiceDescriptor:
         """Register a service with explicit parameters.
@@ -638,7 +639,7 @@ class Container:
         Returns:
             The created ServiceDescriptor
         """
-        return self.registry.register(key, provider, scope=scope, name=name, **kwargs)
+        return self.registry.register(key, provider, scope=scope, name=name, allow_override=allow_override, **kwargs)
 
     def singleton(
         self,

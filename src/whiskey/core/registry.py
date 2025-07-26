@@ -150,6 +150,7 @@ class ServiceRegistry:
         tags: set[str] | None = None,
         lazy: bool = False,
         metadata: dict[str, Any] | None = None,
+        allow_override: bool = False,
         **extra_metadata,
     ) -> ServiceDescriptor:
         """Register a service with the registry.
@@ -181,9 +182,9 @@ class ServiceRegistry:
         # Normalize key to string
         string_key = self._normalize_key(key, name)
 
-        # Allow overwriting existing registrations (last registration wins)
-        # if string_key in self._descriptors:
-        #     raise RegistrationError(f"Service '{string_key}' is already registered")
+        # Check for duplicate registration unless override is allowed
+        if string_key in self._descriptors and not allow_override:
+            raise RegistrationError(f"Service '{string_key}' is already registered")
 
         # Determine service type
         if service_type is None:
