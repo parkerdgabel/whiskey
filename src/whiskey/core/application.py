@@ -25,16 +25,15 @@ class Whiskey:
     """Main Whiskey class with lifecycle management and decorator support.
     
     This class provides the main entry point for Whiskey applications,
-    integrating the fluent configuration API with lifecycle management
+    integrating container functionality with lifecycle management
     and convenience decorators.
     
     Examples:
-        Using the fluent builder:
+        Direct instantiation:
         
-        >>> app = Whiskey.builder() \\
-        ...     .component('database', DatabaseImpl).as_singleton() \\
-        ...     .component(EmailService, EmailService) \\
-        ...     .build_app()
+        >>> app = Whiskey()
+        >>> app.singleton(DatabaseService)
+        >>> app.component(EmailService)
         
         Using decorators:
         

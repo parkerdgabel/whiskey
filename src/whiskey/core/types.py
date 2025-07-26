@@ -8,32 +8,44 @@ from typing import Protocol, runtime_checkable
 
 
 class Inject:
-    """Marker class for explicit dependency injection with Annotated.
+    """Legacy marker class for explicit dependency injection.
 
-    Used with typing.Annotated to mark parameters for injection:
+    DEPRECATED: Whiskey now uses automatic injection based on type hints.
+    This class is kept for backward compatibility only.
+
+    In modern Whiskey, you simply use type hints:
 
     Examples:
+        Old way (deprecated):
         >>> from typing import Annotated
-        >>>
         >>> @inject
         >>> def process(db: Annotated[Database, Inject()]):
         ...     return db.query()
+
+        New way (automatic):
+        >>> @inject
+        >>> def process(db: Database):  # Automatically injected!
+        ...     return db.query()
         >>>
         >>> @inject
-        >>> def handler(
-        ...     cache: Annotated[Cache, Inject(name="redis")],
-        ...     logger: Annotated[Logger, Inject(optional=True)]
-        >>> ):
-        ...     pass
+        >>> def handler(cache: Cache, user_id: int):
+        ...     # cache is auto-injected, user_id must be passed
+        ...     return cache.get(f"user:{user_id}")
     """
 
     def __init__(self, name: str = None, optional: bool = False):
         """Initialize injection marker.
 
         Args:
-            name: Optional name for named dependencies
-            optional: If True, None is returned if dependency not found
+            name: Optional name for named dependencies (deprecated)
+            optional: If True, None is returned if dependency not found (deprecated)
         """
+        import warnings
+        warnings.warn(
+            "Inject() is deprecated. Whiskey now uses automatic injection based on type hints.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.name = name
         self.optional = optional
 

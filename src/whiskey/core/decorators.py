@@ -61,11 +61,11 @@ def component(
         The registered class (for decorator chaining)
 
     Examples:
-        >>> @service
+        >>> @component
         >>> class DatabaseService:
         ...     pass
 
-        >>> @service(scope=Scope.SINGLETON, tags={'infrastructure'})
+        >>> @component(scope=Scope.SINGLETON, tags={'infrastructure'})
         >>> class CacheService:
         ...     pass
     """

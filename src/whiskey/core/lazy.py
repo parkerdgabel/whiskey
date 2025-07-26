@@ -47,15 +47,16 @@ class Lazy(Generic[T]):
         ...         # First access triggers initialization
         ...         return self._expensive.value.do_something()
 
-        Using Lazy with type annotations:
+        Using Lazy with automatic injection:
 
-        >>> from typing import Annotated
-        >>> from whiskey.core.decorators import Inject
-        >>>
         >>> class MyService:
-        ...     def __init__(self,
-        ...                  lazy_dep: Annotated[Lazy[Database], Inject()]):
+        ...     def __init__(self, lazy_dep: Lazy[Database]):
         ...         self._db = lazy_dep
+        ...         # Database is not initialized yet
+        ...     
+        ...     def query(self):
+        ...         # First access to .value triggers Database initialization
+        ...         return self._db.value.execute("SELECT * FROM users")
     """
 
     def __init__(
@@ -239,20 +240,20 @@ class LazyDescriptor(Generic[T]):
 def lazy_inject(service_type: type[T], name: str | None = None) -> Lazy[T]:
     """Create a lazy dependency for injection.
 
-    This is a convenience function for use with dependency injection:
+    This is a convenience function for creating lazy dependencies,
+    particularly useful for default parameter values:
 
     Example:
-        >>> from typing import Annotated
-        >>> from whiskey.core.decorators import Inject
-        >>>
         >>> class MyService:
         ...     def __init__(self,
-        ...                  # Regular injection
-        ...                  db: Annotated[Database, Inject()],
-        ...                  # Lazy injection
-        ...                  cache: Annotated[Cache, Inject()] = lazy_inject(Cache)):
+        ...                  db: Database,  # Regular automatic injection
+        ...                  cache: Lazy[Cache] = None):  # Optional lazy dependency
         ...         self.db = db
-        ...         self.cache = cache
+        ...         self.cache = cache or lazy_inject(Cache)
+        ...     
+        ...     def get_cached(self, key: str):
+        ...         # Cache is only initialized when first accessed
+        ...         return self.cache.value.get(key)
 
     Args:
         service_type: The type to lazily resolve
