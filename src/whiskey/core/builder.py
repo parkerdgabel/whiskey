@@ -136,7 +136,6 @@ class WhiskeyBuilder:
         self._startup_callbacks: list[Callable[[], None]] = []
         self._shutdown_callbacks: list[Callable[[], None]] = []
         self._error_handlers: dict[Type[Exception], Callable] = {}
-        self._middleware: list[Callable] = []
 
     # Service registration methods
 
@@ -274,17 +273,6 @@ class WhiskeyBuilder:
         self._error_handlers[exception_type] = handler
         return self
 
-    def middleware(self, middleware_func: Callable) -> WhiskeyBuilder:
-        """Add middleware for component resolution.
-
-        Args:
-            middleware_func: Middleware function
-
-        Returns:
-            Self for chaining
-        """
-        self._middleware.append(middleware_func)
-        return self
 
     # Environment and conditions
 
@@ -337,7 +325,6 @@ class WhiskeyBuilder:
         self._container._startup_callbacks = self._startup_callbacks
         self._container._shutdown_callbacks = self._shutdown_callbacks
         self._container._error_handlers = self._error_handlers
-        self._container._middleware = self._middleware
 
         return self._container
 
