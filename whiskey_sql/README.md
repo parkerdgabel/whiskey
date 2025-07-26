@@ -394,15 +394,20 @@ app.configure_database(
 - Full feature support including LISTEN/NOTIFY
 - Array types, JSON/JSONB, custom types
 - Advisory locks, prepared statements
+- Native :param syntax converted to $1, $2
 
 ### MySQL (aiomysql)
 - Core features supported
 - JSON support, prepared statements
+- Native :param syntax
 
 ### SQLite (aiosqlite)
-- Development and testing
+- Perfect for development and testing
 - In-memory database support
-- Limited concurrent connections
+- File-based persistence
+- Native :param syntax support
+- Automatic foreign key enforcement
+- JSON1 extension support (SQLite 3.38+)
 
 ## Best Practices
 

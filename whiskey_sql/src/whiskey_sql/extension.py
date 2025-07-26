@@ -91,8 +91,7 @@ def _configure_database(
     # Create database factory
     async def database_factory() -> Database:
         """Factory function to create database instance."""
-        pool = await create_database_pool(**config)
-        return Database(pool, dialect=dialect)
+        return await create_database_pool(**config)
     
     # Register as singleton
     if name:
