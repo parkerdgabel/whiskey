@@ -11,7 +11,8 @@ ai = ["whiskey-ai"]
 web = ["whiskey-asgi"]
 cli = ["whiskey-cli"]
 config = ["whiskey-config"]
-all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli", "whiskey-config"]
+jobs = ["whiskey-jobs"]
+all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli", "whiskey-config", "whiskey-jobs"]
 
 [tool.uv]
 dev-dependencies = [
@@ -37,6 +38,7 @@ whiskey-asgi = { workspace = true }
 whiskey-cli = { workspace = true }
 whiskey-ai = { workspace = true }
 whiskey-config = { workspace = true }
+whiskey-jobs = { workspace = true }
 
 [tool.ruff]
 line-length = 100
