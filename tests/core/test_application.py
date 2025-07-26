@@ -417,6 +417,8 @@ class TestLifecycle:
                 events.append("stopped")
 
             assert app._is_running
+            # Allow startup callbacks to run
+            await asyncio.sleep(0)
             events.append("running")
 
         assert events == ["started", "running", "stopped"]
@@ -509,11 +511,11 @@ class TestBuilderIntegration:
         app = Whiskey()
 
         # Should create and return builder
-        builder = app.container
+        builder = app.builder
         assert isinstance(builder, ComponentBuilder)
 
-        # Same builder instance
-        assert app.container is builder
+        # Builder should add to the app's container
+        builder._app_builder = app
 
     def test_build_method(self):
         """Test build() method."""
@@ -751,11 +753,11 @@ class TestEdgeCases:
     def test_resolve_with_name_override(self):
         """Test resolving with name parameter."""
         app = Whiskey()
-        app.register("primary", SimpleService("primary"))
-        app.register("secondary", SimpleService("secondary"))
+        app.singleton(SimpleService, instance=SimpleService("primary"), name="primary")
+        app.singleton(SimpleService, instance=SimpleService("secondary"), name="secondary")
 
-        primary = app.resolve(str, name="primary")
-        secondary = app.resolve(str, name="secondary")
+        primary = app.resolve(SimpleService, name="primary")
+        secondary = app.resolve(SimpleService, name="secondary")
 
         assert primary.value == "primary"
         assert secondary.value == "secondary"

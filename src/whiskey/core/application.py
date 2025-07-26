@@ -113,6 +113,8 @@ class Whiskey:
             provider: Service provider
             **kwargs: Additional registration options
         """
+        if provider is None:
+            raise ValueError("Provider cannot be None")
         self.container.register(key, provider, **kwargs)
     
     def transient(self, key: str | type, provider: Any = None, **kwargs) -> None:
@@ -324,24 +326,14 @@ class Whiskey:
     def on_startup(self):
         """Decorator to register startup callbacks."""
         def decorator(func: Callable) -> Callable:
-            self._hooks.setdefault("before_startup", []).append(func)
-            # If app is already running, execute immediately
+            # Add to startup callbacks
+            self._startup_callbacks.append(func)
+            # If app is already running, execute immediately  
             if self._is_running:
                 if asyncio.iscoroutinefunction(func):
-                    # Get the current task if any
-                    try:
-                        current_task = asyncio.current_task()
-                    except RuntimeError:
-                        current_task = None
-                    
-                    if current_task:
-                        # Create task and track it
-                        task = asyncio.create_task(func())
-                        # Store for awaiting later
-                        self._hooks.setdefault("startup_tasks", []).append(task)
-                    else:
-                        # No current task, run synchronously
-                        asyncio.run(func())
+                    # Create a task for immediate execution
+                    task = asyncio.create_task(func())
+                    self._hooks.setdefault("startup_tasks", []).append(task)
                 else:
                     func()
             return func
@@ -351,7 +343,7 @@ class Whiskey:
     def on_shutdown(self):
         """Decorator to register shutdown callbacks."""
         def decorator(func: Callable) -> Callable:
-            self._hooks.setdefault("after_shutdown", []).append(func)
+            self._shutdown_callbacks.append(func)
             return func
         return decorator
     
@@ -419,22 +411,42 @@ class Whiskey:
         if self._is_running:
             return
 
-        self._is_running = True
-        
-        # Initialize all services that implement Initializable
-        for descriptor in self.container.registry.list_all():
-            # Get or create instance
-            instance = await self.container.resolve(descriptor.service_type)
-            # Initialize if it implements Initializable
-            if hasattr(instance, 'initialize') and callable(getattr(instance, 'initialize')):
-                await instance.initialize()
+        try:
+            self._is_running = True
+            
+            # Initialize all services that implement Initializable
+            for descriptor in self.container.registry.list_all():
+                # Get or create instance
+                instance = await self.container.resolve(descriptor.service_type)
+                # Initialize if it implements Initializable
+                if hasattr(instance, 'initialize') and callable(getattr(instance, 'initialize')):
+                    await instance.initialize()
 
-        # Run startup callbacks
-        for callback in self._startup_callbacks:
-            if asyncio.iscoroutinefunction(callback):
-                await callback()
-            else:
-                callback()
+            # Run startup callbacks
+            for callback in self._startup_callbacks:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback()
+                else:
+                    callback()
+            
+            # Start background tasks
+            if "tasks" in self._hooks:
+                for task_func in self._hooks["tasks"]:
+                    if hasattr(task_func, "_task_interval"):
+                        interval = task_func._task_interval
+                        if interval:
+                            # Create a periodic task
+                            async def run_periodic():
+                                while self._is_running:
+                                    await task_func()
+                                    await asyncio.sleep(interval)
+                            
+                            task = asyncio.create_task(run_periodic())
+                            self._hooks.setdefault("running_tasks", []).append(task)
+        except Exception:
+            # If startup fails, reset running state
+            self._is_running = False
+            raise
 
     async def shutdown(self) -> None:
         """Shutdown the application and run cleanup callbacks."""
@@ -442,6 +454,14 @@ class Whiskey:
             return
 
         self._is_running = False
+        
+        # Cancel running tasks
+        if "running_tasks" in self._hooks:
+            for task in self._hooks["running_tasks"]:
+                task.cancel()
+            # Wait for tasks to finish cancellation
+            await asyncio.gather(*self._hooks["running_tasks"], return_exceptions=True)
+            self._hooks["running_tasks"].clear()
 
         # Run shutdown callbacks
         for callback in reversed(self._shutdown_callbacks):
@@ -481,7 +501,8 @@ class Whiskey:
         await self.shutdown()
 
     async def emit(self, event: str, *args, **kwargs) -> None:
-        """Emit an event - basic implementation for testing."""
+        """Emit an event to all registered handlers."""
+        # Handle error events specially
         if event == "error" and args:
             error = args[0]
             # Check for specific error type first, then fallback to Exception
@@ -496,6 +517,22 @@ class Whiskey:
                     await handler(error)
                 else:
                     handler(error)
+        
+        # Handle regular events
+        if event in self._hooks:
+            for handler in self._hooks[event]:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(*args, **kwargs)
+                else:
+                    handler(*args, **kwargs)
+        
+        # Handle wildcard handlers
+        if "*" in self._hooks:
+            for handler in self._hooks["*"]:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(event, *args, **kwargs)
+                else:
+                    handler(event, *args, **kwargs)
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -594,10 +631,24 @@ class Whiskey:
         self._middleware.append(middleware)
         return self
     
-    def on(self, event: str, handler: Callable) -> Whiskey:
-        """Register an event handler."""
-        self._hooks.setdefault(event, []).append(handler)
-        return self
+    def on(self, event: str, handler: Callable = None) -> Union[Whiskey, Callable]:
+        """Register an event handler.
+        
+        Can be used as a method or decorator:
+            app.on("event", handler)
+            @app.on("event")
+            def handler(): ...
+        """
+        if handler is None:
+            # Used as decorator
+            def decorator(func: Callable) -> Callable:
+                self._hooks.setdefault(event, []).append(func)
+                return func
+            return decorator
+        else:
+            # Used as method
+            self._hooks.setdefault(event, []).append(handler)
+            return self
     
     @property
     def hook(self):
@@ -619,15 +670,20 @@ class Whiskey:
         setattr(self, name, decorator)
         return self
     
-    def add_singleton(self, key: str | type, provider: Any = None, **kwargs) -> ComponentBuilder:
-        """Add a singleton using builder pattern."""
-        from .builder import ComponentBuilder
-        builder = ComponentBuilder(self, key, provider or key)
-        builder.as_singleton()
-        for k, v in kwargs.items():
-            if hasattr(builder, f"_{k}"):
-                setattr(builder, f"_{k}", v)
-        return builder
+    def add_singleton(self, key: str | type, provider: Any = None, *, instance: Any = None, **kwargs) -> None:
+        """Add a singleton service."""
+        # If instance is provided as keyword arg, use it as provider
+        if instance is not None:
+            provider = instance
+        elif provider is None and isinstance(key, type):
+            provider = key
+        self.container.register(key, provider, scope=Scope.SINGLETON, **kwargs)
+    
+    def add_transient(self, key: str | type, provider: Any = None, **kwargs) -> None:
+        """Add a transient service."""
+        if provider is None and isinstance(key, type):
+            provider = key
+        self.container.register(key, provider, scope=Scope.TRANSIENT, **kwargs)
     
     @property
     def builder(self) -> ComponentBuilder:
