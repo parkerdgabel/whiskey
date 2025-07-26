@@ -1,8 +1,9 @@
 """Comprehensive tests for the discovery module."""
 
+import pkgutil
 import sys
 from types import ModuleType
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -144,7 +145,7 @@ class TestComponentDiscoverer:
         GoodClass.__module__ = "test_module"
 
         # Set up dir() to return our attributes
-        mock_module.__dir__ = lambda: ["BadProp", "GoodClass"]
+        mock_module.__dir__ = lambda self: ["BadProp", "GoodClass"]
 
         with patch("importlib.import_module", return_value=mock_module):
             # Should skip bad property and find good class
@@ -211,11 +212,10 @@ class TestComponentDiscoverer:
                 "mypackage.submodule": sub_module,
             }.get(name)
 
-            with patch("whiskey.core.discovery.pkgutil.walk_packages") as mock_walk:
+            with patch.object(pkgutil, "walk_packages") as mock_walk:
                 # Return module info for submodule
-                module_info = Mock()
-                module_info.name = "submodule"
-                mock_walk.return_value = [(None, "submodule", False)]
+                # walk_packages returns (importer, modname, ispkg) tuples
+                mock_walk.return_value = [(None, "mypackage.submodule", False)]
 
                 components = discoverer.discover_package("mypackage", recursive=True)
 

@@ -165,8 +165,8 @@ class TestScopeType:
         from whiskey.core.registry import Scope as RegistryScope
         
         # ScopeType constants should match RegistryScope values
-        assert ScopeType.SINGLETON == RegistryScope.SINGLETON.value
-        assert ScopeType.TRANSIENT == RegistryScope.TRANSIENT.value
+        assert RegistryScope.SINGLETON.value == ScopeType.SINGLETON
+        assert RegistryScope.TRANSIENT.value == ScopeType.TRANSIENT
 
 
 class TestContextVarScope:
@@ -396,8 +396,9 @@ class TestWhiskeyScopeIntegration:
 
         # Scoped services require an active scope to be resolved
         # Without scope management exposed in Container, we can't resolve scoped services
-        from whiskey.core.errors import ScopeError
         import pytest
+
+        from whiskey.core.errors import ScopeError
         
         with pytest.raises(ScopeError, match="Scope 'default' is not active"):
             app.resolve(SessionService)

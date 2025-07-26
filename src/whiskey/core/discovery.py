@@ -68,7 +68,7 @@ class ComponentDiscoverer:
 
     def discover_module(
         self,
-        module_name: str,
+        module_name: str | Any,
         *,
         predicate: Callable[[type], bool] | None = None,
         decorator_name: str | None = None,
@@ -79,7 +79,7 @@ class ComponentDiscoverer:
         Only classes defined in the module (not imported) are considered.
 
         Args:
-            module_name: Fully qualified module name (e.g., "myapp.services")
+            module_name: Fully qualified module name (e.g., "myapp.services") or module object
             predicate: Optional function to filter classes.
                       Should return True for classes to include.
             decorator_name: Optional attribute name to check for.
@@ -104,15 +104,24 @@ class ComponentDiscoverer:
             ...     decorator_name="_is_entity"
             ... )
         """
-        try:
-            module = importlib.import_module(module_name)
-        except ImportError:
-            return set()
+        if isinstance(module_name, str):
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError:
+                return set()
+        else:
+            # Assume it's a module object
+            module = module_name
+            module_name = module.__name__
 
         discovered = set()
 
         for name in dir(module):
-            obj = getattr(module, name)
+            try:
+                obj = getattr(module, name)
+            except Exception:
+                # Skip attributes that raise exceptions when accessed
+                continue
 
             # Skip non-classes
             if not inspect.isclass(obj):
@@ -186,16 +195,20 @@ class ComponentDiscoverer:
         self,
         components: set[type],
         *,
-        scope: str = "transient",
+        scope: str | Any = "transient",
         condition: Callable[[type], bool] | None = None,
-    ) -> None:
+    ) -> set[type]:
         """Auto-register discovered components.
 
         Args:
             components: Components to register
-            scope: Default scope for registration
+            scope: Default scope for registration (string or Scope enum)
             condition: Optional condition to check before registering
+        
+        Returns:
+            Set of components that were actually registered
         """
+        registered = set()
         for component in components:
             if condition and not condition(component):
                 continue
@@ -204,8 +217,21 @@ class ComponentDiscoverer:
             if component in self.container:
                 continue
 
-            # Auto-register with default scope
-            self.container.register(component, scope=scope)
+            # Auto-register with default scope - container.register expects (key, provider)
+            from .registry import Scope
+            if isinstance(scope, Scope):
+                scope_enum = scope
+            elif scope == "singleton":
+                scope_enum = Scope.SINGLETON
+            elif scope == "scoped":
+                scope_enum = Scope.SCOPED
+            else:
+                scope_enum = Scope.TRANSIENT
+                
+            self.container.register(component, component, scope=scope_enum)
+            registered.add(component)
+        
+        return registered
 
 
 class ContainerInspector:
@@ -255,7 +281,7 @@ class ContainerInspector:
         interface: type | None = None,
         scope: str | None = None,
         tags: set[str] | None = None,
-    ) -> list[type]:
+    ) -> dict[str, Any]:
         """List registered services with optional filters.
 
         Args:
@@ -264,7 +290,7 @@ class ContainerInspector:
             tags: Only include services with these tags (requires metadata)
 
         Returns:
-            List of matching service types
+            Dict of service information
 
         Examples:
             >>> # All singletons
@@ -279,20 +305,30 @@ class ContainerInspector:
             ...     scope="singleton"
             ... )
         """
-        services = []
+        services = {}
 
-        for service_type in self.container.keys():
+        for descriptor in self.container.registry.list_all():
+            service_type = descriptor.service_type
+            
             # Filter by interface
-            if interface and not issubclass(service_type, interface):
+            if interface and inspect.isclass(service_type) and not issubclass(service_type, interface):
                 continue
 
             # Filter by scope
             if scope:
-                service_scope = self.container._service_scopes.get(service_type)
-                if service_scope != scope:
+                if (scope == "singleton" and descriptor.scope.value != "singleton") or (scope == "transient" and descriptor.scope.value != "transient") or (scope == "scoped" and descriptor.scope.value != "scoped"):
                     continue
 
-            services.append(service_type)
+            # Filter by tags
+            if tags and not descriptor.has_any_tag(tags):
+                continue
+
+            services[descriptor.key] = {
+                "type": service_type,
+                "scope": descriptor.scope.value,
+                "tags": list(descriptor.tags),
+                "registered": True
+            }
 
         return services
 
@@ -329,38 +365,10 @@ class ContainerInspector:
             service_type: Service type to check
 
         Returns:
-            True if service and all its dependencies can be resolved
+            True if service is explicitly registered
         """
-        if service_type in self.container:
-            return True
-
-        # Check if we can create it
-        if not inspect.isclass(service_type):
-            return False
-
-        # Check all dependencies
-        deps = self.get_dependencies(service_type)
-        for dep_type in deps.values():
-            # Handle Annotated types
-            from typing import get_args, get_origin
-
-            origin = get_origin(dep_type)
-            if origin is not None:
-                try:
-                    from typing import Annotated
-
-                    if origin is Annotated:
-                        # Get the actual type from Annotated
-                        args = get_args(dep_type)
-                        if args:
-                            dep_type = args[0]
-                except ImportError:
-                    pass
-
-            if isinstance(dep_type, type) and not self.can_resolve(dep_type):
-                return False
-
-        return True
+        # Only return True for explicitly registered services
+        return service_type in self.container
 
     def resolution_report(self, service_type: type) -> dict[str, Any]:
         """Generate a detailed resolution report.
@@ -371,12 +379,22 @@ class ContainerInspector:
         Returns:
             Dict with resolution details
         """
+        # Try to get service descriptor to determine scope
+        scope = "transient"  # default
+        try:
+            descriptor = self.container.registry.get(service_type)
+            scope = descriptor.scope.value
+        except KeyError:
+            pass
+            
         report = {
             "type": service_type,
             "registered": service_type in self.container,
             "can_resolve": self.can_resolve(service_type),
             "dependencies": {},
-            "scope": self.container._service_scopes.get(service_type, "transient"),
+            "missing_dependencies": [],
+            "resolution_path": [],
+            "scope": scope,
         }
 
         deps = self.get_dependencies(service_type)
@@ -397,16 +415,19 @@ class ContainerInspector:
                 except ImportError:
                     pass
 
+            can_resolve_dep = self.can_resolve(actual_type) if isinstance(actual_type, type) else False
+            
             report["dependencies"][param_name] = {
                 "type": dep_type,
                 "actual_type": actual_type,
                 "registered": actual_type in self.container
                 if isinstance(actual_type, type)
                 else False,
-                "can_resolve": self.can_resolve(actual_type)
-                if isinstance(actual_type, type)
-                else False,
+                "can_resolve": can_resolve_dep,
             }
+            
+            if not can_resolve_dep:
+                report["missing_dependencies"].append(param_name)
 
         return report
 
@@ -418,7 +439,8 @@ class ContainerInspector:
         """
         graph = {}
 
-        for service_type in self.container.keys():
+        for descriptor in self.container.registry.list_all():
+            service_type = descriptor.service_type
             deps = self.get_dependencies(service_type)
             graph[service_type] = {
                 dep_type for dep_type in deps.values() if isinstance(dep_type, type)
@@ -430,7 +452,7 @@ class ContainerInspector:
 def discover_components(
     module_or_package: str | Any,
     *,
-    container: Container | None = None,
+    container: Container,
     auto_register: bool = False,
     **kwargs,
 ) -> set[type]:
@@ -438,18 +460,13 @@ def discover_components(
 
     Args:
         module_or_package: Module or package to scan
-        container: Container to use (creates new if None)
+        container: Container to use for discovery and registration
         auto_register: Whether to auto-register found components
         **kwargs: Additional arguments for discovery
 
     Returns:
         Set of discovered components
     """
-    if container is None:
-        from whiskey.core.decorators import get_default_container
-
-        container = get_default_container()
-
     discoverer = ComponentDiscoverer(container)
 
     # Determine if it's a package or module
@@ -465,7 +482,8 @@ def discover_components(
         if hasattr(module_or_package, "__path__"):
             components = discoverer.discover_package(module_or_package, **kwargs)
         else:
-            components = discoverer.discover_module(module_or_package.__name__, **kwargs)
+            # Pass the module object directly
+            components = discoverer.discover_module(module_or_package, **kwargs)
 
     if auto_register:
         discoverer.auto_register(components)

@@ -79,6 +79,11 @@ class Whiskey:
             self._middleware = []
 
         self._is_running = False
+        # Add hooks for lifecycle compatibility
+        self._hooks = {
+            "before_startup": self._startup_callbacks,
+            "after_shutdown": self._shutdown_callbacks
+        }
 
     @classmethod
     def builder(cls) -> WhiskeyBuilder:
@@ -318,6 +323,32 @@ class Whiskey:
         # Clear container caches
         self.container.clear_caches()
 
+    # Aliases for compatibility
+    async def start(self) -> None:
+        """Alias for startup."""
+        await self.startup()
+
+    async def stop(self) -> None:
+        """Alias for shutdown."""
+        await self.shutdown()
+
+    async def emit(self, event: str, *args, **kwargs) -> None:
+        """Emit an event - basic implementation for testing."""
+        if event == "error" and args:
+            error = args[0]
+            # Check for specific error type first, then fallback to Exception
+            handler = None
+            if type(error) in self._error_handlers:
+                handler = self._error_handlers[type(error)]
+            elif Exception in self._error_handlers:
+                handler = self._error_handlers[Exception]
+            
+            if handler:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(error)
+                else:
+                    handler(error)
+
     async def __aenter__(self):
         """Async context manager entry."""
         await self.startup()
@@ -381,6 +412,22 @@ class ConditionalDecoratorHelper:
     def __init__(self, app: Whiskey, condition: Callable[[], bool]):
         self.app = app
         self.condition = condition
+
+    def __call__(self, target=None, **kwargs):
+        """Make the helper callable as a decorator."""
+        kwargs["condition"] = self.condition
+        
+        # If target is already registered, preserve its scope and other attributes
+        if target in self.app.container:
+            try:
+                descriptor = self.app.container.registry.get(target)
+                kwargs.setdefault("scope", descriptor.scope)
+                kwargs.setdefault("tags", descriptor.tags)
+                kwargs.setdefault("lazy", descriptor.lazy)
+            except KeyError:
+                pass
+        
+        return self.app.component(target, **kwargs)
 
     def service(
         self, cls: Type[T] = None, **kwargs

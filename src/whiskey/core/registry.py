@@ -181,9 +181,9 @@ class ServiceRegistry:
         # Normalize key to string
         string_key = self._normalize_key(key, name)
 
-        # Check for duplicate registration
-        if string_key in self._descriptors:
-            raise RegistrationError(f"Service '{string_key}' is already registered")
+        # Allow overwriting existing registrations (last registration wins)
+        # if string_key in self._descriptors:
+        #     raise RegistrationError(f"Service '{string_key}' is already registered")
 
         # Determine service type
         if service_type is None:

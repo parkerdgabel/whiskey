@@ -116,14 +116,14 @@ class TestComponentDecorators:
     def test_component_decorator_with_params(self):
         """Test component decorator with parameters."""
 
-        @component(name="custom_service", scope=Scope.SINGLETON)
+        @component(key="custom_service", scope=Scope.SINGLETON)
         class MyService:
             def __init__(self):
                 self.id = id(self)
 
         app = get_app()
 
-        # Should be registered with custom name
+        # Should be registered with custom key
         instance1 = app.resolve("custom_service")
         instance2 = app.resolve("custom_service")
 
@@ -197,9 +197,10 @@ class TestComponentDecorators:
         app = get_app()
 
         # Should be registered with scope
-        # Note: actual scope behavior would require scope to be active
-        instance = app.resolve(RequestScopedService)
-        assert isinstance(instance, RequestScopedService)
+        # Note: trying to resolve scoped service without active scope should fail
+        from whiskey.core.errors import ScopeError
+        with pytest.raises(ScopeError):
+            app.resolve(RequestScopedService)
 
     def test_provide_alias(self):
         """Test that provide is an alias for component."""
@@ -425,7 +426,7 @@ class TestConditionalDecorators:
             pass
 
         # Mock debug mode
-        with patch("whiskey.core.decorators.os.environ.get", return_value="true"):
+        with patch.dict(os.environ, {"DEBUG": "true"}):
             app = get_app()
             instance = app.resolve(DebugService)
             assert isinstance(instance, DebugService)
@@ -439,7 +440,7 @@ class TestConditionalDecorators:
             pass
 
         # Mock production environment
-        with patch("whiskey.core.decorators.os.environ.get", return_value="production"):
+        with patch.dict(os.environ, {"ENV": "production"}):
             app = get_app()
             instance = app.resolve(ProductionService)
             assert isinstance(instance, ProductionService)
@@ -479,9 +480,9 @@ class TestResolutionFunctions:
         assert instance.value == "async_resolved"
 
     def test_resolve_with_name(self):
-        """Test resolution by name."""
+        """Test resolution by key."""
 
-        @component(name="named_service")
+        @component(key="named_service")
         class Service:
             pass
 

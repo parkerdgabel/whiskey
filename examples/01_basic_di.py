@@ -12,9 +12,9 @@ Run this example:
 """
 
 import asyncio
-
 from typing import Annotated
-from whiskey import Container, inject, Inject, provide, singleton
+
+from whiskey import Container, Inject, inject, provide, singleton
 
 # Step 1: Define Your Services
 # ============================
