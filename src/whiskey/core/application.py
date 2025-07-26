@@ -494,6 +494,162 @@ class Whiskey:
     async def stop(self) -> None:
         """Alias for shutdown."""
         await self.shutdown()
+    
+    # Standardized run API
+    
+    def run(self, main: Callable = None, *, mode: str = "auto", **kwargs) -> Any:
+        """Execute a callable within the Whiskey IoC context.
+        
+        This is the standardized way to run programs with Whiskey. It handles:
+        - Application lifecycle (startup/shutdown)
+        - Dependency injection for the main callable
+        - Async/sync execution based on the callable
+        - Extension-specific runners (CLI, ASGI, etc.)
+        
+        Args:
+            main: The main callable to execute. If None, will attempt to find
+                  an appropriate runner based on registered extensions.
+            mode: Execution mode - "auto", "sync", or "async". Auto detects
+                  based on the callable.
+            **kwargs: Additional arguments passed to the main callable or runner.
+            
+        Returns:
+            The result of executing the main callable.
+            
+        Examples:
+            # Run a simple function
+            app.run(lambda: print("Hello"))
+            
+            # Run an async function with DI
+            @inject
+            async def main(db: Database):
+                await db.connect()
+                
+            app.run(main)
+            
+            # Let extensions handle execution
+            app.use(cli_extension)
+            app.run()  # Will run CLI
+        """
+        # Determine execution mode
+        if mode == "auto":
+            if main is not None:
+                mode = "async" if asyncio.iscoroutinefunction(main) else "sync"
+            else:
+                # Check for registered runners
+                runners = self._find_runners()
+                if runners:
+                    # Use the first available runner
+                    return runners[0](**kwargs)
+                else:
+                    raise RuntimeError("No main callable provided and no runners found")
+        
+        # Execute with lifecycle management
+        if mode == "async":
+            try:
+                # Check if we're already in an event loop (e.g., pytest-asyncio)
+                loop = asyncio.get_running_loop()
+                # We're in a loop, schedule as a task
+                return loop.run_until_complete(self._run_async(main, **kwargs))
+            except RuntimeError:
+                # No loop, create one
+                return asyncio.run(self._run_async(main, **kwargs))
+        else:
+            return self._run_sync(main, **kwargs)
+    
+    async def _run_async(self, main: Callable, **kwargs) -> Any:
+        """Run an async callable with lifecycle management."""
+        async with self:
+            if main is None:
+                # Just run the application until interrupted
+                try:
+                    await asyncio.Event().wait()
+                except KeyboardInterrupt:
+                    pass
+                return None
+            
+            # Execute the main callable with DI
+            return await self.call_async(main, **kwargs)
+    
+    def _run_sync(self, main: Callable, **kwargs) -> Any:
+        """Run a sync callable with lifecycle management."""
+        async def wrapper():
+            async with self:
+                if main is None:
+                    return None
+                # Handle both sync and async functions
+                if asyncio.iscoroutinefunction(main):
+                    # It's an async function, await it
+                    return await self.call_async(main, **kwargs)
+                elif hasattr(main, '__wrapped__') or self._needs_injection(main):
+                    # Sync function that needs injection
+                    return await self.call_async(main, **kwargs)
+                else:
+                    # Plain sync function, just call it
+                    return main(**kwargs)
+        
+        try:
+            # Check if we're already in an event loop
+            loop = asyncio.get_running_loop()
+            # We're in a loop, schedule as a task
+            return loop.run_until_complete(wrapper())
+        except RuntimeError:
+            # No loop, create one
+            return asyncio.run(wrapper())
+    
+    def _needs_injection(self, func: Callable) -> bool:
+        """Check if a function might need dependency injection."""
+        import inspect
+        if not callable(func):
+            return False
+        
+        try:
+            sig = inspect.signature(func)
+            # Check if any parameters have type annotations that might be injectable
+            for param in sig.parameters.values():
+                if param.annotation != param.empty and param.annotation not in (str, int, float, bool, list, dict, tuple, set):
+                    # Has a complex type annotation, might need injection
+                    return True
+            return False
+        except:
+            return False
+    
+    def _find_runners(self) -> List[Callable]:
+        """Find available runners from extensions."""
+        runners = []
+        
+        # Check for known runner methods added by extensions
+        runner_attrs = ['run_cli', 'run_asgi', 'run_worker', 'run_scheduler']
+        for attr in runner_attrs:
+            if hasattr(self, attr):
+                runners.append(getattr(self, attr))
+        
+        # Check for custom runners registered via hooks
+        if 'runners' in self._hooks:
+            runners.extend(self._hooks['runners'])
+        
+        return runners
+    
+    def register_runner(self, name: str, runner: Callable) -> None:
+        """Register a custom runner.
+        
+        Extensions can use this to register their own runners that will be
+        available via app.run() when no main callable is provided.
+        
+        Args:
+            name: Name of the runner (e.g., "cli", "asgi")
+            runner: Callable that runs the application
+            
+        Example:
+            def my_runner(**kwargs):
+                # Custom runner logic
+                pass
+                
+            app.register_runner("custom", my_runner)
+        """
+        self._hooks.setdefault('runners', []).append(runner)
+        # Also set as attribute for direct access
+        setattr(self, f'run_{name}', runner)
 
     async def emit(self, event: str, *args, **kwargs) -> None:
         """Emit an event to all registered handlers."""
@@ -541,6 +697,22 @@ class Whiskey:
             await asyncio.gather(*self._hooks["startup_tasks"])
             self._hooks["startup_tasks"].clear()
         await self.shutdown()
+    
+    @property
+    def lifespan(self):
+        """Context manager for application lifecycle.
+        
+        Can be used in both sync and async contexts:
+        
+        async with app.lifespan():
+            # Async context
+            await app.resolve(Service)
+            
+        with app.lifespan():
+            # Sync context (requires no running event loop)
+            app.resolve_sync(Service)
+        """
+        return self
     
     def __enter__(self):
         """Sync context manager entry."""

@@ -1093,7 +1093,11 @@ class Container:
             raise ResolutionError(f"Failed to call {func_name}: {e}", func_name, e)
 
     def call_sync(self, func: Callable, *args, **kwargs) -> Any:
-        """Synchronous version of call()."""
+        """Synchronous version of call().
+        
+        Note: This method should only be called when there's no event loop running.
+        In async contexts, use call() directly.
+        """
         return asyncio.run(self.call(func, *args, **kwargs))
 
     async def invoke(self, func: Callable, **overrides) -> Any:
