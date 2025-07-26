@@ -74,11 +74,7 @@ inspector = container.inspect()
 services = inspector.list_services()
 ```
 
-##### `enter_scope(name: str) -> Scope | None`
-Enter a named scope (Note: Container scope management is limited).
-
-##### `exit_scope(name: str) -> None`
-Exit a named scope (Note: Container scope management is limited).
+Note: Scope management methods (`enter_scope`, `exit_scope`) have been moved to the test compatibility module (`whiskey.core.testing`). For production use, manage scopes through the Application class or custom scope managers.
 
 ### Whiskey (Application)
 
@@ -110,14 +106,7 @@ class UserService:
 app.component(UserService, scope="singleton")
 ```
 
-##### `provider(cls: type | None = None, **kwargs)`
-Alias for component - registers a provider service.
-
-##### `managed(cls: type | None = None, **kwargs)`
-Alias for component - registers a managed service.
-
-##### `system(cls: type | None = None, **kwargs)`
-Alias for component - registers a system service.
+Note: The decorator aliases `provider`, `managed`, and `system` have been removed for a cleaner API. Use `@app.component` for transient services and `@app.singleton` for singleton services.
 
 #### Lifecycle Management
 

@@ -153,10 +153,10 @@ async def main():
 
     container = Container()
 
-    # Fluent registration with method chaining
-    container.add(Database).build()
-    container.add_singleton(Logger).build()
-    container.add(UserService).tagged("business").build()
+    # Direct registration (builder pattern removed for cleaner API)
+    container.register(Database)
+    container.singleton(Logger)
+    container.register(UserService, tags={"business"})
 
     # Factory functions
     def create_configured_database() -> Database:

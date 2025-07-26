@@ -317,3 +317,98 @@ If you encounter issues during migration:
 3. Open an issue on GitHub with a minimal reproduction
 
 Happy migrating! 🚀
+
+---
+
+# API Simplification Migration Guide
+
+This section covers the API simplification changes made to make Whiskey more Pythonic.
+
+## Removed Features
+
+### 1. Container Builder Pattern
+
+**Old:**
+```python
+container.add(Service).as_singleton().tagged("core").build()
+container.add_singleton(Database).build()
+```
+
+**New:**
+```python
+container.singleton(Service, tags={"core"})
+container.singleton(Database)
+```
+
+### 2. Redundant Registration Methods
+
+**Old:**
+```python
+container.register_singleton(Service)
+container.register_factory(Service, factory_func)
+container.add_services(db=Database, cache=Cache)
+```
+
+**New:**
+```python
+container.singleton(Service)
+container.factory(Service, factory_func)
+container.services(db=Database, cache=Cache)
+```
+
+### 3. Application Decorator Aliases
+
+**Old:**
+```python
+@app.provider  # Alias for @app.component
+class Service1: pass
+
+@app.managed   # Alias for @app.component
+class Service2: pass
+
+@app.system    # Alias for @app.singleton
+class Service3: pass
+```
+
+**New:**
+```python
+@app.component  # For transient services
+class Service1: pass
+
+@app.component  # Same decorator
+class Service2: pass
+
+@app.singleton  # For singleton services
+class Service3: pass
+```
+
+### 4. Test-Specific Methods
+
+The following methods have been moved to `whiskey.core.testing`:
+- `container.enter_scope()`
+- `container.exit_scope()`
+- `container.on_startup()`
+- `container.on_shutdown()`
+
+**For tests:**
+```python
+from whiskey.core.testing import add_test_compatibility_methods
+
+container = Container()
+add_test_compatibility_methods(container)
+# Now you can use enter_scope, etc.
+```
+
+## Migration Steps
+
+1. **Remove builder chains**: Replace `.add().build()` with direct registration
+2. **Update decorator aliases**: Replace `@app.provider`, `@app.managed`, `@app.system` with `@app.component` or `@app.singleton`
+3. **Use new method names**: `add_services` → `services`, `add_singleton` → `singleton`
+4. **Update tests**: Add test compatibility methods where needed
+
+## Benefits
+
+- **Cleaner API**: One obvious way to do things
+- **Less confusion**: No multiple aliases for the same functionality
+- **More Pythonic**: Follows Python's design principles
+- **Easier to learn**: Fewer concepts to understand

@@ -89,8 +89,8 @@ async def demonstrate_singleton_vs_transient():
     container = Container()
 
     # Register with explicit scopes
-    container.add_singleton(DatabaseConnection, DatabaseConnection).build()
-    container.add(UserRepository, UserRepository).build()  # Transient by default
+    container.singleton(DatabaseConnection)
+    container.register(UserRepository)  # Transient by default
 
     print("\nResolving services multiple times...")
 
@@ -119,9 +119,9 @@ async def demonstrate_scoped_services():
     container = Container()
 
     # Register services with different scopes
-    container.add_singleton(DatabaseConnection, DatabaseConnection).build()
-    container.add_scoped(RequestContext, RequestContext, "request").build()
-    container.add(UserService, UserService).build()
+    container.singleton(DatabaseConnection)
+    container.scoped(RequestContext, scope_name="request")
+    container.register(UserService)
 
     @asynccontextmanager
     async def request_scope():
@@ -211,9 +211,9 @@ async def demonstrate_performance_monitoring():
     from whiskey.core.performance import PerformanceMonitor
 
     container = Container()
-    container.add_singleton(DatabaseConnection, DatabaseConnection).build()
-    container.add(UserRepository, UserRepository).build()
-    container.add(UserService, UserService).build()
+    container.singleton(DatabaseConnection)
+    container.register(UserRepository)
+    container.register(UserService)
     container.add(RequestContext, RequestContext).build()
 
     # Monitor performance

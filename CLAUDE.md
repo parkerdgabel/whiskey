@@ -78,7 +78,7 @@ Simple decorators that work with the default container:
 ### Application (Rich IoC Container)
 
 The `Application` class (`core/application.py`) provides rich IoC features:
-1. Components registered via `@app.component` (or `provider`, `managed`, `system`)
+1. Components registered via `@app.component` (transient) or `@app.singleton`
 2. Rich lifecycle phases: configure → register → before_startup → startup → after_startup → ready
 3. Built-in event emitter with wildcard support
 4. Component metadata (priority, requires, provides, critical)
