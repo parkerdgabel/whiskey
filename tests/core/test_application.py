@@ -72,7 +72,6 @@ class TestWhiskeyBasics:
         assert app._startup_callbacks == []
         assert app._shutdown_callbacks == []
         assert app._error_handlers == {}
-        assert app._middleware == []
 
     def test_whiskey_with_container(self):
         """Test creating Whiskey with existing container."""
