@@ -170,10 +170,24 @@ def factory(
         func = key_or_func
         actual_key = key
 
-    target_app = app or _get_default_app()
-    return target_app.factory(
-        func, key=actual_key, name=name, scope=scope, tags=tags, condition=condition, lazy=lazy
-    )
+    def decorator(f: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        # The app.factory expects key as first positional argument
+        if actual_key is None:
+            raise ValueError("Factory decorator requires a key")
+        target_app.factory(
+            actual_key, f, name=name, scope=scope, tags=tags, condition=condition, lazy=lazy
+        )
+        return f
+    
+    if func is None:
+        # Called with parentheses or key: @factory(key=...) or @factory(ServiceClass)
+        return decorator
+    else:
+        # Called without parentheses: @factory - but this requires key parameter
+        if actual_key is None:
+            raise ValueError("Factory decorator requires a key")
+        return decorator(func)
 
 
 # Alias for backward compatibility
@@ -364,7 +378,7 @@ async def call(func: Callable, *args, app: Whiskey = None, **kwargs) -> Any:
         >>> result = await call(process_data, user_id=123)
     """
     target_app = app or _get_default_app()
-    return await target_app.call(func, *args, **kwargs)
+    return await target_app.call_async(func, *args, **kwargs)
 
 
 def call_sync(func: Callable, *args, app: Whiskey = None, **kwargs) -> Any:
@@ -378,11 +392,11 @@ def invoke(func: Callable, *, app: Whiskey = None, **overrides) -> Any:
     target_app = app or _get_default_app()
     # For sync functions, call synchronously
     if asyncio.iscoroutinefunction(func):
-        # For async functions, we need to return the coroutine
-        return target_app.invoke(func, **overrides)
+        # For async functions, return the coroutine from invoke_async
+        return target_app.invoke_async(func, **overrides)
     else:
-        # For sync functions, use call_sync
-        return target_app.call_sync(func, **overrides)
+        # For sync functions, use invoke (which is sync in the app)
+        return target_app.invoke(func, **overrides)
 
 
 def wrap_function(func: Callable, *, app: Whiskey = None) -> Callable:
