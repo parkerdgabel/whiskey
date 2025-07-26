@@ -92,8 +92,11 @@ class TestContainerBasics:
 
     @pytest.fixture
     def container(self):
-        """Create a test container."""
-        return Container()
+        """Create a test container with compatibility methods."""
+        from whiskey.core.testing import add_test_compatibility_methods
+        container = Container()
+        add_test_compatibility_methods(container)
+        return container
 
     @pytest.mark.unit
     def test_container_creation(self):
@@ -152,8 +155,11 @@ class TestRegistration:
 
     @pytest.fixture
     def container(self):
-        """Create a test container."""
-        return Container()
+        """Create a test container with compatibility methods."""
+        from whiskey.core.testing import add_test_compatibility_methods
+        container = Container()
+        add_test_compatibility_methods(container)
+        return container
 
     @pytest.mark.unit
     async def test_register_instance(self, container):
@@ -205,7 +211,7 @@ class TestRegistration:
     @pytest.mark.unit
     async def test_singleton(self, container):
         """Test singleton registration."""
-        container.register_singleton(SimpleService)
+        container.singleton(SimpleService)
 
         resolved1 = await container.resolve(SimpleService)
         resolved2 = await container.resolve(SimpleService)
@@ -216,7 +222,7 @@ class TestRegistration:
     async def test_singleton_instance(self, container):
         """Test singleton with instance."""
         instance = SimpleService()
-        container.register_singleton(SimpleService, instance=instance)
+        container.singleton(SimpleService, instance=instance)
 
         resolved = await container.resolve(SimpleService)
         assert resolved is instance
@@ -272,8 +278,11 @@ class TestResolution:
 
     @pytest.fixture
     def container(self):
-        """Create a test container."""
-        return Container()
+        """Create a test container with compatibility methods."""
+        from whiskey.core.testing import add_test_compatibility_methods
+        container = Container()
+        add_test_compatibility_methods(container)
+        return container
 
     @pytest.mark.unit
     async def test_dependency_injection(self, container):
@@ -289,7 +298,7 @@ class TestResolution:
     async def test_factory_with_dependencies(self, container):
         """Test factory with dependencies."""
         container[SimpleService] = SimpleService
-        container.register_factory(DependentService, factory_with_deps)
+        container.factory(DependentService, factory_with_deps)
 
         resolved = await container.resolve(DependentService)
         assert isinstance(resolved, DependentService)
@@ -374,8 +383,11 @@ class TestScopes:
 
     @pytest.fixture
     def container(self):
-        """Create a test container."""
-        return Container()
+        """Create a test container with compatibility methods."""
+        from whiskey.core.testing import add_test_compatibility_methods
+        container = Container()
+        add_test_compatibility_methods(container)
+        return container
 
     @pytest.mark.unit
     def test_enter_scope(self, container):
@@ -431,8 +443,11 @@ class TestLifecycle:
 
     @pytest.fixture
     def container(self):
-        """Create a test container."""
-        return Container()
+        """Create a test container with compatibility methods."""
+        from whiskey.core.testing import add_test_compatibility_methods
+        container = Container()
+        add_test_compatibility_methods(container)
+        return container
 
     @pytest.mark.unit
     async def test_initialize_service(self, container):
@@ -528,8 +543,11 @@ class TestCallMethods:
 
     @pytest.fixture
     def container(self):
-        """Create a test container."""
-        return Container()
+        """Create a test container with compatibility methods."""
+        from whiskey.core.testing import add_test_compatibility_methods
+        container = Container()
+        add_test_compatibility_methods(container)
+        return container
 
     @pytest.mark.unit
     def test_call_sync(self, container):
@@ -577,7 +595,7 @@ class TestCallMethods:
         def func(service: Service):
             return service.value
 
-        result = container.invoke_sync(func)
+        result = container.call_sync(func)
         assert result == 42
 
     @pytest.mark.unit
@@ -642,8 +660,11 @@ class TestEdgeCases:
 
     @pytest.fixture
     def container(self):
-        """Create a test container."""
-        return Container()
+        """Create a test container with compatibility methods."""
+        from whiskey.core.testing import add_test_compatibility_methods
+        container = Container()
+        add_test_compatibility_methods(container)
+        return container
 
     @pytest.mark.unit
     def test_circular_dependency_detection(self, container):

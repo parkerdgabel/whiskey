@@ -36,97 +36,7 @@ _current_container: ContextVar[Container] = ContextVar("current_container", defa
 _active_scopes: ContextVar[dict[str, dict[str, Any]]] = ContextVar("active_scopes", default={})
 
 
-class ContainerComponentBuilder:
-    """Fluent builder for individual service registration in a Container.
-
-    This provides a lighter-weight alternative to ApplicationBuilder for
-    simple service registration with fluent configuration.
-    """
-
-    def __init__(self, container: Container, key: str | type, provider: Any):
-        self._container = container
-        self._key = key
-        self._provider = provider
-        self._scope = Scope.TRANSIENT
-        self._name: str | None = None
-        self._tags: set[str] = set()
-        self._condition: Callable[[], bool] | None = None
-        self._lazy = False
-        self._metadata: dict[str, Any] = {}
-
-    def as_singleton(self) -> ContainerComponentBuilder:
-        """Configure service with singleton scope."""
-        self._scope = Scope.SINGLETON
-        return self
-
-    def as_scoped(self, scope_name: str = "default") -> ContainerComponentBuilder:
-        """Configure service with scoped lifecycle."""
-        self._scope = Scope.SCOPED
-        self._metadata["scope_name"] = scope_name
-        return self
-
-    def as_transient(self) -> ContainerComponentBuilder:
-        """Configure service with transient scope (default)."""
-        self._scope = Scope.TRANSIENT
-        return self
-
-    def named(self, name: str) -> ContainerComponentBuilder:
-        """Assign a name to this service."""
-        self._name = name
-        return self
-
-    def tagged(self, *tags: str) -> ContainerComponentBuilder:
-        """Add tags to this service."""
-        self._tags.update(tags)
-        return self
-
-    def when(self, condition: Callable[[], bool] | bool) -> ContainerComponentBuilder:
-        """Add a condition for registration."""
-        if isinstance(condition, bool):
-            self._condition = lambda: condition
-        else:
-            self._condition = condition
-        return self
-
-    def when_env(self, var_name: str, expected_value: str = None) -> ContainerComponentBuilder:
-        """Add environment-based condition."""
-        import os
-
-        if expected_value is None:
-            condition = lambda: var_name in os.environ
-        else:
-            condition = lambda: os.environ.get(var_name) == expected_value
-        return self.when(condition)
-
-    def when_debug(self) -> ContainerComponentBuilder:
-        """Register only in debug mode."""
-        import os
-
-        condition = lambda: os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
-        return self.when(condition)
-
-    def lazy(self, is_lazy: bool = True) -> ContainerComponentBuilder:
-        """Enable lazy resolution."""
-        self._lazy = is_lazy
-        return self
-
-    def with_metadata(self, **metadata) -> ContainerComponentBuilder:
-        """Add arbitrary metadata."""
-        self._metadata.update(metadata)
-        return self
-
-    def build(self) -> ServiceDescriptor:
-        """Complete the registration and return the descriptor."""
-        return self._container.register(
-            self._key,
-            self._provider,
-            scope=self._scope,
-            name=self._name,
-            condition=self._condition,
-            tags=self._tags,
-            lazy=self._lazy,
-            **self._metadata,
-        )
+# Removed ContainerComponentBuilder - using direct method chaining instead
 
 
 class Container:
@@ -826,85 +736,53 @@ class Container:
         except KeyError:
             return []
 
-    # Fluent registration builders
-
-    def add(
-        self, key: str | type, provider: Union[type, object, Callable] = None
-    ) -> ContainerComponentBuilder:
-        """Start fluent service registration.
-
-        Args:
-            key: Service key (string or type)
-            provider: Service implementation (defaults to key if it's a type)
-
-        Returns:
-            ContainerComponentBuilder for fluent configuration
-
-        Examples:
-            >>> container.add('database', DatabaseImpl).as_singleton().tagged('core')
-            >>> container.add(EmailService).as_scoped('request').when_debug()
-        """
-        if provider is None and isinstance(key, type):
-            provider = key
-
-        if provider is None:
-            raise ValueError(f"Provider required for service '{key}'")
-
-        return ContainerComponentBuilder(self, key, provider)
-
-    def add_singleton(
-        self, key: str | type, provider: Union[type, object, Callable] = None
-    ) -> ContainerComponentBuilder:
-        """Start fluent singleton registration."""
-        return self.add(key, provider).as_singleton()
-
-    def add_scoped(
-        self,
-        key: str | type,
-        provider: Union[type, object, Callable] = None,
-        scope_name: str = "default",
-    ) -> ContainerComponentBuilder:
-        """Start fluent scoped registration."""
-        return self.add(key, provider).as_scoped(scope_name)
-
-    def add_factory(self, key: str | type, factory_func: Callable) -> ContainerComponentBuilder:
-        """Start fluent factory registration."""
-        return self.add(key, factory_func)
-
-    def add_function(self, key: str | type, func: Callable) -> ContainerComponentBuilder:
-        """Register a function as a service (not a factory).
-
-        The function will be called once and its result cached according to scope.
-        This is different from add_factory where the function itself is the provider.
-        """
-        return self.add(key, func)
-
-    def add_instance(self, key: str | type, instance: Any) -> ContainerComponentBuilder:
-        """Start fluent instance registration (as singleton)."""
-        return self.add(key, instance).as_singleton()
-
     # Batch registration methods
 
-    def add_services(self, **services) -> None:
+    def services(self, **services) -> Container:
         """Register multiple services at once.
 
         Args:
             **services: Mapping of keys to providers
 
+        Returns:
+            Self for chaining
+
         Examples:
-            >>> container.add_services(
+            >>> container.services(
             ...     database=DatabaseImpl,
             ...     cache=CacheImpl,
             ...     email=EmailService
             ... )
         """
         for key, provider in services.items():
-            self.add(key, provider).build()
+            self.register(key, provider)
+        return self
 
-    def add_singletons(self, **services) -> None:
-        """Register multiple singleton services at once."""
+    def singletons(self, **services) -> Container:
+        """Register multiple singleton services at once.
+        
+        Args:
+            **services: Mapping of keys to providers
+            
+        Returns:
+            Self for chaining
+        """
         for key, provider in services.items():
-            self.add_singleton(key, provider).build()
+            self.singleton(key, provider)
+        return self
+    
+    def factory(self, key: str | type, factory_func: Callable, **kwargs) -> ServiceDescriptor:
+        """Register a factory function.
+        
+        Args:
+            key: Service key 
+            factory_func: Factory function that creates instances
+            **kwargs: Additional registration options
+            
+        Returns:
+            ServiceDescriptor
+        """
+        return self.register(key, factory_func, **kwargs)
 
     # Convenience registration methods
 
@@ -938,6 +816,7 @@ class Container:
         provider: Union[type, object, Callable] = None,
         *,
         name: str = None,
+        instance: Any = None,
         **kwargs,
     ) -> ServiceDescriptor:
         """Register a singleton service.
@@ -946,12 +825,16 @@ class Container:
             key: Service key (string or type)
             provider: Service implementation (defaults to key if it's a type)
             name: Optional name for named services
+            instance: Pre-created instance to use as singleton
             **kwargs: Additional registration options
 
         Returns:
             The created ServiceDescriptor
         """
-        if provider is None and isinstance(key, type):
+        # Handle instance parameter
+        if instance is not None:
+            provider = instance
+        elif provider is None and isinstance(key, type):
             provider = key
 
         return self.registry.register(key, provider, scope=Scope.SINGLETON, name=name, **kwargs)
@@ -989,9 +872,11 @@ class Container:
             **kwargs,
         )
 
-    # Convenience methods for test compatibility
+    # Deprecated methods for backward compatibility
     def register_singleton(self, key: str | type, provider: Union[type, object, Callable] = None, *, instance: Any = None, **kwargs) -> ServiceDescriptor:
-        """Register a singleton service (test compatibility method)."""
+        """Deprecated: Use singleton() instead."""
+        import warnings
+        warnings.warn("register_singleton is deprecated, use singleton() instead", DeprecationWarning, stacklevel=2)
         if instance is not None:
             return self.register(key, instance, scope=Scope.SINGLETON, **kwargs)
         if provider is None and isinstance(key, type):
@@ -999,11 +884,15 @@ class Container:
         return self.singleton(key, provider, **kwargs)
 
     def register_factory(self, key: str | type, factory_func: Callable, **kwargs) -> ServiceDescriptor:
-        """Register a factory function (test compatibility method)."""
+        """Deprecated: Use register() or factory() instead."""
+        import warnings
+        warnings.warn("register_factory is deprecated, use register() or factory() instead", DeprecationWarning, stacklevel=2)
         return self.register(key, factory_func, **kwargs)
 
     def invoke_sync(self, func: Callable, **overrides) -> Any:
-        """Invoke a function with dependency injection (synchronous)."""
+        """Deprecated: Use call_sync() instead."""
+        import warnings
+        warnings.warn("invoke_sync is deprecated, use call_sync() instead", DeprecationWarning, stacklevel=2)
         return self.call_sync(func, **overrides)
 
     # Context management
@@ -1227,105 +1116,11 @@ class Container:
         """
         return [self.get_service_info(desc.key) for desc in self.registry.list_all()]
 
-    # Scope management methods for test compatibility
-    def enter_scope(self, scope_name: str):
-        """Enter a scope and return a scope context object."""
-        if not hasattr(self, '_scopes'):
-            self._scopes = {}
-        
-        scope_context = ScopeContext(scope_name)
-        self._scopes[scope_name] = scope_context
-        return scope_context
-
-    def exit_scope(self, scope_name: str):
-        """Exit a scope and clean up its services."""
-        if hasattr(self, '_scopes') and scope_name in self._scopes:
-            del self._scopes[scope_name]
-
-    def scope(self, scope_name: str):
-        """Create a scope context manager."""
-        return ScopeContextManager(self, scope_name)
-
-    # Lifecycle methods for test compatibility
-    def on_startup(self, callback: Callable):
-        """Register a startup callback."""
-        if not hasattr(self, '_startup_callbacks'):
-            self._startup_callbacks = []
-        self._startup_callbacks.append(callback)
-
-    def on_shutdown(self, callback: Callable):
-        """Register a shutdown callback."""
-        if not hasattr(self, '_shutdown_callbacks'):
-            self._shutdown_callbacks = []
-        self._shutdown_callbacks.append(callback)
-
-    async def startup(self):
-        """Run startup callbacks."""
-        if hasattr(self, '_startup_callbacks'):
-            for callback in self._startup_callbacks:
-                if asyncio.iscoroutinefunction(callback):
-                    await callback()
-                else:
-                    callback()
-
-    async def shutdown(self):
-        """Run shutdown callbacks."""
-        if hasattr(self, '_shutdown_callbacks'):
-            for callback in self._shutdown_callbacks:
-                if asyncio.iscoroutinefunction(callback):
-                    await callback()
-                else:
-                    callback()
-
-    # Service lifecycle methods for test compatibility
-    async def _initialize_service(self, service):
-        """Initialize a service if it implements Initializable."""
-        from .types import Initializable
-        if isinstance(service, Initializable):
-            await service.initialize()
-
-    async def _dispose_service(self, service):
-        """Dispose a service if it implements Disposable."""
-        from .types import Disposable
-        if isinstance(service, Disposable):
-            await service.dispose()
+    # Test compatibility methods have been moved to whiskey.core.testing module
+    # Use TestContainer or add_test_compatibility_methods() for legacy test support
 
 
-class ScopeContext:
-    """Simple scope context for test compatibility."""
-    def __init__(self, name: str):
-        self.name = name
-
-
-class ScopeContextManager:
-    """Scope context manager for test compatibility."""
-    def __init__(self, container: Container, scope_name: str):
-        self.container = container
-        self.scope_name = scope_name
-
-    def __enter__(self):
-        # Activate the scope in the context variable
-        active_scopes = _active_scopes.get({})
-        active_scopes[self.scope_name] = {}
-        self._token = _active_scopes.set(active_scopes)
-        return self.container.enter_scope(self.scope_name)
-
-    def __exit__(self, *args):
-        # Deactivate the scope
-        _active_scopes.reset(self._token)
-        self.container.exit_scope(self.scope_name)
-
-    async def __aenter__(self):
-        # Activate the scope in the context variable
-        active_scopes = _active_scopes.get({})
-        active_scopes[self.scope_name] = {}
-        self._token = _active_scopes.set(active_scopes)
-        return self.container.enter_scope(self.scope_name)
-
-    async def __aexit__(self, *args):
-        # Deactivate the scope
-        _active_scopes.reset(self._token)
-        self.container.exit_scope(self.scope_name)
+# ScopeContext and ScopeContextManager moved to testing module
 
 
 def get_current_container() -> Container | None:

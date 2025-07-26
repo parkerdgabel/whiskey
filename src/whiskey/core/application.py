@@ -291,22 +291,7 @@ class Whiskey:
             lazy=lazy,
         )
 
-    # Decorator aliases
-    
-    @property
-    def provider(self):
-        """Alias for component decorator."""
-        return self.component
-    
-    @property
-    def managed(self):
-        """Alias for component decorator (transient scope)."""
-        return self.component
-    
-    @property  
-    def system(self):
-        """Alias for singleton decorator."""
-        return self.singleton
+    # Removed decorator aliases - use component() and singleton() directly
     
     @property
     def inject(self):
@@ -382,22 +367,22 @@ class Whiskey:
 
             return decorator
 
-        # Return a helper object that provides all decorator types
-        return ConditionalDecoratorHelper(self, condition)
+        # Return a conditional decorator
+        return _conditional_decorator(self, condition)
 
     def when_debug(self):
         """Decorator factory for debug mode conditional registration."""
         import os
 
         condition = lambda: os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
-        return ConditionalDecoratorHelper(self, condition)
+        return _conditional_decorator(self, condition)
 
     def when_production(self):
         """Decorator factory for production mode conditional registration."""
         import os
 
         condition = lambda: os.environ.get("ENV", "").lower() in ("prod", "production")
-        return ConditionalDecoratorHelper(self, condition)
+        return _conditional_decorator(self, condition)
 
     # Lifecycle methods
 
@@ -752,7 +737,7 @@ class Whiskey:
     
     def invoke(self, func: Callable, **overrides) -> Any:
         """Invoke a function with full dependency injection (synchronous)."""
-        return self.container.invoke_sync(func, **overrides)
+        return self.container.call_sync(func, **overrides)
 
     async def invoke_async(self, func: Callable, **overrides) -> Any:
         """Invoke a function with full dependency injection (asynchronous)."""
@@ -846,9 +831,21 @@ class Whiskey:
             return inner
         return decorator
     
-    def extend(self, extension: Callable) -> Whiskey:
-        """Apply an extension to the application."""
-        extension(self)
+    def extend(self, *extensions: Callable, **kwargs) -> Whiskey:
+        """Apply one or more extensions to the application.
+        
+        Args:
+            *extensions: Extension functions to apply
+            **kwargs: Configuration passed to all extensions
+            
+        Returns:
+            Self for chaining
+            
+        Example:
+            app.extend(jobs_extension, auth_extension, worker_pool_size=8)
+        """
+        for extension in extensions:
+            extension(self, **kwargs)
         return self
     
     def add_decorator(self, name: str, decorator: Callable) -> Whiskey:
@@ -856,77 +853,23 @@ class Whiskey:
         setattr(self, name, decorator)
         return self
     
-    def add_singleton(self, key: str | type, provider: Any = None, *, instance: Any = None, **kwargs) -> None:
-        """Add a singleton service."""
-        # If instance is provided as keyword arg, use it as provider
-        if instance is not None:
-            provider = instance
-        elif provider is None and isinstance(key, type):
-            provider = key
-        self.container.register(key, provider, scope=Scope.SINGLETON, **kwargs)
+    # Removed add_singleton and add_transient - use singleton() and transient() instead
     
-    def add_transient(self, key: str | type, provider: Any = None, **kwargs) -> None:
-        """Add a transient service."""
-        if provider is None and isinstance(key, type):
-            provider = key
-        self.container.register(key, provider, scope=Scope.TRANSIENT, **kwargs)
+    # Removed builder property - use direct registration methods instead
+
+
+def _conditional_decorator(app: Whiskey, condition: Callable[[], bool]):
+    """Create a conditional decorator."""
+    def decorator(target=None, **kwargs):
+        kwargs["condition"] = condition
+        return app.component(target, **kwargs)
     
-    @property
-    def builder(self) -> ComponentBuilder:
-        """Get a component builder for this container."""
-        from .builder import ComponentBuilder
-        # Return a builder that adds to this container
-        return ComponentBuilder(self, None, None)
-
-
-class ConditionalDecoratorHelper:
-    """Helper class for conditional decorators."""
-
-    def __init__(self, app: Whiskey, condition: Callable[[], bool]):
-        self.app = app
-        self.condition = condition
-
-    def __call__(self, target=None, **kwargs):
-        """Make the helper callable as a decorator."""
-        kwargs["condition"] = self.condition
-        
-        # If target is already registered, preserve its scope and other attributes
-        if target in self.app.container:
-            try:
-                descriptor = self.app.container.registry.get(target)
-                kwargs.setdefault("scope", descriptor.scope)
-                kwargs.setdefault("tags", descriptor.tags)
-                kwargs.setdefault("lazy", descriptor.lazy)
-            except KeyError:
-                pass
-        
-        return self.app.component(target, **kwargs)
-
-    def service(
-        self, cls: Type[T] = None, **kwargs
-    ) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
-        """Conditionally register a service."""
-        kwargs["condition"] = self.condition
-        return self.app.component(cls, **kwargs)
-
-    def singleton(
-        self, cls: Type[T] = None, **kwargs
-    ) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
-        """Conditionally register a singleton."""
-        kwargs["condition"] = self.condition
-        return self.app.singleton(cls, **kwargs)
-
-    def factory(
-        self, func: Callable = None, **kwargs
-    ) -> Union[Callable, Callable[[Callable], Callable]]:
-        """Conditionally register a factory."""
-        kwargs["condition"] = self.condition
-        return self.app.factory(func, **kwargs)
-
-    def component(self, target=None, **kwargs):
-        """Conditionally register a component."""
-        kwargs["condition"] = self.condition
-        return self.app.component(target, **kwargs)
+    # Add methods for different registration types
+    decorator.component = lambda target=None, **kw: app.component(target, condition=condition, **kw)
+    decorator.singleton = lambda target=None, **kw: app.singleton(target, condition=condition, **kw)
+    decorator.factory = lambda key, func, **kw: app.factory(key, func, condition=condition, **kw)
+    
+    return decorator
 
 
 # Global application instance management

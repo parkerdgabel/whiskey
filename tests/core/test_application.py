@@ -134,15 +134,19 @@ class TestComponentRegistration:
         assert instance1 is instance2
 
     def test_provider_decorator_alias(self):
-        """Test @app.provider is alias for @app.component."""
+        """Test that provider alias has been removed."""
         app = Whiskey()
-        assert app.provider == app.component
+        # Provider alias removed for cleaner API
+        assert not hasattr(app, 'provider')
 
     def test_managed_decorator(self):
         """Test @app.managed decorator for transient scope."""
         app = Whiskey()
 
-        @app.managed
+        # Managed alias removed - use @app.component instead
+        assert not hasattr(app, 'managed')
+        
+        @app.component
         class ManagedService:
             def __init__(self):
                 self.id = id(self)
@@ -157,7 +161,10 @@ class TestComponentRegistration:
         """Test @app.system decorator for singleton scope."""
         app = Whiskey()
 
-        @app.system
+        # System alias removed - use @app.singleton instead
+        assert not hasattr(app, 'system')
+        
+        @app.singleton
         class SystemService:
             def __init__(self):
                 self.id = id(self)
@@ -387,7 +394,7 @@ class TestLifecycle:
         app = Whiskey()
         disposed = False
 
-        @app.system  # Singleton so we can track disposal
+        @app.singleton  # Singleton so we can track disposal
         class DisposableService(Disposable):
             async def dispose(self):
                 nonlocal disposed
@@ -516,9 +523,9 @@ class TestBuilderIntegration:
         """Test configuring app with builder."""
         app = Whiskey()
 
-        def configure(builder: WhiskeyBuilder):
-            builder.add_singleton(SimpleService, instance=SimpleService("configured"))
-            builder.add_transient(DatabaseService)
+        def configure(app: Whiskey):
+            app.singleton(SimpleService, instance=SimpleService("configured"))
+            app.transient(DatabaseService)
 
         app.configure(configure)
 
@@ -533,19 +540,22 @@ class TestBuilderIntegration:
         """Test accessing container builder."""
         app = Whiskey()
 
-        # Should create and return builder
-        builder = app.builder
-        assert isinstance(builder, ComponentBuilder)
-
-        # Builder should add to the app's container
-        builder._app_builder = app
+        # Instance builder property removed, but classmethod builder() still exists
+        # for creating apps via Whiskey.builder().build_app()
+        assert hasattr(Whiskey, 'builder')  # Class method exists
+        assert callable(Whiskey.builder)  # It's callable
+        
+        # Create app using classmethod
+        builder = Whiskey.builder()
+        assert isinstance(builder, WhiskeyBuilder)
 
     def test_build_method(self):
         """Test build() method."""
         app = Whiskey()
 
         # Configure using builder
-        app.container.add_singleton(SimpleService).build()
+        # Use direct registration instead of builder pattern
+        app.container.singleton(SimpleService)
 
         instance = app.resolve(SimpleService)
         assert isinstance(instance, SimpleService)
