@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import functools
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 import click
+
+if TYPE_CHECKING:
+    from whiskey import Whiskey
 
 
 @dataclass
@@ -25,7 +28,7 @@ class CommandMetadata:
 class CLIManager:
     """Manages CLI commands and groups."""
 
-    def __init__(self, app: Application):
+    def __init__(self, app: Whiskey):
         self.app = app
         self.cli_group = click.Group()
         self.commands: Dict[str, CommandMetadata] = {}
@@ -59,33 +62,25 @@ class CLIManager:
         original_callback = metadata.func
         is_async = asyncio.iscoroutinefunction(original_callback)
 
-        if is_async or hasattr(original_callback, "__wrapped__"):
-            # Async wrapper
-            @functools.wraps(original_callback)
-            async def async_callback(*args, **kwargs):
-                async with self.app.lifespan():
-                    self.app.container[Application] = self.app
-                    return await original_callback(*args, **kwargs)
+        @functools.wraps(original_callback)
+        def wrapped_callback(*args, **kwargs):
+            # The lifecycle should already be active from run_cli
+            # Execute the command with DI support
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, create coroutine for execution
+                async def execute():
+                    return await self.app.call_async(original_callback, *args, **kwargs)
+                
+                # Run the coroutine in the current event loop
+                future = asyncio.ensure_future(execute())
+                return loop.run_until_complete(future)
+            except RuntimeError:
+                # No event loop - shouldn't happen with proper CLI usage
+                # Fall back to sync execution
+                return self.app.call_sync(original_callback, *args, **kwargs)
 
-            @functools.wraps(original_callback)
-            def wrapped_callback(*args, **kwargs):
-                return asyncio.run(async_callback(*args, **kwargs))
-
-            cmd.callback = wrapped_callback
-        else:
-            # Sync wrapper
-            @functools.wraps(original_callback)
-            def wrapped_callback(*args, **kwargs):
-                # Setup app context
-                async def setup():
-                    async with self.app.lifespan():
-                        self.app.container[Application] = self.app
-
-                asyncio.run(setup())
-
-                return original_callback(*args, **kwargs)
-
-            cmd.callback = wrapped_callback
+        cmd.callback = wrapped_callback
 
         # Add to appropriate group
         if metadata.group:
@@ -106,7 +101,7 @@ class CLIManager:
         return group
 
 
-def cli_extension(app: Application) -> None:
+def cli_extension(app: Whiskey) -> None:
     """CLI extension that adds command-line interface capabilities.
 
     This extension provides a framework-agnostic API for building CLIs:
@@ -136,11 +131,8 @@ def cli_extension(app: Application) -> None:
     app.cli_manager = manager
     app.cli = manager.cli_group
 
-    # Current command being built
-    _current_command: Optional[CommandMetadata] = None
-
     # Track pending commands that are being built
-    _pending_commands: Dict[str, CommandMetadata] = {}
+    manager.pending_commands: Dict[str, CommandMetadata] = {}
 
     def command(
         name: Optional[str] = None, description: Optional[str] = None, group: Optional[str] = None
@@ -173,35 +165,27 @@ def cli_extension(app: Application) -> None:
             )
 
             # Store in pending for argument/option decorators
-            _pending_commands[cmd_name] = metadata
+            manager.pending_commands[cmd_name] = metadata
 
             # Register a wrapper that will finalize the command
             def wrapper(*args, **kwargs):
                 # First time called, finalize and register
-                if cmd_name in _pending_commands:
-                    manager.add_command(_pending_commands[cmd_name])
-                    del _pending_commands[cmd_name]
+                if cmd_name in manager.pending_commands:
+                    manager.add_command(manager.pending_commands[cmd_name])
+                    del manager.pending_commands[cmd_name]
                 return func(*args, **kwargs)
 
             # Copy attributes
             functools.update_wrapper(wrapper, func)
 
-            # Immediately register if no arguments/options will be added
-            # This happens after a short delay to allow decorators to be applied
-            async def delayed_register():
-                await asyncio.sleep(0.001)
-                if cmd_name in _pending_commands:
-                    manager.add_command(_pending_commands[cmd_name])
-                    del _pending_commands[cmd_name]
-
-            try:
-                asyncio.create_task(delayed_register())
-            except RuntimeError:
-                # No event loop, register immediately
-                if cmd_name in _pending_commands:
-                    manager.add_command(_pending_commands[cmd_name])
-                    del _pending_commands[cmd_name]
-
+            # Store the original function reference and metadata
+            wrapper._cli_metadata = metadata
+            wrapper._cli_original = func
+            wrapper._cli_pending_name = cmd_name
+            
+            # The command will be registered when all decorators are applied
+            # This is handled by checking pending commands before CLI execution
+            
             return wrapper
 
         return decorator
@@ -222,16 +206,27 @@ def cli_extension(app: Application) -> None:
         """
 
         def decorator(func: Callable) -> Callable:
-            # Find the command metadata in pending commands
-            cmd_name = getattr(func, "__name__", str(func)).replace("_", "-")
-
-            # Check if it's a wrapped function
-            if hasattr(func, "__wrapped__"):
-                cmd_name = func.__wrapped__.__name__.replace("_", "-")
-
-            if cmd_name in _pending_commands:
-                metadata = _pending_commands[cmd_name]
-                metadata.arguments.append({"name": name, **kwargs})
+            # Check if this function has CLI metadata attached
+            if hasattr(func, '_cli_metadata'):
+                # Add argument to the metadata
+                func._cli_metadata.arguments.append({"name": name, **kwargs})
+            elif hasattr(func, '_cli_pending_name'):
+                # Function was wrapped by @command, get metadata from pending
+                cmd_name = func._cli_pending_name
+                if cmd_name in manager.pending_commands:
+                    metadata = manager.pending_commands[cmd_name]
+                    metadata.arguments.append({"name": name, **kwargs})
+            else:
+                # Try to find in pending commands by name
+                cmd_name = getattr(func, "__name__", str(func)).replace("_", "-")
+                
+                # Check if it's a wrapped function
+                if hasattr(func, "__wrapped__"):
+                    cmd_name = func.__wrapped__.__name__.replace("_", "-")
+                
+                if cmd_name in manager.pending_commands:
+                    metadata = manager.pending_commands[cmd_name]
+                    metadata.arguments.append({"name": name, **kwargs})
 
             return func
 
@@ -253,16 +248,29 @@ def cli_extension(app: Application) -> None:
         """
 
         def decorator(func: Callable) -> Callable:
-            # Find the command metadata in pending commands
-            cmd_name = getattr(func, "__name__", str(func)).replace("_", "-")
-
-            # Check if it's a wrapped function
-            if hasattr(func, "__wrapped__"):
-                cmd_name = func.__wrapped__.__name__.replace("_", "-")
-
-            if cmd_name in _pending_commands:
-                metadata = _pending_commands[cmd_name]
-
+            metadata = None
+            
+            # Check if this function has CLI metadata attached
+            if hasattr(func, '_cli_metadata'):
+                metadata = func._cli_metadata
+            elif hasattr(func, '_cli_pending_name'):
+                # Function was wrapped by @command, get metadata from pending
+                cmd_name = func._cli_pending_name
+                if cmd_name in manager.pending_commands:
+                    metadata = manager.pending_commands[cmd_name]
+            else:
+                # Try to find in pending commands by name
+                cmd_name = getattr(func, "__name__", str(func)).replace("_", "-")
+                
+                # Check if it's a wrapped function
+                if hasattr(func, "__wrapped__"):
+                    cmd_name = func.__wrapped__.__name__.replace("_", "-")
+                
+                if cmd_name in manager.pending_commands:
+                    metadata = manager.pending_commands[cmd_name]
+            
+            if metadata:
+                # Add option to metadata
                 # Handle shorthand like "-v/--verbose"
                 if "/" in name:
                     parts = name.split("/")
@@ -303,41 +311,73 @@ def cli_extension(app: Application) -> None:
     app.group = group
 
     def run_cli(args: Optional[List[str]] = None) -> None:
-        """Run the CLI application.
+        """Run the CLI application with proper lifecycle management.
 
         Args:
             args: Optional arguments (defaults to sys.argv)
         """
-        manager.cli_group.main(args=args, standalone_mode=True)
+        # Register any pending commands before running
+        for cmd_name, metadata in list(manager.pending_commands.items()):
+            manager.add_command(metadata)
+            del manager.pending_commands[cmd_name]
+        
+        # Run the CLI within the app's lifecycle context
+        async def cli_main():
+            async with app.lifespan:
+                # Make app available in container
+                app.container[type(app)] = app
+                
+                # Execute the CLI in a sync context since Click expects sync
+                # But we need the lifecycle to be active
+                def run_click():
+                    manager.cli_group.main(args=args, standalone_mode=False)
+                    return 0
+                
+                try:
+                    run_click()
+                    return 0
+                except SystemExit as e:
+                    return e.code if e.code is not None else 0
+                except Exception as e:
+                    print(f"Error: {e}")
+                    return 1
+        
+        # Check if we're already in an event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # Already in a loop - this can happen when called from app.run()
+            # Just run Click directly since lifecycle is already active
+            try:
+                manager.cli_group.main(args=args, standalone_mode=False)
+            except SystemExit as e:
+                if e.code != 0:
+                    raise
+        except RuntimeError:
+            # No event loop - use asyncio.run for clean lifecycle
+            exit_code = asyncio.run(cli_main())
+            if exit_code != 0:
+                raise SystemExit(exit_code)
 
+    # Register the CLI runner with the new standardized API
+    app.register_runner("cli", run_cli)
     app.run_cli = run_cli
 
     # Register built-in commands
-    @app.on_configure
+    @app.on("configure")
     async def register_builtin_commands():
         @app.command(name="app-info", description="Show application information")
         def app_info():
             """Show application information."""
-            print(f"Application: {app.config.name}")
-            print(f"Debug mode: {app.config.debug}")
-
-            # Show components
-            components = list(app._component_metadata.keys())
-            if components:
-                print(f"\nComponents ({len(components)}):")
-                for comp in components:
-                    print(f"  - {comp.__name__}")
-
-    # Enhanced run method
-    original_run = app.run
-
-    def enhanced_run(main: Optional[Callable] = None) -> None:
-        """Enhanced run that can run CLI if no main provided."""
-        if main is None and hasattr(app, "_main_func"):
-            original_run()
-        elif main is None and hasattr(app, "cli_manager"):
-            app.run_cli()
-        else:
-            original_run(main)
-
-    app.run = enhanced_run
+            print(f"Application: {getattr(app, 'name', 'Whiskey App')}")
+            
+            # Show registered services
+            try:
+                services = list(app.container.registry.list_all())
+                if services:
+                    print(f"\nRegistered services ({len(services)}):")
+                    for service in services[:10]:  # Show first 10
+                        print(f"  - {service.service_type}")
+                    if len(services) > 10:
+                        print(f"  ... and {len(services) - 10} more")
+            except Exception:
+                pass
