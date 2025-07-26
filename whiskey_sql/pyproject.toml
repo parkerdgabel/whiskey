@@ -28,6 +28,9 @@ dependencies = [
     "whiskey>=0.1.0",
 ]
 
+[tool.uv.sources]
+whiskey = { workspace = true }
+
 [project.optional-dependencies]
 postgresql = ["asyncpg>=0.28.0"]
 mysql = ["aiomysql>=0.2.0"]
