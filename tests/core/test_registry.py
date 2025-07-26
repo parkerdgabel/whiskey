@@ -612,12 +612,13 @@ class TestErrorHandling:
             descriptor = registry.register(key=key, provider=TestService)
             assert descriptor is not None
 
-    def test_none_provider_error(self):
-        """Test registration with None provider."""
+    def test_none_provider_allowed(self):
+        """Test registration with None provider is allowed."""
         registry = ServiceRegistry()
 
-        with pytest.raises((ValueError, TypeError, RegistrationError)):
-            registry.register(key="test", provider=None)
+        # None provider should be allowed for optional dependencies
+        descriptor = registry.register(key="test", provider=None)
+        assert descriptor.provider is None
 
     def test_empty_tags_handling(self):
         """Test registration with empty tags."""
