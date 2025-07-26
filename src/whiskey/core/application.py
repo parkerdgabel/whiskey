@@ -50,13 +50,16 @@ class Whiskey:
         ...     pass
     """
 
-    def __init__(self, container: Container = None):
+    def __init__(self, container: Container = None, name: str = None):
         """Initialize a new Application.
 
         Args:
             container: Optional Container instance (creates new one if None)
+            name: Optional name for the application (defaults to "Whiskey")
         """
         self.container = container if container is not None else Container()
+        self.name = name if name is not None else "Whiskey"
+        
         # Initialize callbacks - if container has them, use them; otherwise create new
         if hasattr(self.container, "_startup_callbacks"):
             self._startup_callbacks = self.container._startup_callbacks
@@ -82,7 +85,8 @@ class Whiskey:
         # Add hooks for lifecycle compatibility
         self._hooks = {
             "before_startup": self._startup_callbacks,
-            "after_shutdown": self._shutdown_callbacks
+            "after_shutdown": self._shutdown_callbacks,
+            "tasks": []
         }
 
     @classmethod
@@ -99,6 +103,30 @@ class Whiskey:
         """Alias for builder() method."""
         return cls.builder()
 
+    # Direct registration methods
+    
+    def register(self, key: str | type, provider: Any, **kwargs) -> None:
+        """Register a service directly.
+        
+        Args:
+            key: Service key
+            provider: Service provider
+            **kwargs: Additional registration options
+        """
+        self.container.register(key, provider, **kwargs)
+    
+    def transient(self, key: str | type, provider: Any = None, **kwargs) -> None:
+        """Register a transient service.
+        
+        Args:
+            key: Service key
+            provider: Service provider (uses key if None and key is a type)
+            **kwargs: Additional registration options
+        """
+        if provider is None and isinstance(key, type):
+            provider = key
+        self.container.register(key, provider, scope=Scope.TRANSIENT, **kwargs)
+    
     # Decorator methods for component registration
 
     def component(
@@ -111,6 +139,8 @@ class Whiskey:
         tags: set[str] = None,
         condition: Callable[[], bool] = None,
         lazy: bool = False,
+        metadata: dict = None,
+        priority: int = None,
     ) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
         """Decorator to register a class as a component.
 
@@ -141,17 +171,34 @@ class Whiskey:
             if not inspect.isclass(cls) and key is None:
                 raise ConfigurationError("Factory functions require a 'key' parameter")
 
-            component_key = key or cls
+            # If name is provided, use it as the key
+            if name is not None:
+                component_key = name
+                registration_name = None
+            else:
+                component_key = key or cls
+                registration_name = name
 
+            # Prepare kwargs for registration
+            registration_kwargs = {
+                "scope": scope,
+                "name": registration_name,
+                "condition": condition,
+                "tags": tags or set(),
+                "lazy": lazy,
+                "allow_override": True,  # Allow decorators to override registrations
+            }
+            
+            # Add metadata if provided
+            if metadata is not None:
+                registration_kwargs["metadata"] = metadata
+            if priority is not None:
+                registration_kwargs.setdefault("metadata", {})["priority"] = priority
+            
             self.container.register(
                 component_key,
                 cls,
-                scope=scope,
-                name=name,
-                condition=condition,
-                tags=tags or set(),
-                lazy=lazy,
-                allow_override=True,  # Allow decorators to override registrations
+                **registration_kwargs
             )
 
             return cls
@@ -172,8 +219,23 @@ class Whiskey:
         tags: set[str] = None,
         condition: Callable[[], bool] = None,
         lazy: bool = False,
+        instance: Any = None,
     ) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
         """Decorator to register a class as a singleton service."""
+        # If instance is provided, register it directly
+        if instance is not None:
+            component_key = key or cls or type(instance)
+            self.container.register(
+                component_key,
+                instance,
+                scope=Scope.SINGLETON,
+                name=name,
+                tags=tags or set(),
+                condition=condition,
+                lazy=lazy,
+            )
+            return cls or type(instance)
+        
         return self.component(
             cls,
             key=key,
@@ -202,57 +264,100 @@ class Whiskey:
 
     def factory(
         self,
-        func: Callable = None,
+        key: str | type,
+        func: Callable,
         *,
-        key: str | type = None,
         name: str = None,
         scope: Scope = Scope.TRANSIENT,
         tags: set[str] = None,
         condition: Callable[[], bool] = None,
         lazy: bool = False,
-    ) -> Union[Callable, Callable[[Callable], Callable]]:
-        """Decorator to register a function as a factory.
+    ) -> None:
+        """Register a function as a factory.
 
         Args:
+            key: Service key (required for factories)
             func: The factory function to register
-            key: Service key (required)
             name: Optional name for named services
             scope: Service scope (default: transient)
             tags: Set of tags for categorization
             condition: Optional registration condition
             lazy: Whether to use lazy resolution
-
-        Returns:
-            The registered function
-
-        Examples:
-            >>> @app.factory(key='database')
-            >>> def create_database():
-            ...     return DatabaseImpl()
         """
+        self.container.register(
+            key,
+            func,
+            scope=scope,
+            name=name,
+            condition=condition,
+            tags=tags or set(),
+            lazy=lazy,
+        )
 
+    # Decorator aliases
+    
+    @property
+    def provider(self):
+        """Alias for component decorator."""
+        return self.component
+    
+    @property
+    def managed(self):
+        """Alias for component decorator (transient scope)."""
+        return self.component
+    
+    @property  
+    def system(self):
+        """Alias for singleton decorator."""
+        return self.singleton
+    
+    @property
+    def inject(self):
+        """Decorator for dependency injection in functions."""
         def decorator(func: Callable) -> Callable:
-            if key is None:
-                raise ConfigurationError("Factory decorator requires 'key' parameter")
-
-            self.container.register(
-                key,
-                func,
-                scope=scope,
-                name=name,
-                condition=condition,
-                tags=tags or set(),
-                lazy=lazy,
-                allow_override=True,  # Allow decorators to override registrations
-            )
-
+            return self.wrap_function(func)
+        return decorator
+    
+    # Lifecycle decorators
+    
+    @property
+    def on_startup(self):
+        """Decorator to register startup callbacks."""
+        def decorator(func: Callable) -> Callable:
+            self._hooks.setdefault("before_startup", []).append(func)
             return func
-
-        if func is None:
-            return decorator
-        else:
-            return decorator(func)
-
+        return decorator
+    
+    @property
+    def on_shutdown(self):
+        """Decorator to register shutdown callbacks."""
+        def decorator(func: Callable) -> Callable:
+            self._hooks.setdefault("after_shutdown", []).append(func)
+            return func
+        return decorator
+    
+    @property
+    def on_error(self):
+        """Decorator to register error handlers."""
+        def decorator(func: Callable) -> Callable:
+            # Register as a generic error handler
+            self._error_handlers[Exception] = func
+            return func
+        return decorator
+    
+    @property
+    def task(self):
+        """Decorator to register background tasks."""
+        def decorator(interval: float = None, **kwargs):
+            def inner(func: Callable) -> Callable:
+                # Store task metadata
+                func._task_interval = interval
+                func._task_kwargs = kwargs
+                self._hooks.setdefault("tasks", []).append(func)
+                return func
+            return inner
+        return decorator
+    
     # Conditional decorators
 
     def when_env(self, var_name: str, expected_value: str = None):
@@ -359,19 +464,49 @@ class Whiskey:
     async def __aexit__(self, *args):
         """Async context manager exit."""
         await self.shutdown()
+    
+    def __enter__(self):
+        """Sync context manager entry."""
+        # Run startup synchronously
+        try:
+            loop = asyncio.get_running_loop()
+            # We're already in an event loop
+            raise RuntimeError("Cannot use sync context manager in async context")
+        except RuntimeError:
+            # No event loop, we can create one
+            asyncio.run(self.startup())
+        return self
+    
+    def __exit__(self, *args):
+        """Sync context manager exit."""
+        try:
+            loop = asyncio.get_running_loop()
+            # We're already in an event loop
+            raise RuntimeError("Cannot use sync context manager in async context")
+        except RuntimeError:
+            # No event loop, we can create one
+            asyncio.run(self.shutdown())
 
     # Function calling methods
 
-    async def call(self, func: Callable, *args, **kwargs) -> Any:
-        """Call a function with dependency injection."""
+    def call(self, func: Callable, *args, **kwargs) -> Any:
+        """Call a function with dependency injection (synchronous)."""
+        return self.container.call_sync(func, *args, **kwargs)
+    
+    async def call_async(self, func: Callable, *args, **kwargs) -> Any:
+        """Call a function with dependency injection (asynchronous)."""
         return await self.container.call(func, *args, **kwargs)
 
     def call_sync(self, func: Callable, *args, **kwargs) -> Any:
         """Call a function with dependency injection (synchronous)."""
         return self.container.call_sync(func, *args, **kwargs)
+    
+    def invoke(self, func: Callable, **overrides) -> Any:
+        """Invoke a function with full dependency injection (synchronous)."""
+        return self.container.invoke_sync(func, **overrides)
 
-    async def invoke(self, func: Callable, **overrides) -> Any:
-        """Invoke a function with full dependency injection."""
+    async def invoke_async(self, func: Callable, **overrides) -> Any:
+        """Invoke a function with full dependency injection (asynchronous)."""
         return await self.container.invoke(func, **overrides)
 
     def wrap_function(self, func: Callable) -> Callable:
@@ -406,6 +541,55 @@ class Whiskey:
     def __contains__(self, key: str | type) -> bool:
         """Check if a service is registered."""
         return key in self.container
+    
+    # Extension methods
+    
+    def use(self, middleware: Callable) -> Whiskey:
+        """Add middleware to the application."""
+        self._middleware.append(middleware)
+        return self
+    
+    def on(self, event: str, handler: Callable) -> Whiskey:
+        """Register an event handler."""
+        self._hooks.setdefault(event, []).append(handler)
+        return self
+    
+    @property
+    def hook(self):
+        """Decorator to register a hook."""
+        def decorator(name: str):
+            def inner(func: Callable) -> Callable:
+                self._hooks.setdefault(name, []).append(func)
+                return func
+            return inner
+        return decorator
+    
+    def extend(self, extension: Callable) -> Whiskey:
+        """Apply an extension to the application."""
+        extension(self)
+        return self
+    
+    def add_decorator(self, name: str, decorator: Callable) -> Whiskey:
+        """Add a custom decorator method."""
+        setattr(self, name, decorator)
+        return self
+    
+    def add_singleton(self, key: str | type, provider: Any = None, **kwargs) -> ComponentBuilder:
+        """Add a singleton using builder pattern."""
+        from .builder import ComponentBuilder
+        builder = ComponentBuilder(self, key, provider or key)
+        builder.as_singleton()
+        for k, v in kwargs.items():
+            if hasattr(builder, f"_{k}"):
+                setattr(builder, f"_{k}", v)
+        return builder
+    
+    @property
+    def builder(self) -> ComponentBuilder:
+        """Get a component builder for this container."""
+        from .builder import ComponentBuilder
+        # Return a builder that adds to this container
+        return ComponentBuilder(self, None, None)
 
 
 class ConditionalDecoratorHelper:
