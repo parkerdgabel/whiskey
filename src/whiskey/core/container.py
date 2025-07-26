@@ -240,7 +240,17 @@ class Container:
         Returns:
             True if the service is registered and condition is met
         """
-        return self.registry.has(key)
+        # First check if registered without a name
+        if self.registry.has(key):
+            return True
+        
+        # If key is a type, check if it's registered with any name
+        if isinstance(key, type):
+            # Check if any services of this type are registered
+            descriptors = self.registry.find_by_type(key)
+            return len(descriptors) > 0
+            
+        return False
 
     def __delitem__(self, key: str | type) -> None:
         """Remove a service registration.
