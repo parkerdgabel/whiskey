@@ -325,6 +325,25 @@ class Whiskey:
         """Decorator to register startup callbacks."""
         def decorator(func: Callable) -> Callable:
             self._hooks.setdefault("before_startup", []).append(func)
+            # If app is already running, execute immediately
+            if self._is_running:
+                if asyncio.iscoroutinefunction(func):
+                    # Get the current task if any
+                    try:
+                        current_task = asyncio.current_task()
+                    except RuntimeError:
+                        current_task = None
+                    
+                    if current_task:
+                        # Create task and track it
+                        task = asyncio.create_task(func())
+                        # Store for awaiting later
+                        self._hooks.setdefault("startup_tasks", []).append(task)
+                    else:
+                        # No current task, run synchronously
+                        asyncio.run(func())
+                else:
+                    func()
             return func
         return decorator
     
@@ -401,6 +420,14 @@ class Whiskey:
             return
 
         self._is_running = True
+        
+        # Initialize all services that implement Initializable
+        for descriptor in self.container.registry.list_all():
+            # Get or create instance
+            instance = await self.container.resolve(descriptor.service_type)
+            # Initialize if it implements Initializable
+            if hasattr(instance, 'initialize') and callable(getattr(instance, 'initialize')):
+                await instance.initialize()
 
         # Run startup callbacks
         for callback in self._startup_callbacks:
@@ -426,6 +453,20 @@ class Whiskey:
             except Exception as e:
                 # Log error but don't stop shutdown process
                 print(f"Error in shutdown callback: {e}")
+        
+        # Dispose all services that implement Disposable
+        disposed_instances = set()
+        for descriptor in self.container.registry.list_all():
+            if descriptor.scope == Scope.SINGLETON:
+                try:
+                    # Get singleton instance if it exists
+                    instance = self.container.resolve_sync(descriptor.service_type)
+                    if instance not in disposed_instances and hasattr(instance, 'dispose') and callable(getattr(instance, 'dispose')):
+                        await instance.dispose()
+                        disposed_instances.add(instance)
+                except Exception:
+                    # Continue disposal even if one fails
+                    pass
 
         # Clear container caches
         self.container.clear_caches()
@@ -463,6 +504,10 @@ class Whiskey:
 
     async def __aexit__(self, *args):
         """Async context manager exit."""
+        # Wait for any pending startup tasks
+        if "startup_tasks" in self._hooks:
+            await asyncio.gather(*self._hooks["startup_tasks"])
+            self._hooks["startup_tasks"].clear()
         await self.shutdown()
     
     def __enter__(self):
