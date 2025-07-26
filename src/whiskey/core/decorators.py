@@ -1,0 +1,470 @@
+"""Global convenience decorators for Whiskey's Pythonic DI redesign.
+
+This module provides global decorators that work with a default application
+instance, similar to Flask's approach. These decorators are convenient for
+simple applications that don't need explicit application management.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import inspect
+from functools import wraps
+from typing import Any, Callable, Type, TypeVar, Union
+
+from .application import Whiskey, create_default_app
+from .registry import Scope
+
+T = TypeVar("T")
+
+# Lazy initialization of default app
+_default_app: Whiskey = None
+
+
+def _get_default_app() -> Whiskey:
+    """Get or create the default application instance."""
+    global _default_app
+    if _default_app is None:
+        _default_app = create_default_app()
+    return _default_app
+
+
+# Global service registration decorators
+
+
+def component(
+    cls: Type[T] = None,
+    *,
+    key: str | type = None,
+    name: str = None,
+    scope: Scope = Scope.TRANSIENT,
+    tags: set[str] = None,
+    condition: Callable[[], bool] = None,
+    lazy: bool = False,
+    app: Whiskey = None,
+) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+    """Global decorator to register a class as a service.
+
+    Uses the default application instance unless 'app' is specified.
+
+    Args:
+        cls: The class to register (when used without parentheses)
+        key: Optional service key (defaults to class)
+        name: Optional name for named services
+        scope: Service scope (default: transient)
+        tags: Set of tags for categorization
+        condition: Optional registration condition
+        lazy: Whether to use lazy resolution
+        app: Optional Whiskey instance (uses default if None)
+
+    Returns:
+        The registered class (for decorator chaining)
+
+    Examples:
+        >>> @service
+        >>> class DatabaseService:
+        ...     pass
+
+        >>> @service(scope=Scope.SINGLETON, tags={'infrastructure'})
+        >>> class CacheService:
+        ...     pass
+    """
+    def decorator(cls: Type[T]) -> Type[T]:
+        # Validate that target is a class
+        if not inspect.isclass(cls):
+            raise TypeError("@component decorator can only be applied to classes")
+        target_app = app or _get_default_app()
+        return target_app.component(
+            cls, key=key, name=name, scope=scope, tags=tags, condition=condition, lazy=lazy
+        )
+    
+    if cls is None:
+        return decorator
+    else:
+        return decorator(cls)
+
+
+def singleton(
+    cls: Type[T] = None,
+    *,
+    key: str | type = None,
+    name: str = None,
+    tags: set[str] = None,
+    condition: Callable[[], bool] = None,
+    lazy: bool = False,
+    app: Whiskey = None,
+) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+    """Global decorator to register a class as a singleton service."""
+    target_app = app or _get_default_app()
+    return target_app.singleton(cls, key=key, name=name, tags=tags, condition=condition, lazy=lazy)
+
+
+def scoped(
+    scope_name: str = "default",
+    *,
+    key: str | type = None,
+    name: str = None,
+    tags: set[str] = None,
+    condition: Callable[[], bool] = None,
+    lazy: bool = False,
+    app: Whiskey = None,
+) -> Callable[[Type[T]], Type[T]]:
+    """Global decorator to register a class as a scoped service."""
+    target_app = app or _get_default_app()
+    
+    def decorator(cls: Type[T]) -> Type[T]:
+        return target_app.scoped(
+            cls, scope_name=scope_name, key=key, name=name, tags=tags, condition=condition, lazy=lazy
+        )
+    
+    return decorator
+
+
+def factory(
+    key_or_func=None,
+    *,
+    key: str | type = None,
+    name: str = None,
+    scope: Scope = Scope.TRANSIENT,
+    tags: set[str] = None,
+    condition: Callable[[], bool] = None,
+    lazy: bool = False,
+    app: Whiskey = None,
+) -> Union[Callable, Callable[[Callable], Callable]]:
+    """Global decorator to register a function as a factory.
+
+    Args:
+        key_or_func: Either the service key or the factory function
+        key: Service key (if not provided as first arg)
+        name: Optional name for named services
+        scope: Service scope (default: transient)
+        tags: Set of tags for categorization
+        condition: Optional registration condition
+        lazy: Whether to use lazy resolution
+        app: Optional Whiskey instance (uses default if None)
+
+    Returns:
+        The registered function
+
+    Examples:
+        >>> @factory(SimpleService)
+        >>> def create_simple():
+        ...     return SimpleService()
+
+        >>> @factory(key=Cache, scope=Scope.SINGLETON)
+        >>> def create_cache():
+        ...     return RedisCache()
+    """
+    # Handle different call patterns
+    if key_or_func is not None and inspect.isclass(key_or_func):
+        # Called as @factory(ServiceClass) - first arg is the key (a class)
+        actual_key = key_or_func
+        func = None
+    elif key_or_func is not None and callable(key_or_func) and key is None:
+        # Called as @factory without parentheses - first arg is the function
+        # This case requires key to be specified via key parameter
+        func = key_or_func
+        actual_key = None
+    else:
+        # Called as @factory(key=...) or @factory()
+        func = key_or_func
+        actual_key = key
+
+    def decorator(f: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        # The app.factory expects key as first positional argument
+        if actual_key is None:
+            raise ValueError("Factory decorator requires a key")
+        target_app.factory(
+            actual_key, f, name=name, scope=scope, tags=tags, condition=condition, lazy=lazy
+        )
+        return f
+    
+    if func is None:
+        # Called with parentheses or key: @factory(key=...) or @factory(ServiceClass)
+        return decorator
+    else:
+        # Called without parentheses: @factory - but this requires key parameter
+        if actual_key is None:
+            raise ValueError("Factory decorator requires a key")
+        return decorator(func)
+
+
+# Alias for backward compatibility
+provide = component
+
+
+# Injection decorator
+
+
+def inject(
+    func: Callable = None, *, app: Whiskey = None
+) -> Union[Callable, Callable[[Callable], Callable]]:
+    """Global decorator to enable dependency injection for a function.
+
+    This decorator modifies a function to automatically resolve its
+    parameters from the dependency injection container.
+
+    Args:
+        func: The function to inject dependencies into
+        app: Optional Whiskey instance (uses default if None)
+
+    Returns:
+        The wrapped function with automatic injection
+
+    Examples:
+        >>> @inject
+        >>> def process_data(db: Database, cache: Cache):
+        ...     # db and cache are automatically resolved
+        ...     return db.query() + cache.get()
+
+        >>> @inject
+        >>> async def async_handler(service: MyService):
+        ...     return await service.process()
+    """
+
+    def decorator(func: Callable) -> Callable:
+        target_app = app or _get_default_app()
+
+        if asyncio.iscoroutinefunction(func):
+
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                # Use container's call method with provided args/kwargs
+                return await target_app.container.call(func, *args, **kwargs)
+
+            return async_wrapper
+        else:
+
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                # Use container's call_sync method
+                return target_app.container.call_sync(func, *args, **kwargs)
+
+            return sync_wrapper
+
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
+
+
+# Conditional decorators
+
+
+def when_env(var_name: str, expected_value: str = None, app: Whiskey = None):
+    """Global decorator factory for environment-based conditional registration."""
+    target_app = app or _get_default_app()
+    return target_app.when_env(var_name, expected_value)
+
+
+def when_debug(cls_or_app=None, *, app: Whiskey = None):
+    """Global decorator factory for debug mode conditional registration."""
+    # Handle case where used without parentheses: @when_debug
+    if cls_or_app is not None and not isinstance(cls_or_app, Whiskey):
+        # Called as @when_debug (without parentheses)
+        target_app = app or _get_default_app()
+        helper = target_app.when_debug()
+        return helper(cls_or_app)
+    else:
+        # Called as @when_debug() (with parentheses)
+        target_app = cls_or_app or app or _get_default_app()
+        return target_app.when_debug()
+
+
+def when_production(cls_or_app=None, *, app: Whiskey = None):
+    """Global decorator factory for production mode conditional registration."""
+    # Handle case where used without parentheses: @when_production
+    if cls_or_app is not None and not isinstance(cls_or_app, Whiskey):
+        # Called as @when_production (without parentheses)
+        target_app = app or _get_default_app()
+        helper = target_app.when_production()
+        return helper(cls_or_app)
+    else:
+        # Called as @when_production() (with parentheses)
+        target_app = cls_or_app or app or _get_default_app()
+        return target_app.when_production()
+
+
+# Whiskey lifecycle decorators
+
+
+def on_startup(func: Callable = None, *, app: Whiskey = None):
+    """Global decorator to register a startup callback.
+
+    Args:
+        func: The callback function
+        app: Optional Whiskey instance (uses default if None)
+
+    Examples:
+        >>> @on_startup
+        >>> def initialize_services():
+        ...     print("Whiskey starting up...")
+
+        >>> @on_startup
+        >>> async def async_startup():
+        ...     await setup_async_resources()
+    """
+
+    def decorator(func: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        target_app._startup_callbacks.append(func)
+        return func
+
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
+
+
+def on_shutdown(func: Callable = None, *, app: Whiskey = None):
+    """Global decorator to register a shutdown callback."""
+
+    def decorator(func: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        target_app._shutdown_callbacks.append(func)
+        return func
+
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
+
+
+def on_error(func: Callable = None, *, app: Whiskey = None):
+    """Global decorator to register an error handler.
+
+    Args:
+        func: The error handler function
+        app: Optional Whiskey instance (uses default if None)
+
+    Examples:
+        >>> @on_error
+        >>> def handle_error(exc: Exception):
+        ...     print(f"Handled error: {exc}")
+    """
+
+    def decorator(func: Callable) -> Callable:
+        target_app = app or _get_default_app()
+        # Use Exception as the default error type
+        target_app._error_handlers[Exception] = func
+        return func
+
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
+
+
+# Function calling utilities
+
+
+async def call(func: Callable, *args, app: Whiskey = None, **kwargs) -> Any:
+    """Global function to call a function with dependency injection.
+
+    Args:
+        func: The function to call
+        *args: Positional arguments
+        app: Optional Whiskey instance (uses default if None)
+        **kwargs: Keyword arguments (override injection)
+
+    Returns:
+        The function's return value
+
+    Examples:
+        >>> def process_data(db: Database, user_id: int):
+        ...     return db.get_user(user_id)
+        >>>
+        >>> result = await call(process_data, user_id=123)
+    """
+    target_app = app or _get_default_app()
+    return await target_app.call_async(func, *args, **kwargs)
+
+
+def call_sync(func: Callable, *args, app: Whiskey = None, **kwargs) -> Any:
+    """Global function to call a function with dependency injection (sync)."""
+    target_app = app or _get_default_app()
+    return target_app.call_sync(func, *args, **kwargs)
+
+
+def invoke(func: Callable, *, app: Whiskey = None, **overrides) -> Any:
+    """Global function to invoke a function with full dependency injection."""
+    target_app = app or _get_default_app()
+    # For sync functions, call synchronously
+    if asyncio.iscoroutinefunction(func):
+        # For async functions, return the coroutine from invoke_async
+        return target_app.invoke_async(func, **overrides)
+    else:
+        # For sync functions, use invoke (which is sync in the app)
+        return target_app.invoke(func, **overrides)
+
+
+def wrap_function(func: Callable, *, app: Whiskey = None) -> Callable:
+    """Global function to wrap a function with automatic injection.
+
+    Args:
+        func: The function to wrap
+        app: Optional Whiskey instance (uses default if None)
+
+    Returns:
+        Wrapped function that uses automatic injection
+
+    Examples:
+        >>> def process_data(db: Database, user_id: int):
+        ...     return db.get_user(user_id)
+        >>>
+        >>> injected_process = wrap_function(process_data)
+        >>> result = await injected_process(user_id=123)  # db auto-injected
+    """
+    target_app = app or _get_default_app()
+    return target_app.wrap_function(func)
+
+
+# Service resolution utilities
+
+
+def resolve(key: str | type, *, app: Whiskey = None) -> Any:
+    """Global function to resolve a service.
+
+    Args:
+        key: Service key (string or type)
+        app: Optional Whiskey instance (uses default if None)
+
+    Returns:
+        The resolved service instance
+
+    Examples:
+        >>> database = resolve('database')
+        >>> email_service = resolve(EmailService)
+    """
+    if key is None:
+        raise ValueError("Service key cannot be None")
+    target_app = app or _get_default_app()
+    return target_app.resolve(key)
+
+
+async def resolve_async(key: str | type, *, app: Whiskey = None) -> Any:
+    """Global async function to resolve a service."""
+    target_app = app or _get_default_app()
+    return await target_app.resolve_async(key)
+
+
+def get_app() -> Whiskey:
+    """Get the default application instance."""
+    return _get_default_app()
+
+
+def configure_app(config_func: Callable[[Whiskey], None]) -> None:
+    """Configure the default application.
+
+    Args:
+        config_func: Function that configures the application
+
+    Examples:
+        >>> def setup_services(app: Whiskey):
+        ...     app.container.add_singleton('config', load_config())
+        >>>
+        >>> configure_app(setup_services)
+    """
+    app = _get_default_app()
+    config_func(app)

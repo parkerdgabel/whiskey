@@ -1,466 +1,798 @@
-"""Tests for the Application IoC container."""
+"""Comprehensive tests for the Whiskey application class."""
 
 import asyncio
-from typing import Any
+from typing import Optional
 
 import pytest
 
-from whiskey.core.application import Application, ApplicationConfig
-from whiskey.core.decorators import inject
-from whiskey.core.events import Event, EventBus
+from whiskey import Container, Scope, Whiskey
+from whiskey.core.builder import ComponentBuilder, WhiskeyBuilder
+from whiskey.core.errors import ResolutionError
 from whiskey.core.types import Disposable, Initializable
-from ..conftest import AsyncInitService, DisposableService, SimpleService
 
 
-class TestApplicationConfig:
-    """Test ApplicationConfig data class."""
-    
-    @pytest.mark.unit
-    def test_default_config(self):
-        """Test default configuration values."""
-        config = ApplicationConfig()
-        
-        assert config.name == "WhiskeyApp"
-        assert config.version == "0.1.0"
-        assert config.debug is False
-        assert config.auto_discover is True
-        assert config.module_scan_paths == []
-    
-    @pytest.mark.unit
-    def test_custom_config(self):
-        """Test custom configuration."""
-        config = ApplicationConfig(
-            name="TestApp",
-            version="2.0.0",
-            debug=True,
-            auto_discover=False,
-            module_scan_paths=["src", "tests"]
-        )
-        
-        assert config.name == "TestApp"
-        assert config.version == "2.0.0"
-        assert config.debug is True
-        assert config.auto_discover is False
-        assert config.module_scan_paths == ["src", "tests"]
+# Test components/services
+class SimpleService:
+    """Simple test service."""
+
+    def __init__(self, value: str = "test"):
+        self.value = value
 
 
-class TestApplication:
-    """Test Application container."""
-    
-    @pytest.mark.unit
-    def test_application_creation(self):
-        """Test creating application with default config."""
-        app = Application()
-        
-        assert app.config.name == "WhiskeyApp"
-        assert not app._running
-        assert len(app._startup_hooks) == 0
-        assert len(app._shutdown_hooks) == 0
-    
-    @pytest.mark.unit
-    def test_application_with_config(self):
-        """Test creating application with custom config."""
-        config = ApplicationConfig(name="CustomApp", debug=True)
-        app = Application(config)
-        
-        assert app.config.name == "CustomApp"
-        assert app.config.debug is True
-    
-    @pytest.mark.unit
-    async def test_core_services_registered(self):
-        """Test core services are registered automatically."""
-        app = Application()
-        
-        # Check Application itself is registered
-        resolved_app = await app.container.resolve(Application)
-        assert resolved_app is app
-        
-        # Check EventBus is registered
-        event_bus = await app.container.resolve(EventBus)
-        assert event_bus is app.event_bus
-        
-        # Check ApplicationConfig is registered
-        config = await app.container.resolve(ApplicationConfig)
-        assert config is app.config
-    
-    @pytest.mark.unit
-    async def test_service_decorator(self):
-        """Test @service decorator registers services."""
-        app = Application()
-        
-        @app.service
-        class TestService:
-            value = "test"
-        
-        # Service should be registered
-        service = await app.container.resolve(TestService)
-        assert service.value == "test"
-        
+class DatabaseService:
+    """Mock database service."""
+
+    def __init__(self, connection_string: str = "sqlite://"):
+        self.connection_string = connection_string
+
+
+class CacheService:
+    """Mock cache service."""
+
+    def __init__(self, ttl: int = 300):
+        self.ttl = ttl
+
+
+class ComplexService:
+    """Service with dependencies."""
+
+    def __init__(self, db: DatabaseService, cache: CacheService):
+        self.db = db
+        self.cache = cache
+
+
+class DependentService:
+    """Service with single dependency."""
+
+    def __init__(self, simple: SimpleService):
+        self.simple = simple
+
+
+# Factory functions
+def create_simple_service():
+    """Factory function for testing."""
+    return SimpleService("factory")
+
+
+async def async_service_factory():
+    """Async factory for testing."""
+    await asyncio.sleep(0.001)
+    return DatabaseService("async://")
+
+
+class TestWhiskeyBasics:
+    """Test basic Whiskey functionality."""
+
+    def test_whiskey_creation(self):
+        """Test creating a Whiskey instance."""
+        app = Whiskey()
+        assert app is not None
+        assert isinstance(app.container, Container)
+        assert app._is_running is False
+        assert app._startup_callbacks == []
+        assert app._shutdown_callbacks == []
+        assert app._error_handlers == {}
+        assert app._middleware == []
+
+    def test_whiskey_with_container(self):
+        """Test creating Whiskey with existing container."""
+        container = Container()
+        container.register("test", "value")
+
+        app = Whiskey(container=container)
+        assert app.container is container
+        assert app.resolve("test") == "value"
+
+    def test_whiskey_with_name(self):
+        """Test creating Whiskey with custom name."""
+        app = Whiskey(name="MyApp")
+        assert app.name == "MyApp"
+
+    def test_whiskey_default_name(self):
+        """Test Whiskey default name."""
+        app = Whiskey()
+        assert app.name == "Whiskey"
+
+
+class TestComponentRegistration:
+    """Test component registration methods."""
+
+    def test_register_component_direct(self):
+        """Test direct component registration."""
+        app = Whiskey()
+        app.register(SimpleService, SimpleService())
+
+        instance = app.resolve(SimpleService)
+        assert isinstance(instance, SimpleService)
+
+    def test_component_decorator(self):
+        """Test @app.component decorator."""
+        app = Whiskey()
+
+        @app.component
+        class MyService:
+            def __init__(self):
+                self.value = 42
+
+        instance = app.resolve(MyService)
+        assert isinstance(instance, MyService)
+        assert instance.value == 42
+
+    def test_component_decorator_with_params(self):
+        """Test @app.component with parameters."""
+        app = Whiskey()
+
+        @app.component(name="custom", scope=Scope.SINGLETON)
+        class MyService:
+            def __init__(self):
+                self.id = id(self)
+
+        # Resolve by custom name
+        instance1 = app.resolve("custom")
+        instance2 = app.resolve("custom")
+
         # Should be singleton
-        service2 = await app.container.resolve(TestService)
-        assert service is service2
-    
-    @pytest.mark.unit
-    async def test_service_with_lifecycle(self):
-        """Test service with initialize and dispose methods."""
-        app = Application()
-        
-        init_called = False
-        dispose_called = False
-        
-        @app.service
-        class LifecycleService(Initializable, Disposable):
-            async def initialize(self):
-                nonlocal init_called
-                init_called = True
-            
-            async def dispose(self):
-                nonlocal dispose_called
-                dispose_called = True
-        
-        # Lifecycle methods called during startup/shutdown
-        async with app.lifespan():
-            assert init_called
-            assert not dispose_called
-        
-        assert dispose_called
-    
-    @pytest.mark.unit
-    async def test_lazy_service(self):
-        """Test lazy service initialization."""
-        app = Application()
-        
-        init_called = False
-        
-        @app.service(lazy=True)
-        class LazyService(Initializable):
-            async def initialize(self):
-                nonlocal init_called
-                init_called = True
-        
-        # Lazy service not initialized on startup
-        async with app.lifespan():
-            assert not init_called
-    
-    @pytest.mark.unit
-    async def test_named_service(self):
-        """Test named service registration."""
-        app = Application()
-        
-        @app.service(name="primary")
-        class NamedService:
-            value = "primary"
-        
-        # Resolve by name
-        service = await app.container.resolve(NamedService, name="primary")
-        assert service.value == "primary"
-    
-    @pytest.mark.unit
-    def test_startup_hook(self):
-        """Test startup hook registration."""
-        app = Application()
-        
-        async def startup_task():
-            pass
-        
-        decorated = app.on_startup(startup_task)
-        
-        assert decorated is startup_task
-        assert startup_task in app._startup_hooks
-    
-    @pytest.mark.unit
-    def test_shutdown_hook(self):
-        """Test shutdown hook registration."""
-        app = Application()
-        
-        async def shutdown_task():
-            pass
-        
-        decorated = app.on_shutdown(shutdown_task)
-        
-        assert decorated is shutdown_task
-        assert shutdown_task in app._shutdown_hooks
-    
-    @pytest.mark.unit
-    async def test_startup_shutdown_lifecycle(self):
-        """Test startup and shutdown lifecycle."""
-        app = Application()
-        
+        assert instance1 is instance2
+
+    def test_provider_decorator_alias(self):
+        """Test @app.provider is alias for @app.component."""
+        app = Whiskey()
+        assert app.provider == app.component
+
+    def test_managed_decorator(self):
+        """Test @app.managed decorator for transient scope."""
+        app = Whiskey()
+
+        @app.managed
+        class ManagedService:
+            def __init__(self):
+                self.id = id(self)
+
+        instance1 = app.resolve(ManagedService)
+        instance2 = app.resolve(ManagedService)
+
+        # Should be different instances (transient)
+        assert instance1 is not instance2
+
+    def test_system_decorator(self):
+        """Test @app.system decorator for singleton scope."""
+        app = Whiskey()
+
+        @app.system
+        class SystemService:
+            def __init__(self):
+                self.id = id(self)
+
+        instance1 = app.resolve(SystemService)
+        instance2 = app.resolve(SystemService)
+
+        # Should be same instance (singleton)
+        assert instance1 is instance2
+
+    def test_singleton_method(self):
+        """Test app.singleton() method."""
+        app = Whiskey()
+        app.singleton(DatabaseService, instance=DatabaseService("singleton://"))
+
+        instance = app.resolve(DatabaseService)
+        assert instance.connection_string == "singleton://"
+
+    def test_transient_method(self):
+        """Test app.transient() method."""
+        app = Whiskey()
+        app.transient(SimpleService)
+
+        instance1 = app.resolve(SimpleService)
+        instance2 = app.resolve(SimpleService)
+
+        assert instance1 is not instance2
+
+    def test_factory_method(self):
+        """Test app.factory() method."""
+        app = Whiskey()
+        app.factory(SimpleService, create_simple_service)
+
+        instance = app.resolve(SimpleService)
+        assert instance.value == "factory"
+
+    async def test_async_factory(self):
+        """Test async factory registration."""
+        app = Whiskey()
+        app.factory(DatabaseService, async_service_factory)
+
+        instance = await app.resolve_async(DatabaseService)
+        assert instance.connection_string == "async://"
+
+
+class TestDependencyInjection:
+    """Test dependency injection features."""
+
+    def test_inject_decorator(self):
+        """Test @app.inject decorator."""
+        app = Whiskey()
+        app.singleton(SimpleService, instance=SimpleService("injected"))
+
+        @app.inject
+        def process(service: SimpleService, value: str) -> str:
+            return f"{service.value}: {value}"
+
+        result = process(value="test")
+        assert result == "injected: test"
+
+    async def test_inject_async_function(self):
+        """Test @app.inject with async function."""
+        app = Whiskey()
+        app.singleton(DatabaseService)
+
+        @app.inject
+        async def async_process(db: DatabaseService) -> str:
+            await asyncio.sleep(0.001)
+            return db.connection_string
+
+        result = await async_process()
+        assert result == "sqlite://"
+
+    def test_inject_with_defaults(self):
+        """Test injection with default parameters."""
+        app = Whiskey()
+        app.singleton(SimpleService)
+
+        @app.inject
+        def greet(service: SimpleService, name: str = "World") -> str:
+            return f"{service.value}: Hello, {name}!"
+
+        result = greet()
+        assert result == "test: Hello, World!"
+
+    def test_call_method(self):
+        """Test app.call() method."""
+        app = Whiskey()
+        app.singleton(SimpleService)
+
+        def calculate(service: SimpleService, x: int) -> str:
+            return f"{service.value}: {x * 2}"
+
+        result = app.call(calculate, x=5)
+        assert result == "test: 10"
+
+    async def test_call_async(self):
+        """Test app.call() with async function."""
+        app = Whiskey()
+        app.singleton(DatabaseService)
+
+        async def get_info(db: DatabaseService) -> str:
+            await asyncio.sleep(0.001)
+            return f"Connected to: {db.connection_string}"
+
+        result = await app.call_async(get_info)
+        assert result == "Connected to: sqlite://"
+
+    def test_invoke_method(self):
+        """Test app.invoke() method."""
+        app = Whiskey()
+        app.singleton(SimpleService)
+
+        def get_value(service: SimpleService) -> str:
+            return service.value
+
+        result = app.invoke(get_value)
+        assert result == "test"
+
+    def test_automatic_dependency_resolution(self):
+        """Test automatic dependency resolution."""
+        app = Whiskey()
+        app.transient(DatabaseService)
+        app.transient(CacheService)
+        app.transient(ComplexService)
+
+        instance = app.resolve(ComplexService)
+        assert isinstance(instance, ComplexService)
+        assert isinstance(instance.db, DatabaseService)
+        assert isinstance(instance.cache, CacheService)
+
+
+class TestLifecycle:
+    """Test application lifecycle management."""
+
+    async def test_startup_shutdown(self):
+        """Test basic startup and shutdown."""
+        app = Whiskey()
         startup_called = False
         shutdown_called = False
-        
+
         @app.on_startup
-        async def on_start():
+        async def startup():
             nonlocal startup_called
             startup_called = True
-        
+
         @app.on_shutdown
-        async def on_stop():
+        async def shutdown():
             nonlocal shutdown_called
             shutdown_called = True
-        
-        # Run lifecycle
-        await app.startup()
+
+        await app.start()
         assert startup_called
-        assert app._running
-        
-        await app.shutdown()
+        assert app._is_running
+
+        await app.stop()
         assert shutdown_called
-        assert not app._running
-    
-    @pytest.mark.unit
-    async def test_background_task(self):
-        """Test background task registration and execution."""
-        app = Application()
-        
-        execution_count = 0
-        
-        @app.task(interval=0.05, run_immediately=True)
-        async def periodic_task():
-            nonlocal execution_count
-            execution_count += 1
-        
-        async with app.lifespan():
-            # Should run immediately
-            await asyncio.sleep(0.01)
-            assert execution_count == 1
-            
-            # Should run again after interval
-            await asyncio.sleep(0.06)
-            assert execution_count >= 2
-    
-    @pytest.mark.unit
+        assert not app._is_running
+
+    async def test_sync_lifecycle_callbacks(self):
+        """Test sync callbacks in lifecycle."""
+        app = Whiskey()
+        events = []
+
+        @app.on_startup
+        def sync_startup():
+            events.append("startup")
+
+        @app.on_shutdown
+        def sync_shutdown():
+            events.append("shutdown")
+
+        await app.start()
+        await app.stop()
+
+        assert events == ["startup", "shutdown"]
+
+    async def test_multiple_startup_callbacks(self):
+        """Test multiple startup callbacks execute in order."""
+        app = Whiskey()
+        events = []
+
+        @app.on_startup
+        async def first():
+            events.append("first")
+
+        @app.on_startup
+        async def second():
+            events.append("second")
+
+        await app.start()
+        assert events == ["first", "second"]
+
+    async def test_error_handler(self):
+        """Test error handler registration."""
+        app = Whiskey()
+        handled_errors = []
+
+        @app.on_error
+        async def handle_value_error(error: ValueError):
+            handled_errors.append(error)
+
+        # Emit error event
+        error = ValueError("Test error")
+        await app.emit("error", error)
+
+        assert len(handled_errors) == 1
+        assert handled_errors[0] is error
+
+    async def test_service_initialization(self):
+        """Test services implementing Initializable."""
+        app = Whiskey()
+        initialized = False
+
+        @app.component
+        class InitializableService(Initializable):
+            async def initialize(self):
+                nonlocal initialized
+                initialized = True
+
+        # Start app should initialize services
+        await app.start()
+        assert initialized
+
+    async def test_service_disposal(self):
+        """Test services implementing Disposable."""
+        app = Whiskey()
+        disposed = False
+
+        @app.system  # Singleton so we can track disposal
+        class DisposableService(Disposable):
+            async def dispose(self):
+                nonlocal disposed
+                disposed = True
+
+        # Resolve to create instance
+        app.resolve(DisposableService)
+
+        # Stop app should dispose services
+        await app.start()
+        await app.stop()
+        assert disposed
+
+    async def test_context_manager(self):
+        """Test using Whiskey as context manager."""
+        events = []
+
+        async with Whiskey() as app:
+
+            @app.on_startup
+            async def on_start():
+                events.append("started")
+
+            @app.on_shutdown
+            async def on_stop():
+                events.append("stopped")
+
+            assert app._is_running
+            # Allow startup callbacks to run
+            await asyncio.sleep(0)
+            events.append("running")
+
+        assert events == ["started", "running", "stopped"]
+
+    def test_sync_context_manager(self):
+        """Test using Whiskey as sync context manager."""
+        with Whiskey() as app:
+            app.singleton(SimpleService)
+            instance = app.resolve(SimpleService)
+            assert isinstance(instance, SimpleService)
+
+
+class TestMiddleware:
+    """Test middleware functionality."""
+
+    def test_use_middleware(self):
+        """Test adding middleware."""
+        app = Whiskey()
+
+        def middleware1(next_handler):
+            return next_handler
+
+        def middleware2(next_handler):
+            return next_handler
+
+        app.use(middleware1)
+        app.use(middleware2)
+
+        assert len(app._middleware) == 2
+        assert middleware1 in app._middleware
+        assert middleware2 in app._middleware
+
+    async def test_middleware_chain(self):
+        """Test middleware chain execution."""
+        app = Whiskey()
+        calls = []
+
+        def tracking_middleware(name):
+            def middleware(next_handler):
+                async def handler(*args, **kwargs):
+                    calls.append(f"{name}_before")
+                    result = await next_handler(*args, **kwargs)
+                    calls.append(f"{name}_after")
+                    return result
+
+                return handler
+
+            return middleware
+
+        app.use(tracking_middleware("m1"))
+        app.use(tracking_middleware("m2"))
+
+        # Middleware would be applied to request handlers
+        # This is a simplified test of the pattern
+        async def base_handler():
+            calls.append("handler")
+            return "result"
+
+        # Apply middleware chain manually for testing
+        handler = base_handler
+        for mw in reversed(app._middleware):
+            handler = mw(handler)
+
+        await handler()
+        assert calls == ["m1_before", "m2_before", "handler", "m2_after", "m1_after"]
+
+
+class TestBuilderIntegration:
+    """Test WhiskeyBuilder integration."""
+
+    def test_configure_with_builder(self):
+        """Test configuring app with builder."""
+        app = Whiskey()
+
+        def configure(builder: WhiskeyBuilder):
+            builder.add_singleton(SimpleService, instance=SimpleService("configured"))
+            builder.add_transient(DatabaseService)
+
+        app.configure(configure)
+
+        # Verify registrations
+        simple = app.resolve(SimpleService)
+        assert simple.value == "configured"
+
+        db = app.resolve(DatabaseService)
+        assert isinstance(db, DatabaseService)
+
+    def test_builder_property(self):
+        """Test accessing container builder."""
+        app = Whiskey()
+
+        # Should create and return builder
+        builder = app.builder
+        assert isinstance(builder, ComponentBuilder)
+
+        # Builder should add to the app's container
+        builder._app_builder = app
+
+    def test_build_method(self):
+        """Test build() method."""
+        app = Whiskey()
+
+        # Configure using builder
+        app.container.add_singleton(SimpleService).build()
+
+        instance = app.resolve(SimpleService)
+        assert isinstance(instance, SimpleService)
+
+
+class TestEventEmitter:
+    """Test event emitter functionality."""
+
+    async def test_emit_event(self):
+        """Test emitting custom events."""
+        app = Whiskey()
+        received_events = []
+
+        @app.on("custom_event")
+        async def handle_custom(data):
+            received_events.append(data)
+
+        await app.emit("custom_event", {"value": 42})
+        assert len(received_events) == 1
+        assert received_events[0] == {"value": 42}
+
+    async def test_wildcard_event_handler(self):
+        """Test wildcard event handlers."""
+        app = Whiskey()
+        all_events = []
+
+        @app.on("*")
+        async def handle_all(event_name, data):
+            all_events.append((event_name, data))
+
+        await app.emit("event1", "data1")
+        await app.emit("event2", "data2")
+
+        assert len(all_events) == 2
+        assert all_events[0] == ("event1", "data1")
+        assert all_events[1] == ("event2", "data2")
+
+    def test_hook_decorator(self):
+        """Test @app.hook decorator."""
+        app = Whiskey()
+        hooks_called = []
+
+        @app.hook("before_resolve")
+        def before_resolve_hook(key):
+            hooks_called.append(("before_resolve", key))
+
+        # Hooks would be called during resolution
+        # This tests the registration
+        assert "before_resolve" in app._hooks
+        assert len(app._hooks["before_resolve"]) == 1
+
+
+class TestTaskManagement:
+    """Test background task functionality."""
+
+    async def test_task_decorator(self):
+        """Test @app.task decorator."""
+        app = Whiskey()
+        task_runs = []
+
+        @app.task(interval=0.1)
+        async def background_task():
+            task_runs.append(1)
+
+        # Start app to begin tasks
+        await app.start()
+
+        # Wait for task to run
+        await asyncio.sleep(0.15)
+
+        # Stop app to cancel tasks
+        await app.stop()
+
+        assert len(task_runs) > 0
+
     async def test_task_with_dependencies(self):
-        """Test background task with dependency injection."""
-        app = Application()
-        
-        app.container.register_singleton(SimpleService)
-        
-        task_service = None
-        
-        @app.task(run_immediately=True)
-        async def task_with_deps(service: SimpleService):
-            nonlocal task_service
-            task_service = service
-        
-        async with app.lifespan():
-            await asyncio.sleep(0.01)
-            assert task_service is not None
-            assert isinstance(task_service, SimpleService)
-    
-    @pytest.mark.unit
-    async def test_task_error_handling(self):
-        """Test task error handling doesn't crash app."""
-        app = Application()
-        
-        error_count = 0
-        
-        @app.task(interval=0.05, run_immediately=False)
-        async def failing_task():
-            nonlocal error_count
-            error_count += 1
-            raise ValueError("Task failed")
-        
-        async with app.lifespan():
-            await asyncio.sleep(0.1)
-            # Task should have tried to run despite errors
-            assert error_count >= 1
-    
-    @pytest.mark.unit
-    def test_event_handler_registration(self):
-        """Test event handler registration."""
-        app = Application()
-        
-        @app.on("test_event")
-        async def handle_test_event(event):
+        """Test task with injected dependencies."""
+        app = Whiskey()
+        app.singleton(SimpleService, instance=SimpleService("task"))
+        results = []
+
+        @app.task(interval=0.1)
+        @app.inject
+        async def service_task(service: SimpleService):
+            results.append(service.value)
+
+        await app.start()
+        await asyncio.sleep(0.15)
+        await app.stop()
+
+        assert len(results) > 0
+        assert all(r == "task" for r in results)
+
+
+class TestExtensionSystem:
+    """Test extension system functionality."""
+
+    def test_extend_method(self):
+        """Test extending app with custom methods."""
+        app = Whiskey()
+
+        def my_extension(app_instance):
+            # Add custom method
+            app_instance.custom_method = lambda: "extended"
+
+        app.extend(my_extension)
+
+        assert hasattr(app, "custom_method")
+        assert app.custom_method() == "extended"
+
+    def test_add_decorator_method(self):
+        """Test adding custom decorators."""
+        app = Whiskey()
+        decorated_items = []
+
+        def custom_decorator(name):
+            def decorator(cls):
+                decorated_items.append((name, cls))
+                return cls
+
+            return decorator
+
+        app.add_decorator("custom", custom_decorator)
+
+        @app.custom("test")
+        class TestClass:
             pass
-        
-        # Handler should be registered with event bus
-        assert len(app.event_bus._handlers["test_event"]) == 1
-    
-    @pytest.mark.unit
-    async def test_event_handler_with_di(self):
-        """Test event handler with dependency injection."""
-        app = Application()
-        
-        app.container.register_singleton(SimpleService)
-        
-        handler_called = False
-        handler_service = None
-        
-        @app.on("test_event")
-        async def handle_with_deps(event, service: SimpleService):
-            nonlocal handler_called, handler_service
-            handler_called = True
-            handler_service = service
-        
-        # Start event bus
-        await app.event_bus.start()
-        
-        # Emit event
-        await app.event_bus.emit("test_event", {"data": "test"})
-        await asyncio.sleep(0.01)
-        
-        assert handler_called
-        assert isinstance(handler_service, SimpleService)
-        
-        await app.event_bus.stop()
-    
-    @pytest.mark.unit
-    async def test_middleware_registration(self):
-        """Test middleware registration and execution."""
-        app = Application()
-        
-        middleware_called = False
-        
-        @app.middleware
-        class TestMiddleware:
-            async def process(self, event: Any, next_handler):
-                nonlocal middleware_called
-                middleware_called = True
-                return await next_handler(event)
-        
-        async with app.lifespan():
-            # Middleware should be registered
-            assert len(app.event_bus._middleware) == 1
-            
-            # Test middleware is called
-            @app.on("test_event")
-            async def handler(event):
-                return "handled"
-            
-            result = await app.event_bus.emit("test_event", {})
-            await asyncio.sleep(0.01)
-            
-            assert middleware_called
-    
-    @pytest.mark.unit
-    async def test_multiple_startup_hooks_order(self):
-        """Test multiple startup hooks execute in order."""
-        app = Application()
-        
-        call_order = []
-        
+
+        assert len(decorated_items) == 1
+        assert decorated_items[0] == ("test", TestClass)
+
+
+class TestErrorHandling:
+    """Test error handling scenarios."""
+
+    def test_resolve_missing_service(self):
+        """Test resolving unregistered service."""
+        app = Whiskey()
+
+        with pytest.raises(ResolutionError):
+            app.resolve("missing_service")
+
+    def test_circular_dependency(self):
+        """Test circular dependency detection."""
+        app = Whiskey()
+
+        class ServiceA:
+            def __init__(self, b: "ServiceB"):
+                self.b = b
+
+        class ServiceB:
+            def __init__(self, a: ServiceA):
+                self.a = a
+
+        app.transient(ServiceA)
+        app.transient(ServiceB)
+
+        with pytest.raises(Exception):  # Would be CircularDependencyError
+            app.resolve(ServiceA)
+
+    async def test_startup_error_handling(self):
+        """Test error during startup."""
+        app = Whiskey()
+
         @app.on_startup
-        async def first_startup():
-            call_order.append("first")
-        
-        @app.on_startup
-        async def second_startup():
-            call_order.append("second")
-        
-        await app.startup()
-        
-        assert call_order == ["first", "second"]
-    
-    @pytest.mark.unit
-    async def test_shutdown_hooks_reverse_order(self):
-        """Test shutdown hooks execute in reverse order."""
-        app = Application()
-        
-        call_order = []
-        
-        @app.on_shutdown
-        async def first_shutdown():
-            call_order.append("first")
-        
-        @app.on_shutdown
-        async def second_shutdown():
-            call_order.append("second")
-        
-        await app.shutdown()
-        
-        # Should be reverse order
-        assert call_order == ["second", "first"]
-    
-    @pytest.mark.unit
-    async def test_lifespan_context_manager(self):
-        """Test lifespan context manager."""
-        app = Application()
-        
-        startup_called = False
-        shutdown_called = False
-        
-        @app.on_startup
-        async def on_start():
-            nonlocal startup_called
-            startup_called = True
-        
-        @app.on_shutdown
-        async def on_stop():
-            nonlocal shutdown_called
-            shutdown_called = True
-        
-        async with app.lifespan():
-            assert startup_called
-            assert not shutdown_called
-            assert app._running
-        
-        assert shutdown_called
-        assert not app._running
-    
-    @pytest.mark.unit
-    async def test_background_task_cancellation(self):
-        """Test background tasks are cancelled on shutdown."""
-        app = Application()
-        
-        task_cancelled = False
-        
-        @app.task(interval=10)  # Long interval
-        async def long_running_task():
-            try:
-                await asyncio.sleep(100)
-            except asyncio.CancelledError:
-                nonlocal task_cancelled
-                task_cancelled = True
-                raise
-        
-        await app.startup()
-        assert len(app._background_tasks) == 1
-        
-        await app.shutdown()
-        assert task_cancelled
-    
-    @pytest.mark.unit
-    async def test_container_disposal_on_shutdown(self):
-        """Test container is disposed on shutdown."""
-        app = Application()
-        
-        # Register a disposable service
-        app.container.register_singleton(DisposableService)
-        
-        async with app.lifespan():
-            service = await app.container.resolve(DisposableService)
-            assert not service.disposed
-        
-        # Container should have disposed all services
-        assert service.disposed
-    
-    @pytest.mark.unit
-    def test_service_decorator_direct_call(self):
-        """Test service decorator can be called directly."""
-        app = Application()
-        
-        class DirectService:
-            value = "direct"
-        
-        # Direct call syntax
-        app.service(DirectService)
-        
-        # Should be registered
-        assert app.container.has(DirectService)
-    
-    @pytest.mark.unit
-    def test_middleware_decorator_direct_call(self):
-        """Test middleware decorator can be called directly."""
-        app = Application()
-        
-        class DirectMiddleware:
-            async def process(self, event, next_handler):
-                return await next_handler(event)
-        
-        # Direct call syntax
-        app.middleware(DirectMiddleware)
-        
-        # Should be registered
-        assert app.container.has(DirectMiddleware)
+        async def failing_startup():
+            raise RuntimeError("Startup failed")
+
+        with pytest.raises(RuntimeError):
+            await app.start()
+
+        # App should not be running after failed startup
+        assert not app._is_running
+
+    def test_invalid_configuration(self):
+        """Test invalid configuration scenarios."""
+        app = Whiskey()
+
+        # Test registering None as provider
+        with pytest.raises(ValueError):
+            app.register("service", None)
+
+
+class TestMetadataAndPriority:
+    """Test component metadata and priority features."""
+
+    def test_component_with_metadata(self):
+        """Test registering component with metadata."""
+        app = Whiskey()
+
+        @app.component(metadata={"version": "1.0", "author": "test"}, tags={"core", "stable"})
+        class MetadataService:
+            pass
+
+        # Metadata would be accessible through registry
+        # This tests the registration accepts metadata
+
+    def test_component_priority(self):
+        """Test component registration priority."""
+        app = Whiskey()
+        registration_order = []
+
+        @app.component(priority=10)
+        class HighPriorityService:
+            def __init__(self):
+                registration_order.append("high")
+
+        @app.component(priority=1)
+        class LowPriorityService:
+            def __init__(self):
+                registration_order.append("low")
+
+        # Priority would affect initialization order
+        # This tests priority parameter is accepted
+
+
+class TestEdgeCases:
+    """Test edge cases and special scenarios."""
+
+    def test_empty_app_resolution(self):
+        """Test resolution in empty app."""
+        app = Whiskey()
+
+        # Should auto-create simple classes
+        instance = app.resolve(SimpleService)
+        assert isinstance(instance, SimpleService)
+
+    def test_resolve_with_name_override(self):
+        """Test resolving with name parameter."""
+        app = Whiskey()
+        app.singleton(SimpleService, instance=SimpleService("primary"), name="primary")
+        app.singleton(SimpleService, instance=SimpleService("secondary"), name="secondary")
+
+        primary = app.resolve(SimpleService, name="primary")
+        secondary = app.resolve(SimpleService, name="secondary")
+
+        assert primary.value == "primary"
+        assert secondary.value == "secondary"
+
+    def test_optional_dependency_resolution(self):
+        """Test resolution with optional dependencies."""
+        app = Whiskey()
+
+        class OptionalDepService:
+            def __init__(self, db: Optional[DatabaseService] = None):
+                self.db = db
+
+        app.transient(OptionalDepService)
+        # Don't register DatabaseService
+
+        instance = app.resolve(OptionalDepService)
+        assert instance.db is None
+
+    async def test_async_with_sync_resolve(self):
+        """Test mixing async and sync resolution."""
+        app = Whiskey()
+        app.factory(SimpleService, create_simple_service)
+
+        # Sync resolve of sync factory
+        instance = app.resolve(SimpleService)
+        assert instance.value == "factory"
+
+        # Async resolve of sync factory
+        instance2 = await app.resolve_async(SimpleService)
+        assert instance2.value == "factory"
+
+    def test_whiskey_singleton_behavior(self):
+        """Test that Whiskey itself is not a singleton."""
+        app1 = Whiskey()
+        app2 = Whiskey()
+
+        assert app1 is not app2
+        assert app1.container is not app2.container

@@ -1,60 +1,43 @@
 """Shared test fixtures and utilities."""
 
 import asyncio
-from dataclasses import dataclass
-from typing import Any
 
 import pytest
 
+from whiskey.core.builder import create_app
 from whiskey.core.container import Container
-from whiskey.core.decorators import set_default_container
-from whiskey.core.types import Disposable, Initializable
 
 
 @pytest.fixture
 def container():
     """Create a fresh container for testing."""
     container = Container()
-    # Set as default for decorators
-    set_default_container(container)
     yield container
-    # Cleanup
-    asyncio.run(container.dispose())
+    # Cleanup caches
+    container.clear_caches()
 
 
 @pytest.fixture
 def event_bus():
     """Create a fresh event bus for testing."""
-    from whiskey.core.events import EventBus
-    
-    bus = EventBus()
-    yield bus
-    # Cleanup if started
-    if bus._running:
-        asyncio.run(bus.stop())
+    # Event bus is now part of Application
+    app = create_app().build_app()
+    yield app._event_emitter
+    # Cleanup handled by application
 
 
 @pytest.fixture
 def app():
     """Create a test application."""
-    from whiskey.core.application import Application, ApplicationConfig
-    
-    config = ApplicationConfig(
-        name="TestApp",
-        version="0.1.0",
-        debug=True,
-    )
-    app = Application(config)
+    app = create_app().build_app()
     yield app
-    # Cleanup
-    if app._running:
-        asyncio.run(app.shutdown())
+    # Cleanup handled by context manager
 
 
 # Test classes for dependency injection
 class SimpleService:
     """Simple service with no dependencies."""
-    
+
     def __init__(self):
         self.initialized = True
         self.value = "simple"
@@ -62,7 +45,7 @@ class SimpleService:
 
 class DependentService:
     """Service that depends on SimpleService."""
-    
+
     def __init__(self, simple: SimpleService):
         self.simple = simple
         self.value = "dependent"
@@ -70,63 +53,63 @@ class DependentService:
 
 class CircularServiceA:
     """Service A in circular dependency."""
-    
+
     def __init__(self, service_b: "CircularServiceB"):
         self.service_b = service_b
 
 
 class CircularServiceB:
     """Service B in circular dependency."""
-    
+
     def __init__(self, service_a: CircularServiceA):
         self.service_a = service_a
 
 
 class OptionalDependencyService:
     """Service with optional dependency."""
-    
+
     def __init__(self, simple: SimpleService | None = None):
         self.simple = simple
         self.has_dependency = simple is not None
 
 
-class AsyncInitService(Initializable):
+class AsyncInitService:
     """Service with async initialization."""
-    
+
     def __init__(self):
         self.initialized = False
         self.init_count = 0
-    
+
     async def initialize(self):
         await asyncio.sleep(0.01)
         self.initialized = True
         self.init_count += 1
 
 
-class DisposableService(Disposable):
+class DisposableService:
     """Service with disposal logic."""
-    
+
     def __init__(self):
         self.disposed = False
         self.dispose_count = 0
-    
+
     async def dispose(self):
         await asyncio.sleep(0.01)
         self.disposed = True
         self.dispose_count += 1
 
 
-class ComplexService(Initializable, Disposable):
+class ComplexService:
     """Service with both initialization and disposal."""
-    
+
     def __init__(self, simple: SimpleService):
         self.simple = simple
         self.initialized = False
         self.disposed = False
-    
+
     async def initialize(self):
         self.initialized = True
-    
+
     async def dispose(self):
         self.disposed = True
 

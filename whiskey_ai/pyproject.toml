@@ -1,0 +1,21 @@
+[project]
+name = "whiskey-ai"
+version = "0.1.0"
+description = "AI/LLM integration extension for Whiskey framework"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "whiskey>=0.1.0",
+]
+
+# Entry points removed - using extension functions instead
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+whiskey = { workspace = true }
+
+[tool.setuptools.packages.find]
+where = ["src"]
