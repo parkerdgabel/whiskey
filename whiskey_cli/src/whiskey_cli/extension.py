@@ -127,34 +127,50 @@ class CLIManager:
 
         @functools.wraps(original_callback)
         def wrapped_callback(*args, **kwargs):
-            # Use the app's container to handle injection
-            # This ensures the correct container is used
-            if hasattr(original_callback, "__wrapped__"):
-                # Function has inject decorator, call the unwrapped function
-                # through the app's container
-                unwrapped = original_callback.__wrapped__
-                if asyncio.iscoroutinefunction(unwrapped):
-                    # Async function
-                    result = asyncio.run(self.app.container.call(unwrapped, *args, **kwargs))
-                else:
-                    # Sync function
-                    result = self.app.container.call_sync(unwrapped, *args, **kwargs)
-            else:
-                # No injection needed, just call the function
-                result = original_callback(*args, **kwargs)
-                
-                # Handle async results
-                if asyncio.iscoroutine(result):
+            # Check if the function is already wrapped by @inject
+            # If so, we should call the unwrapped version through the container
+            # If not, we can try container.call or fall back to direct call
+            
+            target_func = original_callback
+            
+            # If function has @inject wrapper, get the original function
+            if hasattr(original_callback, '__wrapped__'):
+                # This is likely an @inject wrapped function
+                # We'll use the container to call the unwrapped version
+                target_func = original_callback.__wrapped__
+            
+            try:
+                # Check if function is async
+                if asyncio.iscoroutinefunction(target_func):
+                    # For async functions, we need to handle them in the event loop context
+                    async def async_call():
+                        return await self.app.container.call(target_func, *args, **kwargs)
+                    
                     try:
                         # Try to get existing event loop
                         loop = asyncio.get_running_loop()
-                        # Create task and run it
-                        return loop.run_until_complete(asyncio.create_task(result))
+                        # We're already in an event loop, run it
+                        return loop.run_until_complete(async_call())
                     except RuntimeError:
                         # No event loop running, create one
+                        return asyncio.run(async_call())
+                else:
+                    # For sync functions, use call_sync
+                    return self.app.container.call_sync(target_func, *args, **kwargs)
+            except Exception as e:
+                # If container call fails, fallback to calling original function directly
+                # This handles cases where the function doesn't need DI
+                result = original_callback(*args, **kwargs)
+                
+                # Handle async results from direct call
+                if asyncio.iscoroutine(result):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        return loop.run_until_complete(asyncio.create_task(result))
+                    except RuntimeError:
                         return asyncio.run(result)
-            
-            return result
+                
+                return result
 
         cmd.callback = wrapped_callback
 
