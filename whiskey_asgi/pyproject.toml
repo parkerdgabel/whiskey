@@ -8,6 +8,16 @@ dependencies = [
     "whiskey>=0.1.0",
 ]
 
+[project.optional-dependencies]
+server = [
+    "uvicorn[standard]>=0.35.0",
+]
+test = [
+    "httpx>=0.28.1",
+    "httpx-ws>=0.7.2",
+    "websockets>=15.0.1",
+]
+
 # Entry points removed - using extension functions instead
 
 [tool.uv.sources]

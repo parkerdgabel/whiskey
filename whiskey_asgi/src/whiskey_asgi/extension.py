@@ -200,12 +200,10 @@ class WebSocket:
 
     async def accept(self, subprotocol: str | None = None) -> None:
         """Accept the WebSocket connection."""
-        await self._send(
-            {
-                "type": "websocket.accept",
-                "subprotocol": subprotocol or "",
-            }
-        )
+        message = {"type": "websocket.accept"}
+        if subprotocol:
+            message["subprotocol"] = subprotocol
+        await self._send(message)
         self._accepted = True
 
     async def send(self, data: str | bytes) -> None:
