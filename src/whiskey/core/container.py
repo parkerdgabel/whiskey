@@ -1023,10 +1023,39 @@ class Container:
     def call_sync(self, func: Callable, *args, **kwargs) -> Any:
         """Synchronous version of call().
         
-        Note: This method should only be called when there's no event loop running.
-        In async contexts, use call() directly.
+        This method works both when called from sync context (no event loop)
+        and when called from within an async context (existing event loop).
         """
-        return asyncio.run(self.call(func, *args, **kwargs))
+        try:
+            # Check if we're already in an event loop
+            loop = asyncio.get_running_loop()
+            
+            # We're in an async context, but we need to return a sync result
+            # Use a ThreadPoolExecutor to run the async code in a separate thread
+            import concurrent.futures
+            import threading
+            
+            # This is a complex workaround for the fundamental issue:
+            # We're trying to call async code synchronously from within an async context
+            
+            def run_in_thread():
+                # Create a new event loop in this thread
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(self.call(func, *args, **kwargs))
+                finally:
+                    new_loop.close()
+                    asyncio.set_event_loop(None)
+            
+            # Run in a separate thread with a new event loop
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result()
+                
+        except RuntimeError:
+            # No event loop running, use asyncio.run as normal
+            return asyncio.run(self.call(func, *args, **kwargs))
 
     async def invoke(self, func: Callable, **overrides) -> Any:
         """Invoke a function with full dependency injection.

@@ -25,19 +25,85 @@ class CommandMetadata:
     options: list[dict[str, Any]] = field(default_factory=list)
 
 
+class LazyClickGroup(click.Group):
+    """Click group that finalizes pending commands when accessed."""
+    
+    def __init__(self, manager: CLIManager, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._manager = manager
+    
+    def main(self, *args, **kwargs):
+        """Override main to finalize commands before running."""
+        # Finalize any pending commands
+        if hasattr(self._manager, 'finalize_pending'):
+            self._manager.finalize_pending()
+        
+        # Override default Click behavior to return 0 when showing help
+        try:
+            return super().main(*args, **kwargs)
+        except SystemExit as e:
+            # If it's exit code 2 and we have no args, it's showing help - that's OK
+            if e.code == 2 and not (args and args[0]):
+                raise SystemExit(0) from None
+            raise
+    
+    def invoke(self, ctx):
+        """Override invoke to finalize commands before running."""
+        # Finalize any pending commands
+        if hasattr(self._manager, 'finalize_pending'):
+            self._manager.finalize_pending()
+        
+        return super().invoke(ctx)
+
+
 class CLIManager:
     """Manages CLI commands and groups."""
 
     def __init__(self, app: Whiskey):
         self.app = app
-        self.cli_group = click.Group()
+        self.cli_group = LazyClickGroup(self)
         self.commands: dict[str, CommandMetadata] = {}
         self.groups: dict[str, click.Group] = {}
+        self.pending_commands: dict[str, CommandMetadata] = {}
+    
+    def finalize_pending(self) -> None:
+        """Register any pending commands."""
+        for cmd_name, metadata in list(self.pending_commands.items()):
+            self.add_command(metadata)
+            del self.pending_commands[cmd_name]
 
     def add_command(self, metadata: CommandMetadata) -> None:
         """Add a command to the CLI."""
         # Build Click command from metadata
         func = metadata.func
+        
+        # Auto-detect function parameters as arguments if no explicit arguments defined
+        import inspect
+        if not metadata.arguments and not metadata.options:
+            sig = inspect.signature(metadata.func)
+            
+            # Check if the function is decorated with @inject
+            has_inject = hasattr(metadata.func, "__wrapped__") or hasattr(metadata.func, "_inject_wrapper")
+            
+            for param_name, param in sig.parameters.items():
+                # Skip parameters with defaults (they become options)
+                # Skip **kwargs and *args
+                if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+                    continue
+                
+                # Skip parameters that have type annotations for injection
+                # unless they're basic types
+                if has_inject and param.annotation != param.empty:
+                    # Check if it's a basic type that shouldn't be injected
+                    basic_types = (str, int, float, bool, bytes, list, dict, tuple, set)
+                    if param.annotation not in basic_types:
+                        # This will be injected, skip it
+                        continue
+                
+                if param.default == param.empty:
+                    # No default = positional argument
+                    metadata.arguments.append({"name": param_name})
+        
         # Add Click decorators for arguments and options
         for arg in reversed(metadata.arguments):
             func = click.argument(arg["name"], **{k: v for k, v in arg.items() if k != "name"})(
@@ -58,26 +124,53 @@ class CLIManager:
 
         # Wrap to handle async and DI
         original_callback = metadata.func
-        asyncio.iscoroutinefunction(original_callback)
 
         @functools.wraps(original_callback)
         def wrapped_callback(*args, **kwargs):
-            # The lifecycle should already be active from run_cli
-            # Execute the command with DI support
+            # Check if the function is already wrapped by @inject
+            # If so, we should call the unwrapped version through the container
+            # If not, we can try container.call or fall back to direct call
+            
+            target_func = original_callback
+            
+            # If function has @inject wrapper, get the original function
+            if hasattr(original_callback, '__wrapped__'):
+                # This is likely an @inject wrapped function
+                # We'll use the container to call the unwrapped version
+                target_func = original_callback.__wrapped__
+            
             try:
-                loop = asyncio.get_running_loop()
-
-                # We're in an async context, create coroutine for execution
-                async def execute():
-                    return await self.app.call_async(original_callback, *args, **kwargs)
-
-                # Run the coroutine in the current event loop
-                future = asyncio.ensure_future(execute())
-                return loop.run_until_complete(future)
-            except RuntimeError:
-                # No event loop - shouldn't happen with proper CLI usage
-                # Fall back to sync execution
-                return self.app.call_sync(original_callback, *args, **kwargs)
+                # Check if function is async
+                if asyncio.iscoroutinefunction(target_func):
+                    # For async functions, we need to handle them in the event loop context
+                    async def async_call():
+                        return await self.app.container.call(target_func, *args, **kwargs)
+                    
+                    try:
+                        # Try to get existing event loop
+                        loop = asyncio.get_running_loop()
+                        # We're already in an event loop, run it
+                        return loop.run_until_complete(async_call())
+                    except RuntimeError:
+                        # No event loop running, create one
+                        return asyncio.run(async_call())
+                else:
+                    # For sync functions, use call_sync
+                    return self.app.container.call_sync(target_func, *args, **kwargs)
+            except Exception as e:
+                # If container call fails, fallback to calling original function directly
+                # This handles cases where the function doesn't need DI
+                result = original_callback(*args, **kwargs)
+                
+                # Handle async results from direct call
+                if asyncio.iscoroutine(result):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        return loop.run_until_complete(asyncio.create_task(result))
+                    except RuntimeError:
+                        return asyncio.run(result)
+                
+                return result
 
         cmd.callback = wrapped_callback
 
@@ -131,9 +224,6 @@ def cli_extension(app: Whiskey) -> None:
     app.cli_manager = manager
     app.cli = manager.cli_group
 
-    # Track pending commands that are being built
-    manager.pending_commands: dict[str, CommandMetadata] = {}
-
     def command(name: str | None = None, description: str | None = None, group: str | None = None):
         """Decorator to register a CLI command.
 
@@ -167,26 +257,12 @@ def cli_extension(app: Whiskey) -> None:
             # Store in pending for argument/option decorators
             manager.pending_commands[cmd_name] = metadata
 
-            # Register a wrapper that will finalize the command
-            def wrapper(*args, **kwargs):
-                # First time called, finalize and register
-                if cmd_name in manager.pending_commands:
-                    manager.add_command(manager.pending_commands[cmd_name])
-                    del manager.pending_commands[cmd_name]
-                return func(*args, **kwargs)
-
-            # Copy attributes
-            functools.update_wrapper(wrapper, func)
-
             # Store the original function reference and metadata
-            wrapper._cli_metadata = metadata
-            wrapper._cli_original = func
-            wrapper._cli_pending_name = cmd_name
+            func._cli_metadata = metadata
+            func._cli_original = func
+            func._cli_pending_name = cmd_name
 
-            # The command will be registered when all decorators are applied
-            # This is handled by checking pending commands before CLI execution
-
-            return wrapper
+            return func
 
         return decorator
 
@@ -317,9 +393,7 @@ def cli_extension(app: Whiskey) -> None:
             args: Optional arguments (defaults to sys.argv)
         """
         # Register any pending commands before running
-        for cmd_name, metadata in list(manager.pending_commands.items()):
-            manager.add_command(metadata)
-            del manager.pending_commands[cmd_name]
+        manager.finalize_pending()
 
         # Run the CLI within the app's lifecycle context
         async def cli_main():
@@ -362,22 +436,26 @@ def cli_extension(app: Whiskey) -> None:
     app.register_runner("cli", run_cli)
     app.run_cli = run_cli
 
-    # Register built-in commands
-    @app.on("configure")
-    async def register_builtin_commands():
-        @app.command(name="app-info", description="Show application information")
-        def app_info():
-            """Show application information."""
-            print(f"Application: {getattr(app, 'name', 'Whiskey App')}")
+    # Register built-in commands immediately
+    @app.command(name="app-info", description="Show application information")
+    def app_info():
+        """Show application information."""
+        print(f"Application: {getattr(app, 'name', 'Whiskey App')}")
 
-            # Show registered services
-            try:
-                services = list(app.container.registry.list_all())
-                if services:
-                    print(f"\nRegistered services ({len(services)}):")
-                    for service in services[:10]:  # Show first 10
+        # Show registered services
+        try:
+            services = list(app.container.registry.list_all())
+            if services:
+                print(f"\nRegistered services ({len(services)}):")
+                for service in services[:10]:  # Show first 10
+                    # Handle both old and new descriptor types
+                    if hasattr(service, 'service_type'):
                         print(f"  - {service.service_type}")
-                    if len(services) > 10:
-                        print(f"  ... and {len(services) - 10} more")
-            except Exception:
-                pass
+                    elif hasattr(service, 'type'):
+                        print(f"  - {service.type}")
+                    else:
+                        print(f"  - {service}")
+                if len(services) > 10:
+                    print(f"  ... and {len(services) - 10} more")
+        except Exception:
+            pass
