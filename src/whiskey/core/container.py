@@ -47,7 +47,7 @@ import asyncio
 import inspect
 from contextvars import ContextVar
 from functools import wraps
-from typing import Any, Callable, TypeVar, Union
+from typing import Any, Callable, TypeVar
 from weakref import WeakKeyDictionary
 
 from .analyzer import InjectDecision, TypeAnalyzer
@@ -70,7 +70,7 @@ T = TypeVar("T")
 
 # Context variables for scope management
 _current_container: ContextVar[Container] = ContextVar("current_container", default=None)
-_active_scopes: ContextVar[dict[str, dict[str, Any]]] = ContextVar("active_scopes", default={})
+_active_scopes: ContextVar[dict[str, dict[str, Any]] | None] = ContextVar("active_scopes", default=None)
 
 
 # Removed ContainerComponentBuilder - using direct method chaining instead
@@ -239,7 +239,7 @@ class Container:
     # Main resolution methods
 
     @monitor_resolution
-    async def resolve(self, key: str | type, *, name: str = None, **context) -> T:
+    async def resolve(self, key: str | type, *, name: str | None = None, **context) -> T:
         """Resolve a service asynchronously.
 
         This is the main resolution method that handles all the smart
@@ -274,7 +274,7 @@ class Container:
             self._resolving.discard(string_key)
             self._resolution_depth -= 1
 
-    def resolve_sync(self, key: str | type, *, name: str = None, overrides: dict = None, **context) -> T:
+    def resolve_sync(self, key: str | type, *, name: str | None = None, overrides: dict | None = None, **context) -> T:
         """Resolve a service synchronously.
 
         Args:
@@ -300,7 +300,7 @@ class Container:
         
         # Handle case where we're already in an event loop
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # We're in an event loop - we can't use asyncio.run
             # Instead, we need to resolve this synchronously by implementing sync resolution logic
             return self._resolve_sync_internal(key, name, context)
@@ -308,7 +308,7 @@ class Container:
             # No event loop running, use asyncio.run
             return asyncio.run(self.resolve(key, name=name, **context))
 
-    def _resolve_sync_internal(self, key: str | type, name: str = None, context: dict = None) -> Any:
+    def _resolve_sync_internal(self, key: str | type, name: str | None = None, context: dict | None = None) -> Any:
         """Internal synchronous resolution implementation for when we're in an async context."""
         # Normalize the key
         string_key = self.registry._normalize_key(key, name)
@@ -325,7 +325,7 @@ class Container:
             self._resolving.discard(string_key)
             self._resolution_depth -= 1
 
-    def _do_resolve_sync(self, key: str | type, name: str = None, context: dict = None) -> Any:
+    def _do_resolve_sync(self, key: str | type, name: str | None = None, context: dict | None = None) -> Any:
         """Synchronous version of _do_resolve."""
         # Get the service descriptor
         try:
@@ -336,11 +336,10 @@ class Container:
                 # Check if it's an abstract class
                 import inspect
                 if inspect.isabstract(key):
-                    raise KeyError(f"{key.__name__} not registered")  
+                    raise KeyError(f"{key.__name__} not registered") from None
                 return self._try_auto_create_sync(key)
-            raise ResolutionError(f"Service '{key}' not registered")
+            raise ResolutionError(f"Service '{key}' not registered") from None
 
-        string_key = descriptor.key
 
         # Handle different scopes
         if descriptor.scope == Scope.SINGLETON:
@@ -350,7 +349,7 @@ class Container:
         else:  # Transient
             return self._create_instance_sync(descriptor, context)
 
-    def _resolve_singleton_sync(self, descriptor: ServiceDescriptor, context: dict = None) -> Any:
+    def _resolve_singleton_sync(self, descriptor: ServiceDescriptor, context: dict | None = None) -> Any:
         """Synchronous singleton resolution."""
         if descriptor.key not in self._singleton_cache:
             instance = self._create_instance_sync(descriptor, context)
@@ -361,6 +360,8 @@ class Container:
         """Synchronous scoped resolution."""
         # Get active scopes
         active_scopes = _active_scopes.get()
+        if active_scopes is None:
+            active_scopes = {}
 
         # Find the appropriate scope - check service metadata first
         scope_name = descriptor.metadata.get("scope_name", context.get("scope", "default"))
@@ -376,7 +377,7 @@ class Container:
 
         return scope_cache[descriptor.key]
 
-    def _create_instance_sync(self, descriptor: ServiceDescriptor, context: dict = None) -> Any:
+    def _create_instance_sync(self, descriptor: ServiceDescriptor, context: dict | None = None) -> Any:
         """Synchronous instance creation."""
         provider = descriptor.provider
 
@@ -390,7 +391,7 @@ class Container:
             # Instance - return as-is
             return provider
 
-    def _instantiate_class_sync(self, cls: type, context: dict = None) -> Any:
+    def _instantiate_class_sync(self, cls: type, context: dict | None = None) -> Any:
         """Synchronous class instantiation."""
         # Check cache first
         if cls in self._injection_cache:
@@ -437,9 +438,9 @@ class Container:
         except Exception as e:
             raise ResolutionError(
                 f"Failed to instantiate {cls.__name__}: {e}", cls.__name__.lower(), e
-            )
+            ) from e
 
-    def _call_with_injection_sync(self, func: Callable, context: dict = None) -> Any:
+    def _call_with_injection_sync(self, func: Callable, context: dict | None = None) -> Any:
         """Synchronous function call with injection."""
         # Check cache first
         if func in self._injection_cache:
@@ -489,7 +490,7 @@ class Container:
             return result
         except Exception as e:
             func_name = getattr(func, "__name__", str(func))
-            raise ResolutionError(f"Failed to call {func_name}: {e}", func_name, e)
+            raise ResolutionError(f"Failed to call {func_name}: {e}", func_name, e) from e
 
     def _try_auto_create_sync(self, cls: type) -> Any:
         """Synchronous auto-creation."""
@@ -504,7 +505,7 @@ class Container:
         # Auto-create by instantiating
         return self._instantiate_class_sync(cls)
 
-    async def _do_resolve(self, key: str | type, name: str = None, context: dict = None) -> Any:
+    async def _do_resolve(self, key: str | type, name: str | None = None, context: dict | None = None) -> Any:
         """Internal resolution implementation.
 
         Args:
@@ -524,11 +525,10 @@ class Container:
                 # Check if it's an abstract class
                 import inspect
                 if inspect.isabstract(key):
-                    raise KeyError(f"{key.__name__} not registered")  
+                    raise KeyError(f"{key.__name__} not registered") from None
                 return await self._try_auto_create(key)
-            raise ResolutionError(f"Service '{key}' not registered")
+            raise ResolutionError(f"Service '{key}' not registered") from None
 
-        string_key = descriptor.key
 
         # Handle different scopes
         if descriptor.scope == Scope.SINGLETON:
@@ -538,7 +538,7 @@ class Container:
         else:  # Transient
             return await self._create_instance(descriptor, context)
 
-    async def _resolve_singleton(self, descriptor: ServiceDescriptor, context: dict = None) -> Any:
+    async def _resolve_singleton(self, descriptor: ServiceDescriptor, context: dict | None = None) -> Any:
         """Resolve a singleton service.
 
         Args:
@@ -566,6 +566,8 @@ class Container:
         """
         # Get active scopes
         active_scopes = _active_scopes.get()
+        if active_scopes is None:
+            active_scopes = {}
 
         # Find the appropriate scope - check service metadata first
         scope_name = descriptor.metadata.get("scope_name", context.get("scope", "default"))
@@ -581,7 +583,7 @@ class Container:
 
         return scope_cache[descriptor.key]
 
-    async def _create_instance(self, descriptor: ServiceDescriptor, context: dict = None) -> Any:
+    async def _create_instance(self, descriptor: ServiceDescriptor, context: dict | None = None) -> Any:
         """Create a service instance.
 
         Args:
@@ -603,7 +605,7 @@ class Container:
             # Instance - return as-is
             return provider
 
-    async def _instantiate_class(self, cls: type, context: dict = None) -> Any:
+    async def _instantiate_class(self, cls: type, context: dict | None = None) -> Any:
         """Instantiate a class with automatic dependency injection.
 
         Args:
@@ -658,9 +660,9 @@ class Container:
         except Exception as e:
             raise ResolutionError(
                 f"Failed to instantiate {cls.__name__}: {e}", cls.__name__.lower(), e
-            )
+            ) from e
 
-    async def _call_with_injection(self, func: Callable, context: dict = None) -> Any:
+    async def _call_with_injection(self, func: Callable, context: dict | None = None) -> Any:
         """Call a function with automatic dependency injection.
 
         Args:
@@ -717,7 +719,7 @@ class Container:
             return result
         except Exception as e:
             func_name = getattr(func, "__name__", str(func))
-            raise ResolutionError(f"Failed to call {func_name}: {e}", func_name, e)
+            raise ResolutionError(f"Failed to call {func_name}: {e}", func_name, e) from e
 
     async def _try_auto_create(self, cls: type) -> Any:
         """Try to auto-create an unregistered class.
@@ -754,7 +756,7 @@ class Container:
         try:
             return self.analyzer.analyze_callable(cls.__init__)
         except Exception as e:
-            raise TypeAnalysisError(f"Failed to analyze {cls.__name__}: {e}", cls)
+            raise TypeAnalysisError(f"Failed to analyze {cls.__name__}: {e}", cls) from e
 
     def _get_resolution_cycle(self, current_key: str) -> list[type]:
         """Get the circular dependency cycle for error reporting.
@@ -826,10 +828,10 @@ class Container:
     def register(
         self,
         key: str | type,
-        provider: Union[type, object, Callable],
+        provider: type | object | Callable,
         *,
         scope: Scope = Scope.TRANSIENT,
-        name: str = None,
+        name: str | None = None,
         allow_override: bool = False,
         **kwargs,
     ) -> ServiceDescriptor:
@@ -850,9 +852,9 @@ class Container:
     def singleton(
         self,
         key: str | type,
-        provider: Union[type, object, Callable] = None,
+        provider: type | object | Callable = None,
         *,
-        name: str = None,
+        name: str | None = None,
         instance: Any = None,
         **kwargs,
     ) -> ServiceDescriptor:
@@ -879,10 +881,10 @@ class Container:
     def scoped(
         self,
         key: str | type,
-        provider: Union[type, object, Callable] = None,
+        provider: type | object | Callable = None,
         *,
         scope_name: str = "default",
-        name: str = None,
+        name: str | None = None,
         **kwargs,
     ) -> ServiceDescriptor:
         """Register a scoped service.
@@ -910,7 +912,7 @@ class Container:
         )
 
     # Deprecated methods for backward compatibility
-    def register_singleton(self, key: str | type, provider: Union[type, object, Callable] = None, *, instance: Any = None, **kwargs) -> ServiceDescriptor:
+    def register_singleton(self, key: str | type, provider: type | object | Callable = None, *, instance: Any = None, **kwargs) -> ServiceDescriptor:
         """Deprecated: Use singleton() instead."""
         import warnings
         warnings.warn("register_singleton is deprecated, use singleton() instead", DeprecationWarning, stacklevel=2)
@@ -1016,7 +1018,7 @@ class Container:
                 return result
         except Exception as e:
             func_name = getattr(func, "__name__", str(func))
-            raise ResolutionError(f"Failed to call {func_name}: {e}", func_name, e)
+            raise ResolutionError(f"Failed to call {func_name}: {e}", func_name, e) from e
 
     def call_sync(self, func: Callable, *args, **kwargs) -> Any:
         """Synchronous version of call().

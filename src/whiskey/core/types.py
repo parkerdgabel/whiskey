@@ -54,7 +54,7 @@ Note:
     protocols at runtime, enabling dynamic lifecycle management.
 """
 
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
 
 class Inject:
@@ -83,7 +83,7 @@ class Inject:
         ...     return cache.get(f"user:{user_id}")
     """
 
-    def __init__(self, name: str = None, optional: bool = False):
+    def __init__(self, name: Optional[str] = None, optional: bool = False):
         """Initialize injection marker.
 
         Args:

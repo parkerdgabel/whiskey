@@ -378,9 +378,8 @@ class ContainerInspector:
                 continue
 
             # Filter by scope
-            if scope:
-                if (scope == "singleton" and descriptor.scope.value != "singleton") or (scope == "transient" and descriptor.scope.value != "transient") or (scope == "scoped" and descriptor.scope.value != "scoped"):
-                    continue
+            if scope and descriptor.scope.value != scope:
+                continue
 
             # Filter by tags
             if tags and not descriptor.has_any_tag(tags):

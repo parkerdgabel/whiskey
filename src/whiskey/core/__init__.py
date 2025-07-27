@@ -69,55 +69,55 @@ from whiskey.core.scopes import ContextVarScope, ScopeType
 from whiskey.core.types import Disposable, Initializable
 
 __all__ = [
+    "CircularDependencyError",
+    "ConfigurationError",
     # Container
     "Container",
-    "get_current_container",
-    "set_current_container",
+    # Scopes
+    "ContextVarScope",
+    "Disposable",
+    # Types
+    "Initializable",
+    "InjectDecision",
+    "InjectionError",
+    "PerformanceMetrics",
+    # Performance
+    "PerformanceMonitor",
+    "RegistrationError",
+    "ResolutionError",
+    "Scope",
+    "ScopeError",
+    "ScopeType",
+    "ServiceDescriptor",
+    # Registry
+    "ServiceRegistry",
+    "TypeAnalysisError",
+    # Analysis
+    "TypeAnalyzer",
     # Application
     "Whiskey",
+    # Errors
+    "WhiskeyError",
     # Global decorators
     "component",
-    "provide",
-    "singleton",
-    "scoped",
+    "configure_app",
     "factory",
+    "get_app",
+    "get_current_container",
     "inject",
+    "on_error",
+    "on_shutdown",
     # Lifecycle decorators
     "on_startup",
-    "on_shutdown",
-    "on_error",
-    # Conditional decorators
-    "when_env",
-    "when_debug",
-    "when_production",
+    "provide",
     # Global functions
     "resolve",
     "resolve_async",
-    "get_app",
-    "configure_app",
-    # Registry
-    "ServiceRegistry",
-    "ServiceDescriptor",
-    "Scope",
-    # Performance
-    "PerformanceMonitor",
-    "PerformanceMetrics",
-    # Analysis
-    "TypeAnalyzer",
-    "InjectDecision",
-    # Scopes
-    "ContextVarScope",
-    "ScopeType",
-    # Types
-    "Initializable",
-    "Disposable",
-    # Errors
-    "WhiskeyError",
-    "ResolutionError",
-    "CircularDependencyError",
-    "RegistrationError",
-    "InjectionError",
-    "ScopeError",
-    "ConfigurationError",
-    "TypeAnalysisError",
+    "scoped",
+    "set_current_container",
+    "singleton",
+    "when_debug",
+    # Conditional decorators
+    "when_env",
+    "when_production",
 ]

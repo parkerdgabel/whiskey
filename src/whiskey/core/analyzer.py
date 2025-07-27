@@ -56,13 +56,13 @@ from __future__ import annotations
 
 import inspect
 from enum import Enum
-from typing import Any, Union, get_args, get_origin
+from typing import Any, Callable, ClassVar, Union, get_args, get_origin
 
 from .errors import TypeAnalysisError
 
 # Handle Python version differences
 try:
-    from typing import Literal, get_type_hints
+    from typing import Literal
 except ImportError:
     from typing_extensions import Literal
 
@@ -93,7 +93,7 @@ class InjectResult:
         type_hint: Any = None,
         reason: str = "",
         inner_type: Any = None,
-        candidates: list[Any] = None,
+        candidates: list[Any] | None = None,
     ):
         self.decision = decision
         self.type_hint = type_hint
@@ -140,7 +140,7 @@ class TypeAnalyzer:
     """
 
     # Built-in types that should never be injected
-    BUILTIN_TYPES = {
+    BUILTIN_TYPES: ClassVar[set[type]] = {
         str,
         int,
         float,
@@ -171,7 +171,7 @@ class TypeAnalyzer:
     }
 
     # Standard library modules to avoid injecting from
-    STDLIB_MODULES = {
+    STDLIB_MODULES: ClassVar[set[str]] = {
         "builtins",
         "sys",
         "os",
@@ -354,7 +354,7 @@ class TypeAnalyzer:
             )
 
         # Handle Callable types
-        if origin in (type(Callable), type(Callable[..., Any])):
+        if origin is Callable or (hasattr(origin, '__name__') and origin.__name__ == 'Callable'):
             return self._analyze_callable_type(type_hint, args)
 
         # Handle typing constructs
@@ -674,7 +674,7 @@ class TypeAnalyzer:
         try:
             sig = inspect.signature(func)
         except (TypeError, ValueError) as e:
-            raise TypeAnalysisError(f"Cannot analyze non-callable object: {e}")
+            raise TypeAnalysisError(f"Cannot analyze non-callable object: {e}") from e
         
         results = {}
 
@@ -732,7 +732,7 @@ class TypeAnalyzer:
         return True
 
     def detect_circular_dependency(
-        self, start_type: type, visited: set[type] = None, path: list[type] = None
+        self, start_type: type, visited: set[type] | None = None, path: list[type] | None = None
     ) -> list[type] | None:
         """Detect circular dependencies in type hierarchy.
 
@@ -752,7 +752,7 @@ class TypeAnalyzer:
         if start_type in visited:
             # Found cycle - return the circular path
             cycle_start = path.index(start_type) if start_type in path else 0
-            return path[cycle_start:] + [start_type]
+            return [*path[cycle_start:], start_type]
 
         if not inspect.isclass(start_type):
             return None
@@ -928,9 +928,7 @@ def is_union(type_hint: Any) -> bool:
     if origin is Union:
         # Check if it's Optional (Union with None)
         args = get_args(type_hint)
-        if len(args) == 2 and type(None) in args:
-            return False  # It's Optional, not a general Union
-        return True
+        return not (len(args) == 2 and type(None) in args)
     return False
 
 

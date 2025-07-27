@@ -49,7 +49,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Union
+from typing import Any, Callable
 
 from .errors import RegistrationError
 
@@ -84,7 +84,7 @@ class ServiceDescriptor:
 
     key: str
     service_type: type
-    provider: Union[type, object, Callable]
+    provider: type | object | Callable
     scope: Scope = Scope.TRANSIENT
     name: str | None = None
     condition: Callable[[], bool] | None = None
@@ -181,7 +181,7 @@ class ServiceRegistry:
     def register(
         self,
         key: str | type,
-        provider: Union[type, object, Callable],
+        provider: type | object | Callable,
         *,
         service_type: type | None = None,
         scope: Scope = Scope.TRANSIENT,

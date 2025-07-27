@@ -58,7 +58,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from functools import wraps
-from typing import Any, Callable, Type, TypeVar, Union
+from typing import Any, Callable, TypeVar
 
 from .application import Whiskey, create_default_app
 from .registry import Scope
@@ -81,16 +81,16 @@ def _get_default_app() -> Whiskey:
 
 
 def component(
-    cls: Type[T] = None,
+    cls: type[T] | None = None,
     *,
-    key: str | type = None,
-    name: str = None,
+    key: str | type | None = None,
+    name: str | None = None,
     scope: Scope = Scope.TRANSIENT,
-    tags: set[str] = None,
-    condition: Callable[[], bool] = None,
+    tags: set[str] | None = None,
+    condition: Callable[[], bool] | None = None,
     lazy: bool = False,
     app: Whiskey = None,
-) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+) -> type[T] | Callable[[type[T]], type[T]]:
     """Global decorator to register a class as a service.
 
     Uses the default application instance unless 'app' is specified.
@@ -117,7 +117,7 @@ def component(
         >>> class CacheService:
         ...     pass
     """
-    def decorator(cls: Type[T]) -> Type[T]:
+    def decorator(cls: type[T]) -> type[T]:
         # Validate that target is a class
         if not inspect.isclass(cls):
             raise TypeError("@component decorator can only be applied to classes")
@@ -133,15 +133,15 @@ def component(
 
 
 def singleton(
-    cls: Type[T] = None,
+    cls: type[T] | None = None,
     *,
-    key: str | type = None,
-    name: str = None,
-    tags: set[str] = None,
-    condition: Callable[[], bool] = None,
+    key: str | type | None = None,
+    name: str | None = None,
+    tags: set[str] | None = None,
+    condition: Callable[[], bool] | None = None,
     lazy: bool = False,
     app: Whiskey = None,
-) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+) -> type[T] | Callable[[type[T]], type[T]]:
     """Global decorator to register a class as a singleton service."""
     target_app = app or _get_default_app()
     return target_app.singleton(cls, key=key, name=name, tags=tags, condition=condition, lazy=lazy)
@@ -150,17 +150,17 @@ def singleton(
 def scoped(
     scope_name: str = "default",
     *,
-    key: str | type = None,
-    name: str = None,
-    tags: set[str] = None,
-    condition: Callable[[], bool] = None,
+    key: str | type | None = None,
+    name: str | None = None,
+    tags: set[str] | None = None,
+    condition: Callable[[], bool] | None = None,
     lazy: bool = False,
     app: Whiskey = None,
-) -> Callable[[Type[T]], Type[T]]:
+) -> Callable[[type[T]], type[T]]:
     """Global decorator to register a class as a scoped service."""
     target_app = app or _get_default_app()
     
-    def decorator(cls: Type[T]) -> Type[T]:
+    def decorator(cls: type[T]) -> type[T]:
         return target_app.scoped(
             cls, scope_name=scope_name, key=key, name=name, tags=tags, condition=condition, lazy=lazy
         )
@@ -171,14 +171,14 @@ def scoped(
 def factory(
     key_or_func=None,
     *,
-    key: str | type = None,
-    name: str = None,
+    key: str | type | None = None,
+    name: str | None = None,
     scope: Scope = Scope.TRANSIENT,
-    tags: set[str] = None,
-    condition: Callable[[], bool] = None,
+    tags: set[str] | None = None,
+    condition: Callable[[], bool] | None = None,
     lazy: bool = False,
     app: Whiskey = None,
-) -> Union[Callable, Callable[[Callable], Callable]]:
+) -> Callable | Callable[[Callable], Callable]:
     """Global decorator to register a function as a factory.
 
     Args:
@@ -246,8 +246,8 @@ provide = component
 
 
 def inject(
-    func: Callable = None, *, app: Whiskey = None
-) -> Union[Callable, Callable[[Callable], Callable]]:
+    func: Callable | None = None, *, app: Whiskey = None
+) -> Callable | Callable[[Callable], Callable]:
     """Global decorator to enable dependency injection for a function.
 
     This decorator modifies a function to automatically resolve its
@@ -300,7 +300,7 @@ def inject(
 # Conditional decorators
 
 
-def when_env(var_name: str, expected_value: str = None, app: Whiskey = None):
+def when_env(var_name: str, expected_value: str | None = None, app: Whiskey = None):
     """Global decorator factory for environment-based conditional registration."""
     target_app = app or _get_default_app()
     return target_app.when_env(var_name, expected_value)
@@ -337,7 +337,7 @@ def when_production(cls_or_app=None, *, app: Whiskey = None):
 # Whiskey lifecycle decorators
 
 
-def on_startup(func: Callable = None, *, app: Whiskey = None):
+def on_startup(func: Callable | None = None, *, app: Whiskey = None):
     """Global decorator to register a startup callback.
 
     Args:
@@ -365,7 +365,7 @@ def on_startup(func: Callable = None, *, app: Whiskey = None):
         return decorator(func)
 
 
-def on_shutdown(func: Callable = None, *, app: Whiskey = None):
+def on_shutdown(func: Callable | None = None, *, app: Whiskey = None):
     """Global decorator to register a shutdown callback."""
 
     def decorator(func: Callable) -> Callable:
@@ -379,7 +379,7 @@ def on_shutdown(func: Callable = None, *, app: Whiskey = None):
         return decorator(func)
 
 
-def on_error(func: Callable = None, *, app: Whiskey = None):
+def on_error(func: Callable | None = None, *, app: Whiskey = None):
     """Global decorator to register an error handler.
 
     Args:

@@ -184,7 +184,7 @@ class Lazy(Generic[T]):
 
             # Check if we're in an async context
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # We're in an async context
                 # Since we can't await here (not an async method), we need to handle this differently
                 # For now, raise an error suggesting to use await on the container directly

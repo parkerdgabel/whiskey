@@ -170,22 +170,25 @@ class ContextVarScope(Scope):
 
     def __init__(self, name: str):
         super().__init__(name)
-        self._context_var: ContextVar[dict[type, Any]] = ContextVar(f"scope_{name}", default={})
+        self._context_var: ContextVar[dict[type, Any] | None] = ContextVar(f"scope_{name}", default=None)
 
     def get(self, service_type: type[T]) -> T | None:
         """Get from context."""
         instances = self._context_var.get()
+        if instances is None:
+            return None
         return instances.get(service_type)
 
     def set(self, service_type: type[T], instance: T) -> None:
         """Set in context."""
-        instances = self._context_var.get().copy()
+        instances = self._context_var.get()
+        instances = {} if instances is None else instances.copy()
         instances[service_type] = instance
         self._context_var.set(instances)
 
     def clear(self) -> None:
         """Clear context."""
-        self._context_var.set({})
+        self._context_var.set(None)
 
 
 # Built-in scope types

@@ -53,8 +53,9 @@ See Also:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
-from typing import Any, Callable, Type, TypeVar, Union
+from typing import Any, Callable, TypeVar
 
 from .container import Container
 from .errors import ConfigurationError
@@ -93,7 +94,7 @@ class Whiskey:
         ...     pass
     """
 
-    def __init__(self, container: Container = None, name: str = None):
+    def __init__(self, container: Container = None, name: str | None = None):
         """Initialize a new Application.
 
         Args:
@@ -130,7 +131,7 @@ class Whiskey:
     # Builder pattern removed - use Whiskey() or Whiskey.create() directly
 
     @classmethod
-    def create(cls, container: Container = None, name: str = None) -> Whiskey:
+    def create(cls, container: Container = None, name: str | None = None) -> Whiskey:
         """Create a new Whiskey application.
         
         Args:
@@ -172,17 +173,17 @@ class Whiskey:
 
     def component(
         self,
-        cls: Type[T] = None,
+        cls: type[T] | None = None,
         *,
-        key: str | type = None,
-        name: str = None,
+        key: str | type | None = None,
+        name: str | None = None,
         scope: Scope = Scope.TRANSIENT,
-        tags: set[str] = None,
-        condition: Callable[[], bool] = None,
+        tags: set[str] | None = None,
+        condition: Callable[[], bool] | None = None,
         lazy: bool = False,
-        metadata: dict = None,
-        priority: int = None,
-    ) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+        metadata: dict | None = None,
+        priority: int | None = None,
+    ) -> type[T] | Callable[[type[T]], type[T]]:
         """Decorator to register a class as a component.
 
         Args:
@@ -207,7 +208,7 @@ class Whiskey:
             ...     pass
         """
 
-        def decorator(cls: Type[T]) -> Type[T]:
+        def decorator(cls: type[T]) -> type[T]:
             # Check if it's a function (not a class) and key is missing
             if not inspect.isclass(cls) and key is None:
                 raise ConfigurationError("Factory functions require a 'key' parameter")
@@ -253,15 +254,15 @@ class Whiskey:
 
     def singleton(
         self,
-        cls: Type[T] = None,
+        cls: type[T] | None = None,
         *,
-        key: str | type = None,
-        name: str = None,
-        tags: set[str] = None,
-        condition: Callable[[], bool] = None,
+        key: str | type | None = None,
+        name: str | None = None,
+        tags: set[str] | None = None,
+        condition: Callable[[], bool] | None = None,
         lazy: bool = False,
         instance: Any = None,
-    ) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+    ) -> type[T] | Callable[[type[T]], type[T]]:
         """Decorator to register a class as a singleton service."""
         # If instance is provided, register it directly
         if instance is not None:
@@ -289,15 +290,15 @@ class Whiskey:
 
     def scoped(
         self,
-        cls: Type[T] = None,
+        cls: type[T] | None = None,
         *,
         scope_name: str = "default",
-        key: str | type = None,
-        name: str = None,
-        tags: set[str] = None,
-        condition: Callable[[], bool] = None,
+        key: str | type | None = None,
+        name: str | None = None,
+        tags: set[str] | None = None,
+        condition: Callable[[], bool] | None = None,
         lazy: bool = False,
-    ) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
+    ) -> type[T] | Callable[[type[T]], type[T]]:
         """Decorator to register a class as a scoped service."""
         return self.component(
             cls, key=key, name=name, scope=Scope.SCOPED, tags=tags, condition=condition, lazy=lazy
@@ -308,10 +309,10 @@ class Whiskey:
         key: str | type,
         func: Callable,
         *,
-        name: str = None,
+        name: str | None = None,
         scope: Scope = Scope.TRANSIENT,
-        tags: set[str] = None,
-        condition: Callable[[], bool] = None,
+        tags: set[str] | None = None,
+        condition: Callable[[], bool] | None = None,
         lazy: bool = False,
     ) -> None:
         """Register a function as a factory.
@@ -383,7 +384,7 @@ class Whiskey:
     @property
     def task(self):
         """Decorator to register background tasks."""
-        def decorator(interval: float = None, **kwargs):
+        def decorator(interval: float | None = None, **kwargs):
             def inner(func: Callable) -> Callable:
                 # Store task metadata
                 func._task_interval = interval
@@ -395,14 +396,16 @@ class Whiskey:
     
     # Conditional decorators
 
-    def when_env(self, var_name: str, expected_value: str = None):
+    def when_env(self, var_name: str, expected_value: str | None = None):
         """Decorator factory for environment-based conditional registration."""
         import os
 
         if expected_value is None:
-            condition = lambda: var_name in os.environ
+            def condition():
+                return var_name in os.environ
         else:
-            condition = lambda: os.environ.get(var_name) == expected_value
+            def condition():
+                return os.environ.get(var_name) == expected_value
 
         def decorator_factory(decorator_name: str, **kwargs):
             def decorator(target):
@@ -418,14 +421,16 @@ class Whiskey:
         """Decorator factory for debug mode conditional registration."""
         import os
 
-        condition = lambda: os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
+        def condition():
+            return os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
         return _conditional_decorator(self, condition)
 
     def when_production(self):
         """Decorator factory for production mode conditional registration."""
         import os
 
-        condition = lambda: os.environ.get("ENV", "").lower() in ("prod", "production")
+        def condition():
+            return os.environ.get("ENV", "").lower() in ("prod", "production")
         return _conditional_decorator(self, condition)
 
     # Lifecycle methods
@@ -460,10 +465,10 @@ class Whiskey:
                         interval = task_func._task_interval
                         if interval:
                             # Create a periodic task
-                            async def run_periodic():
+                            async def run_periodic(func=task_func, sleep_interval=interval):
                                 while self._is_running:
-                                    await task_func()
-                                    await asyncio.sleep(interval)
+                                    await func()
+                                    await asyncio.sleep(sleep_interval)
                             
                             task = asyncio.create_task(run_periodic())
                             self._hooks.setdefault("running_tasks", []).append(task)
@@ -526,7 +531,7 @@ class Whiskey:
     
     # Standardized run API
     
-    def run(self, main: Callable = None, *, mode: str = "auto", **kwargs) -> Any:
+    def run(self, main: Callable | None = None, *, mode: str = "auto", **kwargs) -> Any:
         """Execute a callable within the Whiskey IoC context.
         
         This is the standardized way to run programs with Whiskey. It handles:
@@ -591,10 +596,8 @@ class Whiskey:
         async with self:
             if main is None:
                 # Just run the application until interrupted
-                try:
+                with contextlib.suppress(KeyboardInterrupt):
                     await asyncio.Event().wait()
-                except KeyboardInterrupt:
-                    pass
                 return None
             
             # Execute the main callable with DI
@@ -640,10 +643,10 @@ class Whiskey:
                     # Has a complex type annotation, might need injection
                     return True
             return False
-        except:
+        except Exception:
             return False
     
-    def _find_runners(self) -> List[Callable]:
+    def _find_runners(self) -> list[Callable]:
         """Find available runners from extensions."""
         runners = []
         
@@ -747,7 +750,7 @@ class Whiskey:
         """Sync context manager entry."""
         # Run startup synchronously
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # We're already in an event loop
             raise RuntimeError("Cannot use sync context manager in async context")
         except RuntimeError:
@@ -758,7 +761,7 @@ class Whiskey:
     def __exit__(self, *args):
         """Sync context manager exit."""
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # We're already in an event loop
             raise RuntimeError("Cannot use sync context manager in async context")
         except RuntimeError:
@@ -846,7 +849,7 @@ class Whiskey:
         extension(self, **kwargs)
         return self
     
-    def on(self, event: str, handler: Callable = None) -> Union[Whiskey, Callable]:
+    def on(self, event: str, handler: Callable | None = None) -> Whiskey | Callable:
         """Register an event handler.
         
         Can be used as a method or decorator:

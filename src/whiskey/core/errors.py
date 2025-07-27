@@ -59,7 +59,7 @@ class ResolutionError(WhiskeyError):
     - A condition for service registration is not met
     """
 
-    def __init__(self, message: str, service_key: str = None, cause: Exception = None):
+    def __init__(self, message: str, service_key: str | None = None, cause: Exception | None = None):
         super().__init__(message)
         self.service_key = service_key
         self.cause = cause
@@ -75,7 +75,7 @@ class CircularDependencyError(ResolutionError):
     def __init__(self, cycle: list[type]):
         self.cycle = cycle
         cycle_names = [cls.__name__ for cls in cycle]
-        cycle_str = " → ".join(cycle_names + [cycle_names[0]])
+        cycle_str = " → ".join([*cycle_names, cycle_names[0]])
 
         super().__init__(
             f"Circular dependency detected: {cycle_str}",
@@ -104,7 +104,7 @@ class InjectionError(WhiskeyError):
     - Ambiguous type hints (e.g., Union with multiple registered types)
     """
 
-    def __init__(self, message: str, parameter_name: str = None, type_hint=None):
+    def __init__(self, message: str, parameter_name: str | None = None, type_hint=None):
         super().__init__(message)
         self.parameter_name = parameter_name
         self.type_hint = type_hint
