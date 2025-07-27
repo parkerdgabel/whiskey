@@ -1,6 +1,46 @@
 """Whiskey ETL - Declarative data pipeline extension for Whiskey DI framework."""
 
+from whiskey_etl.db_sink import BulkUpdateSink, DatabaseSink, SQLExecuteSink, TableSink, UpsertSink
+from whiskey_etl.db_source import DatabaseSource, QuerySource, SQLFileSource, TableSource
 from whiskey_etl.extension import etl_extension
+from whiskey_etl.pipeline import Pipeline, PipelineResult, PipelineState
+from whiskey_etl.sinks import DataSink
+from whiskey_etl.sources import DataSource
+from whiskey_etl.sql_transform import (
+    AggregateTransform,
+    JoinTransform,
+    LookupTransform,
+    SQLTransform,
+    ValidateTransform,
+    create_sql_transform,
+)
 
 __version__ = "0.1.0"
-__all__ = ["etl_extension"]
+__all__ = [
+    "etl_extension",
+    # Pipeline
+    "Pipeline",
+    "PipelineResult",
+    "PipelineState",
+    # Base classes
+    "DataSource",
+    "DataSink",
+    # Database sources
+    "DatabaseSource",
+    "TableSource",
+    "QuerySource",
+    "SQLFileSource",
+    # Database sinks
+    "DatabaseSink",
+    "TableSink",
+    "UpsertSink",
+    "BulkUpdateSink",
+    "SQLExecuteSink",
+    # SQL transforms
+    "SQLTransform",
+    "LookupTransform",
+    "JoinTransform",
+    "ValidateTransform",
+    "AggregateTransform",
+    "create_sql_transform",
+]

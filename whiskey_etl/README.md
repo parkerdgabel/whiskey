@@ -7,6 +7,8 @@ A declarative ETL (Extract, Transform, Load) extension for the Whiskey dependenc
 - **Declarative Pipeline Definition**: Define data pipelines using decorators and classes
 - **Dependency Injection**: Inject services into transforms, sources, and sinks
 - **Built-in Components**: CSV, JSON, and JSON Lines sources/sinks
+- **Database Integration**: Full SQL database support via whiskey_sql
+- **SQL Transforms**: Lookup, join, validate, and aggregate data using SQL
 - **Transform Utilities**: Filter, map, validate, and clean data with ease
 - **Error Handling**: Retry logic, error callbacks, and detailed error reporting
 - **Monitoring**: Track pipeline progress and metrics
@@ -286,6 +288,128 @@ class TestSink(MemorySink):
 # Run pipeline and check results
 result = await app.pipelines.run("my_pipeline")
 assert memory_sink.get_data() == expected_output
+```
+
+## Database Integration
+
+When using whiskey_sql, ETL pipelines can leverage powerful database sources, sinks, and transforms.
+
+### Database Sources
+
+```python
+# Configure database first
+app.use(sql_extension)
+app.configure_database("postgresql://localhost/mydb")
+
+# Use built-in database source
+@app.pipeline("extract_users")
+class ExtractUsersPipeline:
+    source = "table"  # Built-in table source
+    source_config = {
+        "table_name": "users",
+        "key_column": "id",
+        "batch_size": 1000,
+    }
+    sink = "csv_output"
+
+# Or use custom query source
+@app.source("recent_orders")
+class RecentOrdersSource(QuerySource):
+    def __init__(self, database: Database):
+        super().__init__(
+            database,
+            query="""
+                SELECT * FROM orders 
+                WHERE created_at >= :start_date
+                ORDER BY created_at
+            """
+        )
+```
+
+### Database Sinks
+
+```python
+# Table sink with upsert
+@app.pipeline("sync_products")
+class SyncProductsPipeline:
+    source = "api_products"
+    sink = "upsert"  # Built-in upsert sink
+    sink_config = {
+        "table_name": "products",
+        "key_columns": ["sku"],
+        "update_columns": ["name", "price", "updated_at"],
+    }
+
+# Bulk update sink
+@app.sink("bulk_inventory_update")
+class InventoryUpdateSink(BulkUpdateSink):
+    def __init__(self, database: Database):
+        super().__init__(
+            database,
+            table_name="inventory",
+            key_columns=["warehouse_id", "sku"],
+            update_columns=["quantity", "last_updated"]
+        )
+```
+
+### SQL Transforms
+
+```python
+# Lookup transform with caching
+@app.sql_transform("lookup",
+    lookup_query="SELECT name, email FROM customers WHERE id = :customer_id",
+    input_fields=["customer_id"],
+    output_fields=["customer_name", "customer_email"],
+    cache_size=1000
+)
+async def enrich_customer(record: dict, transform: SQLTransform) -> dict:
+    return await transform.transform(record)
+
+# Join transform
+@app.sql_transform("join",
+    join_table="products",
+    join_keys={"product_id": "id"},
+    select_fields=["name", "category", "price"]
+)
+async def join_product_info(record: dict, transform: SQLTransform) -> dict:
+    return await transform.transform(record)
+
+# Validation transform
+@app.sql_transform("validate",
+    validation_query="SELECT 1 FROM valid_skus WHERE sku = :sku",
+    validation_fields=["sku"],
+    on_invalid="drop"  # or "mark", "error"
+)
+async def validate_sku(record: dict, transform: SQLTransform) -> dict | None:
+    return await transform.transform(record)
+
+# Aggregation transform
+@app.sql_transform("aggregate",
+    aggregate_query="""
+        SELECT COUNT(*) as order_count,
+               SUM(amount) as total_spent,
+               AVG(amount) as avg_order_value
+        FROM orders
+        WHERE customer_id = :customer_id
+    """,
+    group_by_fields=["customer_id"],
+    aggregate_fields=["order_count", "total_spent"]
+)
+async def add_customer_stats(record: dict, transform: SQLTransform) -> dict:
+    return await transform.transform(record)
+
+# Use in pipeline
+@app.pipeline("enrich_orders")
+class EnrichOrdersPipeline:
+    source = "table"
+    source_config = {"table_name": "orders"}
+    transforms = [
+        enrich_customer,
+        join_product_info,
+        validate_sku,
+        add_customer_stats
+    ]
+    sink = "enriched_orders"
 ```
 
 ## Advanced Features

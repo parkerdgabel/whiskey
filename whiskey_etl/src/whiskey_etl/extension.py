@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 from whiskey import Whiskey
 
@@ -77,6 +77,39 @@ def etl_extension(
     app.container[SourceRegistry] = source_registry
     app.container[SinkRegistry] = sink_registry
     app.container[TransformRegistry] = transform_registry
+
+    # Register built-in database sources and sinks if whiskey_sql is available
+    try:
+        from whiskey_sql import Database
+
+        from .db_sink import BulkUpdateSink, SQLExecuteSink, TableSink, UpsertSink
+        from .db_source import DatabaseSource, QuerySource, SQLFileSource, TableSource
+
+        # Register database sources
+        source_registry.register("database", DatabaseSource)
+        source_registry.register("table", TableSource)
+        source_registry.register("query", QuerySource)
+        source_registry.register("sql_file", SQLFileSource)
+
+        # Register database sinks
+        sink_registry.register("table", TableSink)
+        sink_registry.register("upsert", UpsertSink)
+        sink_registry.register("bulk_update", BulkUpdateSink)
+        sink_registry.register("sql_execute", SQLExecuteSink)
+
+        # Also register the concrete classes in the container
+        app.container[DatabaseSource] = DatabaseSource
+        app.container[TableSource] = TableSource
+        app.container[QuerySource] = QuerySource
+        app.container[SQLFileSource] = SQLFileSource
+        app.container[TableSink] = TableSink
+        app.container[UpsertSink] = UpsertSink
+        app.container[BulkUpdateSink] = BulkUpdateSink
+        app.container[SQLExecuteSink] = SQLExecuteSink
+
+    except ImportError:
+        # whiskey_sql not available - database features disabled
+        pass
 
     # Create pipeline manager
     manager = PipelineManager(
@@ -248,6 +281,56 @@ def etl_extension(
         else:
             return decorator(func)
 
+    # SQL transform decorator (only if whiskey_sql is available)
+    def sql_transform(transform_type: str, *, name: str | None = None, **config):
+        """Decorator to register a SQL-based transform.
+
+        Args:
+            transform_type: Type of SQL transform (lookup, join, validate, aggregate)
+            name: Transform name (defaults to decorated function name)
+            **config: Transform-specific configuration
+
+        Example:
+            @app.sql_transform("lookup",
+                lookup_query="SELECT name, email FROM users WHERE id = :user_id",
+                input_fields=["user_id"],
+                output_fields=["user_name", "user_email"])
+            async def enrich_with_user_info(record: dict, transform: SQLTransform) -> dict:
+                # Can customize behavior if needed
+                return await transform.transform(record)
+
+            @app.sql_transform("validate",
+                validation_query="SELECT 1 FROM products WHERE sku = :sku",
+                validation_fields=["sku"],
+                on_invalid="drop")
+            async def validate_product_exists(record: dict, transform: SQLTransform) -> dict | None:
+                return await transform.transform(record)
+        """
+
+        def decorator(func: Callable) -> Callable:
+            transform_name = name or func.__name__
+
+            # Create the SQL transform factory
+            async def sql_transform_wrapper(
+                record: dict[str, Any], database: Database
+            ) -> dict[str, Any] | None:
+                from .sql_transform import create_sql_transform
+
+                transform_func = create_sql_transform(transform_type, database, **config)
+                return await transform_func(record)
+
+            # Copy metadata
+            sql_transform_wrapper.__name__ = func.__name__
+            sql_transform_wrapper._transform_name = transform_name
+            sql_transform_wrapper._sql_transform_config = {"type": transform_type, **config}
+
+            # Register the wrapper
+            transform_registry.register(transform_name, sql_transform_wrapper)
+
+            return func
+
+        return decorator
+
     # Scheduled pipeline decorator
     def scheduled_pipeline(
         name: str | None = None,
@@ -311,6 +394,15 @@ def etl_extension(
     app.sink = sink
     app.transform = transform
     app.scheduled_pipeline = scheduled_pipeline
+
+    # Add SQL transform if available
+    try:
+        from whiskey_sql import Database
+
+        app.add_decorator("sql_transform", sql_transform)
+        app.sql_transform = sql_transform
+    except ImportError:
+        pass
 
     # Lifecycle hooks
     @app.on_startup

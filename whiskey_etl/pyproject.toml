@@ -27,10 +27,12 @@ keywords = ["dependency-injection", "etl", "data-pipeline", "whiskey"]
 
 dependencies = [
     "whiskey>=0.1.0",
+    "whiskey-sql>=0.1.0",
 ]
 
 [tool.uv.sources]
 whiskey = { workspace = true }
+whiskey-sql = { workspace = true }
 
 [project.optional-dependencies]
 pandas = ["pandas>=1.0.0"]
