@@ -1,4 +1,47 @@
-"""HTTP client extension for Whiskey applications."""
+"""HTTP client extension for Whiskey applications.
+
+This module provides a comprehensive HTTP client management system for Whiskey
+applications, enabling declarative client registration with advanced features
+like retry logic, circuit breakers, and request/response interceptors.
+
+The extension follows a pattern similar to other Whiskey extensions, providing
+decorators and managers that integrate seamlessly with the dependency injection
+system.
+
+Example:
+    Basic usage with the extension::
+
+        from whiskey import Whiskey
+        from whiskey_http import http_extension
+
+        app = Whiskey()
+        app.use(http_extension)
+
+        @app.http_client("api", base_url="https://api.example.com")
+        class APIClient:
+            headers = {"X-API-Version": "v1"}
+
+        @app.component
+        class UserService:
+            def __init__(self, api: APIClient):
+                self.api = api
+
+            async def get_user(self, user_id: int):
+                response = await self.api.get(f"/users/{user_id}")
+                return response.json()
+
+Classes:
+    CircuitBreakerState: Tracks state for circuit breaker pattern
+    HTTPClientManager: Manages client configurations and instances
+    WhiskeyHTTPClient: Default HTTP client implementation using httpx
+
+Functions:
+    http_extension: Main extension function to register with Whiskey
+
+Notes:
+    The extension requires httpx for HTTP functionality and integrates
+    with Whiskey's container for dependency injection.
+"""
 
 from __future__ import annotations
 
@@ -24,7 +67,39 @@ if TYPE_CHECKING:
 
 @dataclass
 class CircuitBreakerState:
-    """State for circuit breaker pattern."""
+    """State for circuit breaker pattern.
+
+    The circuit breaker pattern prevents cascading failures by monitoring
+    for failures and temporarily blocking requests when a threshold is reached.
+
+    The circuit breaker has three states:
+    - Closed: Normal operation, requests pass through
+    - Open: Failure threshold reached, requests are blocked
+    - Half-Open: Testing if the service has recovered
+
+    Attributes:
+        failure_count: Number of consecutive failures
+        last_failure_time: Timestamp of the last failure
+        state: Current state of the circuit breaker
+        half_open_calls: Number of test calls made in half-open state
+
+    Example:
+        The circuit breaker transitions between states based on failures::
+
+            # Normal operation (closed)
+            client.get("/api")  # Success
+
+            # After multiple failures
+            client.get("/api")  # Fails -> failure_count++
+            # ... more failures ...
+            # State transitions to "open"
+
+            client.get("/api")  # Blocked immediately
+
+            # After recovery timeout
+            # State transitions to "half_open"
+            client.get("/api")  # Test request allowed
+    """
 
     failure_count: int = 0
     last_failure_time: float | None = None
@@ -33,9 +108,43 @@ class CircuitBreakerState:
 
 
 class HTTPClientManager:
-    """Manages HTTP client implementations and configurations."""
+    """Manages HTTP client implementations and configurations.
+
+    This manager serves as the central registry for HTTP clients in a Whiskey
+    application. It handles client configuration, instance creation, and
+    interceptor management.
+
+    The manager integrates with Whiskey's container to provide dependency
+    injection support for HTTP clients, allowing them to be injected into
+    services and components.
+
+    Attributes:
+        container: Whiskey container for dependency injection
+        _configs: Registry of client configurations by name
+        _client_classes: Registry of client classes by name
+        _interceptors: Request/response interceptors by client name
+        _circuit_breakers: Circuit breaker states by client name
+
+    Example:
+        The manager is typically created by the extension::
+
+            manager = HTTPClientManager(app.container)
+
+            # Register a configuration
+            config = HTTPClientConfig(name="api", base_url="https://api.example.com")
+            manager.register_config(config)
+
+            # Get a client instance
+            client = manager.get_client("api")
+            response = await client.get("/users")
+    """
 
     def __init__(self, container: Container):
+        """Initialize the HTTP client manager.
+
+        Args:
+            container: Whiskey container for storing client instances
+        """
         self.container = container
         self._configs: dict[str, HTTPClientConfig] = {}
         self._client_classes: dict[str, type] = {}
@@ -43,7 +152,25 @@ class HTTPClientManager:
         self._circuit_breakers: dict[str, CircuitBreakerState] = {}
 
     def register_config(self, config: HTTPClientConfig) -> None:
-        """Register an HTTP client configuration."""
+        """Register an HTTP client configuration.
+
+        This method stores the configuration and initializes any necessary
+        supporting structures like interceptor lists and circuit breaker state.
+
+        Args:
+            config: HTTP client configuration to register
+
+        Example:
+            Register a configuration with retry and circuit breaker::
+
+                config = HTTPClientConfig(
+                    name="api",
+                    base_url="https://api.example.com",
+                    retry=RetryConfig(attempts=3),
+                    circuit_breaker=CircuitBreakerConfig(failure_threshold=5)
+                )
+                manager.register_config(config)
+        """
         self._configs[config.name] = config
 
         # Initialize interceptor lists
@@ -55,23 +182,97 @@ class HTTPClientManager:
             self._circuit_breakers[config.name] = CircuitBreakerState()
 
     def register_class(self, name: str, client_class: type) -> None:
-        """Register a client class."""
+        """Register a client class.
+
+        Associates a class with a client name for dependency injection.
+        When the client is resolved, instances of this class will be
+        injected.
+
+        Args:
+            name: Name of the client
+            client_class: Class to associate with the client
+
+        Example:
+            Register a custom client class::
+
+                @app.http_client("github")
+                class GitHubClient:
+                    base_url = "https://api.github.com"
+
+                # The decorator calls this method internally
+                manager.register_class("github", GitHubClient)
+        """
         self._client_classes[name] = client_class
 
     def add_request_interceptor(self, client_name: str, interceptor: Callable) -> None:
-        """Add a request interceptor for a client."""
+        """Add a request interceptor for a client.
+
+        Request interceptors are called before sending requests and can
+        modify the request object (e.g., add headers, log requests).
+
+        Args:
+            client_name: Name of the client to add interceptor to
+            interceptor: Function that takes and returns an httpx.Request
+
+        Example:
+            Add an authentication interceptor::
+
+                async def add_auth(request: httpx.Request) -> httpx.Request:
+                    request.headers["Authorization"] = "Bearer token"
+                    return request
+
+                manager.add_request_interceptor("api", add_auth)
+        """
         if client_name not in self._interceptors:
             self._interceptors[client_name] = {"request": [], "response": []}
         self._interceptors[client_name]["request"].append(interceptor)
 
     def add_response_interceptor(self, client_name: str, interceptor: Callable) -> None:
-        """Add a response interceptor for a client."""
+        """Add a response interceptor for a client.
+
+        Response interceptors are called after receiving responses and can
+        process or modify the response (e.g., log responses, handle errors).
+
+        Args:
+            client_name: Name of the client to add interceptor to
+            interceptor: Function that takes and returns an httpx.Response
+
+        Example:
+            Add a logging interceptor::
+
+                async def log_response(response: httpx.Response) -> httpx.Response:
+                    print(f"{response.status_code} - {response.url}")
+                    return response
+
+                manager.add_response_interceptor("api", log_response)
+        """
         if client_name not in self._interceptors:
             self._interceptors[client_name] = {"request": [], "response": []}
         self._interceptors[client_name]["response"].append(interceptor)
 
     def get_client(self, name: str) -> HTTPClient:
-        """Get or create an HTTP client instance."""
+        """Get or create an HTTP client instance.
+
+        This method implements a lazy initialization pattern - clients are
+        only created when first requested. Once created, the same instance
+        is returned for subsequent requests.
+
+        Args:
+            name: Name of the client to retrieve
+
+        Returns:
+            HTTPClient instance configured with the registered settings
+
+        Raises:
+            ValueError: If no client with the given name is configured
+
+        Example:
+            Get a client and make a request::
+
+                client = manager.get_client("api")
+                response = await client.get("/users")
+                users = response.json()
+        """
         key = f"http.client.instance.{name}"
 
         if key not in self.container:
@@ -91,9 +292,49 @@ class HTTPClientManager:
 
 
 class WhiskeyHTTPClient:
-    """Default HTTP client implementation using httpx."""
+    """Default HTTP client implementation using httpx.
+
+    This class provides a full-featured HTTP client with support for:
+    - Request/response interceptors
+    - Automatic retry with configurable backoff
+    - Circuit breaker pattern for fault tolerance
+    - All standard HTTP methods (GET, POST, PUT, DELETE, etc.)
+
+    The client wraps httpx.AsyncClient and adds enterprise features while
+    maintaining a simple, intuitive API.
+
+    Attributes:
+        config: Client configuration including base URL, headers, etc.
+        manager: Reference to the HTTPClientManager
+        _client: Underlying httpx.AsyncClient instance
+
+    Example:
+        Using the client with retry and circuit breaker::
+
+            config = HTTPClientConfig(
+                name="api",
+                base_url="https://api.example.com",
+                retry=RetryConfig(attempts=3, backoff="exponential"),
+                circuit_breaker=CircuitBreakerConfig(failure_threshold=5)
+            )
+
+            client = WhiskeyHTTPClient(config, manager)
+
+            # Make requests with automatic retry
+            response = await client.get("/users")
+
+            # Use in async context manager
+            async with client:
+                response = await client.post("/users", json={"name": "Alice"})
+    """
 
     def __init__(self, config: HTTPClientConfig, manager: HTTPClientManager):
+        """Initialize the HTTP client.
+
+        Args:
+            config: Client configuration
+            manager: HTTP client manager for accessing interceptors
+        """
         self.config = config
         self.manager = manager
 
@@ -131,7 +372,52 @@ class WhiskeyHTTPClient:
         timeout: float | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
-        """Make an HTTP request with interceptors and retry logic."""
+        """Make an HTTP request with interceptors and retry logic.
+
+        This is the core method that handles all HTTP requests. It applies
+        request interceptors, checks circuit breaker state, executes the
+        request with retry logic, and applies response interceptors.
+
+        Args:
+            method: HTTP method (GET, POST, PUT, etc.)
+            url: URL path (relative to base_url if configured)
+            params: Query parameters
+            headers: Additional headers (merged with default headers)
+            json: JSON body (automatically sets Content-Type)
+            data: Form data or raw body
+            files: Files to upload
+            timeout: Request timeout (overrides default)
+            **kwargs: Additional arguments passed to httpx
+
+        Returns:
+            httpx.Response object
+
+        Raises:
+            httpx.HTTPError: If circuit breaker is open
+            httpx.HTTPStatusError: If response has error status (4xx, 5xx)
+            httpx.RequestError: For network errors
+
+        Example:
+            Make various types of requests::
+
+                # Simple GET
+                response = await client.request("GET", "/users")
+
+                # POST with JSON
+                response = await client.request(
+                    "POST",
+                    "/users",
+                    json={"name": "Alice", "email": "alice@example.com"}
+                )
+
+                # With query parameters and headers
+                response = await client.request(
+                    "GET",
+                    "/search",
+                    params={"q": "python", "limit": 10},
+                    headers={"X-Request-ID": "123"}
+                )
+        """
         # Build request
         request = self._client.build_request(
             method=method,
@@ -175,7 +461,27 @@ class WhiskeyHTTPClient:
         return response
 
     async def _execute_with_retry(self, request: httpx.Request) -> httpx.Response:
-        """Execute request with retry logic."""
+        """Execute request with retry logic.
+
+        Implements the retry strategy defined in the client's RetryConfig.
+        Handles both status code-based retries and exception-based retries.
+
+        Args:
+            request: The HTTP request to execute
+
+        Returns:
+            The successful response
+
+        Raises:
+            The last exception encountered if all retries fail
+            httpx.HTTPError if all retries are exhausted
+
+        Notes:
+            The method implements intelligent backoff strategies:
+            - Exponential: delay = initial_delay * (2 ** attempt)
+            - Linear: delay = initial_delay * (attempt + 1)
+            - Constant: delay = initial_delay
+        """
         retry_config = self.config.retry
         if not retry_config:
             return await self._execute_request(request)
@@ -245,7 +551,23 @@ class WhiskeyHTTPClient:
         await asyncio.sleep(delay)
 
     def _can_make_request(self, breaker: CircuitBreakerState) -> bool:
-        """Check if request can be made based on circuit breaker state."""
+        """Check if request can be made based on circuit breaker state.
+
+        Implements the circuit breaker state machine logic:
+        - Closed: Allow all requests
+        - Open: Block requests until recovery timeout
+        - Half-Open: Allow limited test requests
+
+        Args:
+            breaker: Current circuit breaker state
+
+        Returns:
+            True if request should proceed, False if blocked
+
+        Notes:
+            Automatically transitions from Open to Half-Open after
+            the recovery timeout period.
+        """
         if breaker.state == "closed":
             return True
 
@@ -287,31 +609,111 @@ class WhiskeyHTTPClient:
 
     # Convenience methods
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
-        """Make a GET request."""
+        """Make a GET request.
+
+        Args:
+            url: URL path (relative to base_url if configured)
+            **kwargs: Additional arguments passed to request()
+
+        Returns:
+            httpx.Response object
+
+        Example:
+            response = await client.get("/users", params={"page": 1})
+        """
         return await self.request("GET", url, **kwargs)
 
     async def post(self, url: str, **kwargs: Any) -> httpx.Response:
-        """Make a POST request."""
+        """Make a POST request.
+
+        Args:
+            url: URL path (relative to base_url if configured)
+            **kwargs: Additional arguments passed to request()
+
+        Returns:
+            httpx.Response object
+
+        Example:
+            response = await client.post("/users", json={"name": "Alice"})
+        """
         return await self.request("POST", url, **kwargs)
 
     async def put(self, url: str, **kwargs: Any) -> httpx.Response:
-        """Make a PUT request."""
+        """Make a PUT request.
+
+        Args:
+            url: URL path (relative to base_url if configured)
+            **kwargs: Additional arguments passed to request()
+
+        Returns:
+            httpx.Response object
+
+        Example:
+            response = await client.put("/users/123", json={"name": "Bob"})
+        """
         return await self.request("PUT", url, **kwargs)
 
     async def patch(self, url: str, **kwargs: Any) -> httpx.Response:
-        """Make a PATCH request."""
+        """Make a PATCH request.
+
+        Args:
+            url: URL path (relative to base_url if configured)
+            **kwargs: Additional arguments passed to request()
+
+        Returns:
+            httpx.Response object
+
+        Example:
+            response = await client.patch("/users/123", json={"email": "new@example.com"})
+        """
         return await self.request("PATCH", url, **kwargs)
 
     async def delete(self, url: str, **kwargs: Any) -> httpx.Response:
-        """Make a DELETE request."""
+        """Make a DELETE request.
+
+        Args:
+            url: URL path (relative to base_url if configured)
+            **kwargs: Additional arguments passed to request()
+
+        Returns:
+            httpx.Response object
+
+        Example:
+            response = await client.delete("/users/123")
+        """
         return await self.request("DELETE", url, **kwargs)
 
     async def head(self, url: str, **kwargs: Any) -> httpx.Response:
-        """Make a HEAD request."""
+        """Make a HEAD request.
+
+        Args:
+            url: URL path (relative to base_url if configured)
+            **kwargs: Additional arguments passed to request()
+
+        Returns:
+            httpx.Response object (without body)
+
+        Example:
+            response = await client.head("/users/123")
+            if response.status_code == 200:
+                print("User exists")
+        """
         return await self.request("HEAD", url, **kwargs)
 
     async def options(self, url: str, **kwargs: Any) -> httpx.Response:
-        """Make an OPTIONS request."""
+        """Make an OPTIONS request.
+
+        Args:
+            url: URL path (relative to base_url if configured)
+            **kwargs: Additional arguments passed to request()
+
+        Returns:
+            httpx.Response object
+
+        Example:
+            response = await client.options("/users")
+            allowed_methods = response.headers.get("Allow", "").split(", ")
+        """
         return await self.request("OPTIONS", url, **kwargs)
 
 
