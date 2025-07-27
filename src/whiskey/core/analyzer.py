@@ -1,8 +1,55 @@
-"""Type analysis engine for smart dependency injection.
+"""Type analysis engine for automatic dependency injection decisions.
 
-This module provides comprehensive analysis of type hints to determine
-which parameters should be auto-injected, handling all edge cases and
-providing clear rules for ambiguous scenarios.
+This module implements Whiskey's smart type analyzer that examines type hints
+to automatically determine which parameters should be injected. It handles
+complex scenarios including Optional types, Union types, forward references,
+generics, and standard library types with clear, predictable rules.
+
+Classes:
+    InjectDecision: Enumeration of injection decisions (YES, NO, OPTIONAL, ERROR)
+    InjectResult: Detailed result of injection analysis for a parameter
+    TypeAnalyzer: Main analyzer for type hint examination
+
+Injection Rules:
+    1. Never inject parameters with non-None defaults
+    2. Never inject built-in types (str, int, list, dict, etc.)
+    3. Never inject generic types with parameters (List[T], Dict[K,V])
+    4. Inject Optional[T] only if T is registered, else None
+    5. Inject Union types only if exactly one member is registered
+    6. Resolve forward references then apply rules
+    7. Don't inject standard library types unless explicitly registered
+    8. Always inject user-defined types that are registered
+
+Functions:
+    get_type_hints_safe: Safely extract type hints handling errors
+    is_optional: Check if a type is Optional[T]
+    get_optional_inner: Extract T from Optional[T]
+    is_union: Check if a type is a Union
+    is_generic_with_args: Check if type has generic parameters
+    is_builtin_type: Check if type is a Python built-in
+    is_stdlib_type: Check if type is from standard library
+    is_protocol: Check if type is a Protocol
+
+Example:
+    >>> from whiskey.core import TypeAnalyzer, ServiceRegistry
+    >>> 
+    >>> registry = ServiceRegistry()
+    >>> registry.register(Database, PostgresDB)
+    >>> 
+    >>> analyzer = TypeAnalyzer(registry)
+    >>> 
+    >>> # Analyze a callable
+    >>> def process(name: str, db: Database, cache: Optional[Cache]):
+    ...     pass
+    >>> 
+    >>> results = analyzer.analyze_callable(process)
+    >>> # results['name'] = InjectResult(NO, str, "built-in type")
+    >>> # results['db'] = InjectResult(YES, Database, "registered service")
+    >>> # results['cache'] = InjectResult(OPTIONAL, Cache, "optional type")
+
+See Also:
+    - whiskey.core.container: Uses analyzer for injection decisions
+    - whiskey.core.registry: Service registration state
 """
 
 from __future__ import annotations

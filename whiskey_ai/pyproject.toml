@@ -8,6 +8,11 @@ dependencies = [
     "whiskey>=0.1.0",
 ]
 
+[project.optional-dependencies]
+web = ["whiskey-asgi>=0.1.0"]
+cli = ["whiskey-cli>=0.1.0"]
+all = ["whiskey-asgi>=0.1.0", "whiskey-cli>=0.1.0"]
+
 # Entry points removed - using extension functions instead
 
 [build-system]
@@ -16,6 +21,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.uv.sources]
 whiskey = { workspace = true }
+whiskey-asgi = { workspace = true }
+whiskey-cli = { workspace = true }
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -16,6 +16,8 @@ from .conversation import (
     ConversationManager,
 )
 from .extension import (
+    # Extension
+    ai_extension,
     # Managers
     AgentManager,
     # OpenAI-compatible types
@@ -36,8 +38,6 @@ from .extension import (
     ToolCall,
     ToolManager,
     Usage,
-    # Extension
-    ai_extension,
 )
 from .providers import (
     AnthropicClient,
@@ -99,3 +99,12 @@ __all__ = [
     "web_search",
     "get_current_time",
 ]
+
+# Register CLI commands if available
+try:
+    from whiskey_cli import cli_extension
+    # CLI commands are automatically registered when ai_extension is used
+    # after cli_extension in an app
+except ImportError:
+    # CLI extension not available
+    pass

@@ -1,8 +1,41 @@
-"""Core Whiskey dependency injection framework - Pythonic API."""
+<<<<<<< HEAD
+"""Core components of the Whiskey dependency injection framework.
+
+This module provides the fundamental building blocks for Whiskey's Pythonic
+dependency injection system. It exports all the essential classes, decorators,
+and utilities needed to build applications with automatic dependency resolution.
+
+Key Components:
+    Container: Dict-like service registry with automatic dependency resolution
+    Whiskey: Application class with lifecycle management and rich IoC features
+    Decorators: @component, @singleton, @inject for service registration
+    TypeAnalyzer: Smart type analysis for automatic injection decisions
+    Scopes: Lifecycle management (singleton, transient, scoped)
+    
+Usage Example:
+    >>> from whiskey.core import Container, component, inject, singleton
+    >>> 
+    >>> # Register services
+    >>> @singleton
+    ... class Database:
+    ...     def query(self, sql: str): ...
+    >>> 
+    >>> @component
+    ... class UserService:
+    ...     def __init__(self, db: Database):
+    ...         self.db = db  # Automatically injected!
+    >>> 
+    >>> # Use injection in functions
+    >>> @inject
+    ... async def process_user(user_id: int, service: UserService):
+    ...     return await service.get_user(user_id)
+
+For more detailed examples, see the individual module documentation.
+"""
 
 from whiskey.core.analyzer import InjectDecision, TypeAnalyzer
 from whiskey.core.application import Whiskey
-from whiskey.core.builder import WhiskeyBuilder, create_app
+# Builder pattern removed - use Whiskey() directly
 from whiskey.core.container import Container, get_current_container, set_current_container
 from whiskey.core.decorators import (
     component,
@@ -34,16 +67,33 @@ from whiskey.core.errors import (
 from whiskey.core.performance import PerformanceMetrics, PerformanceMonitor
 from whiskey.core.registry import Scope, ServiceDescriptor, ServiceRegistry
 from whiskey.core.scopes import ContextVarScope, ScopeType
+=======
+"""Core Whiskey dependency injection framework."""
+
+from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
+from whiskey.core.container import Container
+from whiskey.core.decorators import (
+    factory,
+    get_default_container,
+    inject,
+    provide,
+    scoped,
+    set_default_container,
+    singleton,
+)
+from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
+from whiskey.core.types import Disposable, Initializable
+>>>>>>> origin/main
 
 __all__ = [
     # Container
     "Container",
+<<<<<<< HEAD
     "get_current_container",
     "set_current_container",
     # Application
     "Whiskey",
-    "WhiskeyBuilder",
-    "create_app",
+    # Builder classes removed - use direct instantiation
     # Global decorators
     "component",
     "singleton",
@@ -86,3 +136,25 @@ __all__ = [
     "ConfigurationError",
     "TypeAnalysisError",
 ]
+=======
+    "get_default_container",
+    "set_default_container",
+    # Decorators
+    "provide",
+    "singleton",
+    "factory",
+    "inject",
+    "scoped",
+    # Application
+    "Application",
+    "ApplicationConfig",
+    "ComponentMetadata",
+    # Scopes
+    "Scope",
+    "ContextVarScope",
+    "ScopeType",
+    # Types
+    "Initializable",
+    "Disposable",
+]
+>>>>>>> origin/main

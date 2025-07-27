@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """Whiskey - Simple, Pythonic dependency injection for modern Python applications.
 
 Whiskey is a lightweight, type-safe dependency injection framework designed
@@ -7,7 +8,7 @@ associated with enterprise DI frameworks.
 
 Key Features:
     - Dict-like container API for intuitive service registration
-    - Explicit injection with Annotated types
+    - Automatic injection based on type hints - no annotations needed
     - Named dependencies for multiple implementations
     - Conditional registration based on runtime conditions
     - Lazy resolution for efficient resource usage
@@ -18,38 +19,44 @@ Key Features:
     - Extensible with plugins for web, CLI, AI, and more
 
 Quick Start:
-    >>> from whiskey import Container, inject, Inject, Lazy
-    >>> from typing import Annotated
+    >>> from whiskey import Container, inject, singleton, component
     >>>
-    >>> # Create container and register services
-    >>> container = Container()
-    >>> container[Database] = Database("postgresql://...")
-    >>> container[Database, "readonly"] = ReadOnlyDB("postgresql://replica")
+    >>> # Define services with decorators
+    >>> @singleton
+    ... class Database:
+    ...     def __init__(self):
+    ...         self.connection = "postgresql://localhost/myapp"
     >>>
-    >>> # Use dependency injection with named and lazy dependencies
+    >>> @component
+    ... class UserService:
+    ...     def __init__(self, db: Database):  # Automatically injected!
+    ...         self.db = db
+    ...     
+    ...     async def get_user(self, user_id: int):
+    ...         return await self.db.query(f"SELECT * FROM users WHERE id={user_id}")
+    >>>
+    >>> # Use dependency injection in functions
     >>> @inject
-    ... async def get_user(
-    ...     user_id: int,
-    ...     db: Annotated[Database, Inject(name="readonly")],
-    ...     cache: Annotated[Lazy[Cache], Inject()]
-    ... ):
-    ...     # Cache is only initialized if accessed
-    ...     cached = cache.value.get(f"user:{user_id}")
-    ...     if cached:
-    ...         return cached
-    ...     user = await db.find_user(user_id)
-    ...     cache.value.set(f"user:{user_id}", user)
-    ...     return user
+    ... async def process_user(user_id: int, service: UserService):
+    ...     # user_id passed manually, service auto-injected
+    ...     return await service.get_user(user_id)
+    >>>
+    >>> # Call the function - service is injected automatically
+    >>> user = await process_user(123)
 
 For more information, see the documentation at:
 https://github.com/yourusername/whiskey
 """
+=======
+"""Whiskey - Simple, Pythonic dependency injection for AI applications."""
+>>>>>>> origin/main
 
 __version__ = "0.1.0"
 
 # Core exports
+<<<<<<< HEAD
 from whiskey.core.application import Whiskey
-from whiskey.core.builder import create_app
+# Builder pattern removed - use Whiskey() directly
 from whiskey.core.container import Container
 from whiskey.core.decorators import (
     call,
@@ -80,11 +87,19 @@ from whiskey.core.types import Disposable, Initializable, Inject
 
 # Legacy aliases for backward compatibility
 Application = Whiskey
+=======
+from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
+from whiskey.core.container import Container
+from whiskey.core.decorators import factory, inject, provide, scoped, singleton
+from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
+from whiskey.core.types import Disposable, Initializable
+>>>>>>> origin/main
 
 __all__ = [
     # Core DI
     "Container",
     "inject",
+<<<<<<< HEAD
     "singleton",
     "factory",
     "scoped",
@@ -93,11 +108,18 @@ __all__ = [
     # Application Framework
     "Whiskey",
     "Application",  # Legacy alias
-    "create_app",
+    # "create_app",  # Removed - use Whiskey() directly
+=======
+    "provide",
+    "singleton",
+    "factory",
+    "scoped",
+>>>>>>> origin/main
     # Scopes
     "Scope",
     "ContextVarScope",
     "ScopeType",
+<<<<<<< HEAD
     # Lazy
     "Lazy",
     "lazy_inject",
@@ -123,3 +145,13 @@ __all__ = [
     "get_app",
     "configure_app",
 ]
+=======
+    # Application
+    "Application",
+    "ApplicationConfig",
+    "ComponentMetadata",
+    # Types
+    "Initializable",
+    "Disposable",
+]
+>>>>>>> origin/main

@@ -4,13 +4,27 @@ import asyncio
 
 import pytest
 
-from whiskey.core.builder import create_app
 from whiskey.core.container import Container
+from whiskey.core.application import Whiskey
+from whiskey.core.testing import TestContainer, add_test_compatibility_methods
 
 
 @pytest.fixture
 def container():
     """Create a fresh container for testing."""
+    container = Container()
+    # Add test compatibility methods for tests that need them
+    add_test_compatibility_methods(container)
+    # Verify methods were added
+    assert hasattr(container, 'enter_scope'), "enter_scope method not added"
+    yield container
+    # Cleanup caches
+    container.clear_caches()
+
+
+@pytest.fixture
+def clean_container():
+    """Create a fresh container without test compatibility methods."""
     container = Container()
     yield container
     # Cleanup caches
@@ -21,7 +35,7 @@ def container():
 def event_bus():
     """Create a fresh event bus for testing."""
     # Event bus is now part of Application
-    app = create_app().build_app()
+    app = Whiskey()
     yield app._event_emitter
     # Cleanup handled by application
 
@@ -29,7 +43,7 @@ def event_bus():
 @pytest.fixture
 def app():
     """Create a test application."""
-    app = create_app().build_app()
+    app = Whiskey()
     yield app
     # Cleanup handled by context manager
 

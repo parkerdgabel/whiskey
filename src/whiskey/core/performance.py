@@ -1,7 +1,61 @@
-"""Performance monitoring and optimization utilities for Whiskey DI.
+"""Performance monitoring and optimization for dependency injection.
 
-This module provides tools for monitoring container performance,
-analyzing resolution patterns, and optimizing dependency injection.
+This module provides comprehensive performance monitoring and analysis tools
+for Whiskey's dependency injection system. It tracks resolution times, 
+identifies bottlenecks, detects resolution patterns, and provides actionable
+insights for optimization.
+
+Classes:
+    ResolutionMetrics: Metrics for individual service resolutions
+    PerformanceMetrics: Aggregated performance statistics
+    PerformanceMonitor: Context manager for performance monitoring
+    WeakValueCache: Memory-efficient cache using weak references
+
+Functions:
+    is_performance_monitoring_enabled: Check if monitoring is active
+    enable_performance_monitoring: Enable monitoring in current context
+    disable_performance_monitoring: Disable monitoring
+    get_current_metrics: Get metrics from current context
+    monitor_resolution: Decorator to monitor resolution performance
+    record_resolution: Record resolution metrics
+    record_error: Record resolution errors
+
+Features:
+    - Resolution time tracking with percentiles
+    - Dependency graph analysis
+    - Cache hit/miss ratios
+    - Memory usage monitoring
+    - Resolution path tracking
+    - Error rate monitoring
+    - Hot path identification
+
+Example:
+    >>> from whiskey.core.performance import PerformanceMonitor
+    >>> from whiskey import Container
+    >>> 
+    >>> container = Container()
+    >>> # ... register services ...
+    >>> 
+    >>> # Monitor performance
+    >>> with PerformanceMonitor() as monitor:
+    ...     for _ in range(100):
+    ...         service = await container.resolve(UserService)
+    ...         await service.process()
+    >>> 
+    >>> # Analyze results
+    >>> print(monitor.generate_report())
+    >>> # Shows resolution times, cache hits, hot paths, etc.
+    >>> 
+    >>> # Get specific metrics
+    >>> metrics = monitor.metrics
+    >>> print(f"Cache hit rate: {metrics.cache_hit_rate:.1%}")
+    >>> print(f"Slowest resolution: {metrics.slowest_resolution}")
+
+Performance Tips:
+    - Use singleton scope for expensive services
+    - Enable caching for frequently resolved services
+    - Use lazy injection to defer expensive resolutions
+    - Monitor production workloads to identify bottlenecks
 """
 
 from __future__ import annotations
