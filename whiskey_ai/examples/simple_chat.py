@@ -62,96 +62,55 @@ async def stream_chat(request: Request, client: LLMClient):
         )
 
         async for chunk in stream:
-            # Send as Server-Sent Events
-            yield f"data: {json.dumps(chunk.model_dump())}\n\n"
+            # Send as Server-Sent Event
+            yield f"data: {json.dumps({'content': chunk.choices[0].delta.content})}\n\n"
 
-        yield "data: [DONE]\n\n"
-
-    # Return streaming response
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
-# Chat with tools
-@app.tool(name="get_weather")
+# Function calling example
+@app.tool(name="get_weather", description="Get weather for a location")
 def get_weather(location: str, unit: str = "celsius") -> dict:
-    """Get the current weather for a location."""
-    # Mock weather data
-    return {
-        "location": location,
-        "temperature": 22 if unit == "celsius" else 72,
-        "unit": unit,
-        "conditions": "Partly cloudy",
-    }
+    """Get weather information."""
+    return {"location": location, "temperature": 22, "unit": unit, "condition": "sunny"}
 
 
-@app.post("/chat/tools")
+@app.post("/chat/functions")
 @inject
-async def chat_with_tools(request: Request, client: LLMClient, tools: ToolManager):
-    """Chat endpoint with tool support."""
-    from whiskey_ai.tools import ToolExecutor
-
+async def chat_with_functions(request: Request, client: LLMClient, tools: ToolManager):
+    """Chat endpoint with function calling."""
     data = await request.json()
 
-    # Get tool schemas
+    # Get all tool schemas
     tool_schemas = tools.all_schemas()
 
     # Create chat completion with tools
     response = await client.chat.create(
-        model="gpt-4", messages=data.get("messages", []), tools=tool_schemas, tool_choice="auto"
+        model="gpt-4", messages=data.get("messages", []), tools=tool_schemas
     )
 
-    message = response.choices[0].message
+    # Check if function was called
+    if response.choices[0].message.tool_calls:
+        tool_call = response.choices[0].message.tool_calls[0]
+        function_name = tool_call.function.name
 
-    # Handle tool calls
-    if message.tool_calls:
-        # Execute tools
-        executor = ToolExecutor(tools)
-        tool_results = await executor.execute_all(message.tool_calls)
+        # Execute the function
+        if function := tools.get(function_name):
+            import json
 
-        # Add tool results to messages
-        messages = data.get("messages", [])
-        messages.append(
-            {"role": "assistant", "content": message.content, "tool_calls": message.tool_calls}
-        )
+            args = json.loads(tool_call.function.arguments)
+            result = function(**args)
+            return {"function_called": function_name, "result": result}
 
-        for result in tool_results:
-            messages.append(
-                {
-                    "role": "tool",
-                    "content": json.dumps(result.get("result", result)),
-                    "tool_call_id": result.get("tool_call_id"),
-                }
-            )
-
-        # Get final response
-        response = await client.chat.create(model="gpt-4", messages=messages)
-
-        message = response.choices[0].message
-
-    return {"response": message.content, "tool_calls": message.tool_calls}
+    return {"response": response.choices[0].message.content}
 
 
 # Health check
-@app.get("/")
-async def index():
-    """API information."""
-    return {
-        "name": "Whiskey AI Chat Example",
-        "endpoints": {
-            "POST /chat": "Simple chat completion",
-            "POST /chat/stream": "Streaming chat completion",
-            "POST /chat/tools": "Chat with tool/function calling",
-        },
-        "model": "mock (for testing)",
-    }
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {"status": "ok", "service": "whiskey-ai-chat"}
 
 
 if __name__ == "__main__":
-    print("Starting Whiskey AI Chat Example...")
-    print("API available at http://localhost:8000")
-    print("\nExample request:")
-    print("curl -X POST http://localhost:8000/chat \\")
-    print('  -H "Content-Type: application/json" \\')
-    print('  -d \'{"messages": [{"role": "user", "content": "Hello!"}]}\'')
-
-    app.run_asgi(port=8000)
+    app.run()

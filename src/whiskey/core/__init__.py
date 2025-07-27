@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """Core components of the Whiskey dependency injection framework.
 
 This module provides the fundamental building blocks for Whiskey's Pythonic
@@ -66,10 +67,28 @@ from whiskey.core.errors import (
 from whiskey.core.performance import PerformanceMetrics, PerformanceMonitor
 from whiskey.core.registry import Scope, ServiceDescriptor, ServiceRegistry
 from whiskey.core.scopes import ContextVarScope, ScopeType
+=======
+"""Core Whiskey dependency injection framework."""
+
+from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
+from whiskey.core.container import Container
+from whiskey.core.decorators import (
+    factory,
+    get_default_container,
+    inject,
+    provide,
+    scoped,
+    set_default_container,
+    singleton,
+)
+from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
+from whiskey.core.types import Disposable, Initializable
+>>>>>>> origin/main
 
 __all__ = [
     # Container
     "Container",
+<<<<<<< HEAD
     "get_current_container",
     "set_current_container",
     # Application
@@ -117,3 +136,25 @@ __all__ = [
     "ConfigurationError",
     "TypeAnalysisError",
 ]
+=======
+    "get_default_container",
+    "set_default_container",
+    # Decorators
+    "provide",
+    "singleton",
+    "factory",
+    "inject",
+    "scoped",
+    # Application
+    "Application",
+    "ApplicationConfig",
+    "ComponentMetadata",
+    # Scopes
+    "Scope",
+    "ContextVarScope",
+    "ScopeType",
+    # Types
+    "Initializable",
+    "Disposable",
+]
+>>>>>>> origin/main

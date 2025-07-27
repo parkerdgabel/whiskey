@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class CommandMetadata:
     """Metadata for a CLI command."""
 
+
     func: Callable
     name: str
     description: Optional[str] = None
@@ -34,11 +35,11 @@ class CLIManager:
         self.commands: Dict[str, CommandMetadata] = {}
         self.groups: Dict[str, click.Group] = {}
 
+
     def add_command(self, metadata: CommandMetadata) -> None:
         """Add a command to the CLI."""
         # Build Click command from metadata
         func = metadata.func
-
         # Add Click decorators for arguments and options
         for arg in reversed(metadata.arguments):
             func = click.argument(arg["name"], **{k: v for k, v in arg.items() if k != "name"})(
@@ -48,7 +49,6 @@ class CLIManager:
         for opt in reversed(metadata.options):
             opt_args = opt["name"]
             opt_kwargs = {k: v for k, v in opt.items() if k != "name"}
-
             # Handle list of option names (e.g., ["-v", "--verbose"])
             if isinstance(opt_args, list):
                 func = click.option(*opt_args, **opt_kwargs)(func)
@@ -109,11 +109,19 @@ def cli_extension(app: Whiskey) -> None:
     - @app.argument() and @app.option() for adding parameters
     - app.group() for creating command groups
     - app.run_cli() to run the CLI
+<<<<<<< HEAD
 
     Example:
         app = Application()
         app.use(cli_extension)
 
+=======
+    
+    Example:
+        app = Application()
+        app.use(cli_extension)
+        
+>>>>>>> origin/main
         @app.command()
         @app.argument("name")
         @app.option("--greeting", default="Hello")
@@ -121,6 +129,7 @@ def cli_extension(app: Whiskey) -> None:
         async def greet(name: str, greeting: str, service: GreetingService):
             message = service.create_message(greeting, name)
             print(message)
+
 
         app.run_cli()
     """
@@ -144,20 +153,24 @@ def cli_extension(app: Whiskey) -> None:
             description: Command description (defaults to docstring)
             group: Group to add command to
 
+
         Example:
             @app.command()
             def hello():
                 print("Hello!")
+
 
             @app.command(name="db-migrate", group="database")
             async def migrate():
                 print("Running migrations...")
         """
 
+
         def decorator(func: Callable) -> Callable:
             # Get command info
             cmd_name = name or func.__name__.replace("_", "-")
             cmd_description = description or func.__doc__
+<<<<<<< HEAD
 
             # Create metadata
             metadata = CommandMetadata(
@@ -246,7 +259,6 @@ def cli_extension(app: Whiskey) -> None:
             def hello(count: int, verbose: bool):
                 pass
         """
-
         def decorator(func: Callable) -> Callable:
             metadata = None
             
@@ -280,6 +292,7 @@ def cli_extension(app: Whiskey) -> None:
                     metadata.options.append({"name": opt_args, **kwargs})
                 else:
                     metadata.options.append({"name": name, **kwargs})
+<<<<<<< HEAD
 
             return func
 
@@ -303,6 +316,7 @@ def cli_extension(app: Whiskey) -> None:
                 pass
         """
         return manager.create_group(name, description)
+
 
     # Add methods to app
     app.add_decorator("command", command)
@@ -381,3 +395,4 @@ def cli_extension(app: Whiskey) -> None:
                         print(f"  ... and {len(services) - 10} more")
             except Exception:
                 pass
+    

@@ -1,10 +1,15 @@
 # Whiskey 🥃
 
+<<<<<<< HEAD
 Simple, Pythonic dependency injection for modern Python applications.
+=======
+A simple, Pythonic dependency injection framework for AI applications.
+>>>>>>> origin/main
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<<<<<<< HEAD
 ## Why Whiskey?
 
 Whiskey is a dependency injection framework designed for Python developers who value simplicity and clarity. It provides powerful IoC (Inversion of Control) capabilities without the complexity often associated with enterprise DI frameworks.
@@ -16,18 +21,74 @@ Whiskey is a dependency injection framework designed for Python developers who v
 - **Async-First**: Built for modern async/await Python applications
 - **Zero Dependencies**: Core has no required dependencies
 - **Extensible**: Rich extension system for different application types
+=======
+- **Simple API**: Dict-like container interface that feels natural
+- **Rich IoC**: Full lifecycle management with events and metadata
+- **Async-First**: Built for modern async Python applications
+- **Zero Dependencies**: Core has no required dependencies
+- **Event-Driven**: Built-in event emitter with wildcard support
+- **Extensible**: Rich extension API for building any kind of app
+- **Type-Safe**: Full type hints and IDE support
+- **AI-Ready**: Perfect for LLM apps with specialized extensions
+>>>>>>> origin/main
 
 ## Quick Start
 
 ```python
+<<<<<<< HEAD
 from whiskey import Container, inject
 from whiskey.core.application import Whiskey as Application
+=======
+from whiskey import Application, inject
+
+# Create application
+app = Application()
+
+# Register components with metadata
+@app.component
+@app.priority(10)  # Startup order
+@app.provides("database")
+class Database:
+    async def initialize(self):
+        print("Connected to database")
+
+@app.component
+@app.requires(Database)
+class UserService:
+    def __init__(self, db: Database):
+        self.db = db
+
+# Event handlers
+@app.on("user.created")
+async def send_welcome(user):
+    print(f"Welcome {user['name']}!")
+
+# Lifecycle hooks
+@app.on_ready
+async def ready():
+    print("Application ready!")
+
+# Run with automatic lifecycle
+async with app.lifespan():
+    await app.emit("user.created", {"name": "Alice"})
+```
+
+## Core Concepts
+
+### Simple Container API
+
+Whiskey's container works like a Python dict:
+
+```python
+from whiskey import Container
+>>>>>>> origin/main
 
 # Simple container usage
 container = Container()
 container[Database] = Database("postgresql://...")
 db = await container.resolve(Database)
 
+<<<<<<< HEAD
 # Or use the Whiskey class for rich features
 app = Application()  # Application is imported as Whiskey
 
@@ -54,6 +115,102 @@ async with app.lifespan():
     await send_welcome_email(new_user)
 ```
 
+=======
+# Register services
+container[Database] = Database("postgresql://...")
+container[EmailService] = EmailService
+container[Cache] = lambda: RedisCache("localhost")
+
+# Resolve services
+db = await container.resolve(Database)
+
+# Dict-like operations
+if Database in container:
+    db = await container.resolve(Database)
+
+# Context manager for scoping
+with container:
+    service = await container.resolve(MyService)
+```
+
+### Scopes
+
+Core scopes (built-in):
+- `singleton` - One instance for the entire application
+- `transient` - New instance for each request (default)
+- `request` - One instance per HTTP request
+
+AI scopes (via whiskey-ai extension):
+- `session` - One instance per user session  
+- `conversation` - One instance per AI conversation
+- `ai_context` - One instance per AI operation
+
+### Decorators
+
+- `@provide` - Register a class as an injectable service
+- `@singleton` - Register as a singleton service
+- `@inject` - Automatically inject dependencies into functions
+- `@factory` - Register a factory function
+
+### Rich Lifecycle & Events
+
+```python
+# Lifecycle phases
+@app.before_startup
+async def init_resources():
+    print("Initializing...")
+
+@app.after_shutdown  
+async def cleanup():
+    print("Cleaning up...")
+
+# Event system with wildcards
+@app.on("http.request.*")
+async def log_requests(event_data):
+    print(f"HTTP Event: {event_data}")
+
+# Error handling
+@app.on_error
+async def handle_errors(error):
+    print(f"Error: {error['message']}")
+```
+
+### Extensions
+
+Extensions can add new features to the Application:
+
+```python
+# Create an extension
+def monitoring_extension(app):
+    # Add custom lifecycle phase
+    app.add_lifecycle_phase("metrics_init", after="startup")
+    
+    # Add custom decorator
+    def tracked(cls):
+        cls._metrics_enabled = True
+        return cls
+    
+    app.add_decorator("tracked", tracked)
+    
+    # Listen to events
+    @app.on("application.*")
+    async def monitor_app(event):
+        print(f"Monitor: {event}")
+
+# Use extensions
+app = Application().use(
+    monitoring_extension,
+    # ... other extensions
+)
+```
+
+### First-Party Extensions
+
+- **whiskey-ai**: AI/LLM-specific scopes and utilities
+- **whiskey-asgi**: ASGI web framework support
+- **whiskey-cli**: CLI application support
+
+>>>>>>> origin/main
 ## Installation
 
 ```bash

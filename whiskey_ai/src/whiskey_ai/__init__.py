@@ -16,6 +16,8 @@ from .conversation import (
     ConversationManager,
 )
 from .extension import (
+    # Extension
+    ai_extension,
     # Managers
     AgentManager,
     # OpenAI-compatible types
@@ -36,8 +38,6 @@ from .extension import (
     ToolCall,
     ToolManager,
     Usage,
-    # Extension
-    ai_extension,
 )
 from .providers import (
     AnthropicClient,

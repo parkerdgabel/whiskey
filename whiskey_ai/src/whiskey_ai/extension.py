@@ -25,15 +25,22 @@ if TYPE_CHECKING:
 @dataclass
 class Function:
     """OpenAI function definition."""
+<<<<<<< HEAD
 
     name: str
     description: str | None = None
     parameters: dict[str, Any] | None = None
+=======
+    name: str
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+>>>>>>> origin/main
 
 
 @dataclass
 class Tool:
     """OpenAI tool definition."""
+
 
     type: Literal["function"]
     function: Function
@@ -43,6 +50,7 @@ class Tool:
 class FunctionCall:
     """Function call in a message."""
 
+
     name: str
     arguments: str
 
@@ -50,6 +58,7 @@ class FunctionCall:
 @dataclass
 class ToolCall:
     """Tool call in a message."""
+
 
     id: str
     type: Literal["function"]
@@ -60,23 +69,33 @@ class ToolCall:
 class ResponseFormat:
     """Response format specification."""
 
+
     type: Literal["text", "json_object"]
 
 
 @dataclass
 class Message:
     """OpenAI-compatible message."""
+<<<<<<< HEAD
 
     role: Literal["system", "user", "assistant", "function", "tool"]
     content: str | None = None
     name: str | None = None
     function_call: FunctionCall | None = None
     tool_calls: list[ToolCall] | None = None
+=======
+    role: Literal["system", "user", "assistant", "function", "tool"]
+    content: Optional[str] = None
+    name: Optional[str] = None
+    function_call: Optional[FunctionCall] = None
+    tool_calls: Optional[List[ToolCall]] = None
+>>>>>>> origin/main
 
 
 @dataclass
 class Usage:
     """Token usage information."""
+
 
     prompt_tokens: int
     completion_tokens: int
@@ -86,16 +105,24 @@ class Usage:
 @dataclass
 class Choice:
     """Completion choice."""
+<<<<<<< HEAD
 
     index: int
     message: Message
     finish_reason: str | None
     logprobs: Any | None = None
+=======
+    index: int
+    message: Message
+    finish_reason: Optional[str]
+    logprobs: Optional[Any] = None
+>>>>>>> origin/main
 
 
 @dataclass
 class ChatCompletion:
     """OpenAI-compatible chat completion response."""
+<<<<<<< HEAD
 
     id: str
     model: str
@@ -104,31 +131,55 @@ class ChatCompletion:
     object: str = "chat.completion"
     created: int = field(default_factory=lambda: int(time.time()))
     system_fingerprint: str | None = None
+=======
+    id: str
+    model: str
+    choices: List[Choice]
+    usage: Usage
+    object: str = "chat.completion"
+    created: int = field(default_factory=lambda: int(time.time()))
+    system_fingerprint: Optional[str] = None
+>>>>>>> origin/main
 
 
 @dataclass
 class Delta:
     """Streaming message delta."""
+<<<<<<< HEAD
 
     content: str | None = None
     function_call: FunctionCall | None = None
     tool_calls: list[ToolCall] | None = None
     role: str | None = None
+=======
+    content: Optional[str] = None
+    function_call: Optional[FunctionCall] = None
+    tool_calls: Optional[List[ToolCall]] = None
+    role: Optional[str] = None
+>>>>>>> origin/main
 
 
 @dataclass
 class StreamChoice:
     """Streaming completion choice."""
+<<<<<<< HEAD
 
     index: int
     delta: Delta
     finish_reason: str | None = None
     logprobs: Any | None = None
+=======
+    index: int
+    delta: Delta
+    finish_reason: Optional[str] = None
+    logprobs: Optional[Any] = None
+>>>>>>> origin/main
 
 
 @dataclass
 class ChatCompletionChunk:
     """OpenAI-compatible streaming chunk."""
+<<<<<<< HEAD
 
     id: str
     model: str
@@ -136,22 +187,39 @@ class ChatCompletionChunk:
     object: str = "chat.completion.chunk"
     created: int = field(default_factory=lambda: int(time.time()))
     system_fingerprint: str | None = None
+=======
+    id: str
+    model: str
+    choices: List[StreamChoice]
+    object: str = "chat.completion.chunk"
+    created: int = field(default_factory=lambda: int(time.time()))
+    system_fingerprint: Optional[str] = None
+>>>>>>> origin/main
 
 
 @dataclass
 class Embedding:
     """Single embedding."""
+<<<<<<< HEAD
 
     index: int
     embedding: list[float]
+=======
+    index: int
+    embedding: List[float]
+>>>>>>> origin/main
     object: str = "embedding"
 
 
 @dataclass
 class EmbeddingResponse:
     """OpenAI-compatible embedding response."""
+<<<<<<< HEAD
 
     data: list[Embedding]
+=======
+    data: List[Embedding]
+>>>>>>> origin/main
     model: str
     usage: Usage
     object: str = "list"
@@ -161,6 +229,7 @@ class EmbeddingResponse:
 @runtime_checkable
 class ChatCompletions(Protocol):
     """OpenAI-compatible chat completions interface."""
+
 
     async def create(
         self,
@@ -193,6 +262,7 @@ class ChatCompletions(Protocol):
 class Embeddings(Protocol):
     """OpenAI-compatible embeddings interface."""
 
+
     async def create(
         self,
         *,
@@ -211,10 +281,12 @@ class Embeddings(Protocol):
 class LLMClient(Protocol):
     """OpenAI-compatible client interface."""
 
+
     chat: ChatCompletions
     embeddings: Embeddings
 
 
+<<<<<<< HEAD
 # Manager classes using Whiskey's dict-like patterns
 class ModelManager:
     """Manages LLM model implementations using Whiskey's container patterns."""
@@ -317,6 +389,7 @@ class AgentManager:
 class ConversationScope(ContextVarScope):
     """Scope for conversation/chat sessions - isolated per async context."""
 
+
     def __init__(self):
         super().__init__("conversation")
 
@@ -334,7 +407,7 @@ def ai_extension(app: Whiskey) -> None:
     - CLI commands for AI development
 
     Example:
-        app = Application()
+        app = Whiskey()
         app.use(ai_extension)
 
         # Register a model
@@ -471,7 +544,6 @@ def ai_extension(app: Whiskey) -> None:
         Agents are classes that can be injected and perform
         complex tasks using LLMs and tools.
         """
-
         def decorator(cls: type) -> type:
             agent_manager.register(name, cls)
             # Register the agent class in the container
