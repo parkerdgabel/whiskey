@@ -5,7 +5,6 @@ from typing import ClassVar
 import pytest
 
 from whiskey import Whiskey
-from whiskey.core.errors import ResolutionError
 from whiskey_auth import (
     AuthProvider,
     Permission,
@@ -101,6 +100,7 @@ class TestExtensionFunctions:
 
         # Check CurrentUser is registered as a factory
         from whiskey_auth.core import CurrentUser
+
         assert CurrentUser in app.container
 
         # Test resolver with no auth
@@ -221,11 +221,11 @@ class TestProviderImplementations:
 
     def test_jwt_provider_token_operations(self):
         """Test JWT provider token operations."""
-        
+
         class TestJWTProvider(JWTAuthProvider):
             async def get_user_by_id(self, user_id):
                 return None
-        
+
         provider = TestJWTProvider(
             secret="secret", algorithm="HS256", issuer="test", audience="test-app"
         )
@@ -249,11 +249,11 @@ class TestProviderImplementations:
 
     def test_jwt_provider_refresh_token(self):
         """Test JWT refresh token flow."""
-        
+
         class TestJWTProvider(JWTAuthProvider):
             async def get_user_by_id(self, user_id):
                 return None
-        
+
         provider = TestJWTProvider(secret="secret")
 
         # Create refresh token
@@ -273,14 +273,15 @@ class TestAuthDecoratorsSimple:
     @pytest.mark.asyncio
     async def test_requires_auth_with_context(self):
         """Test requires_auth with direct context."""
-        from whiskey_auth.decorators import requires_auth
-        
         # Test the decorator without DI by mocking get_current_container to return None
         import whiskey.core.container
+        from whiskey_auth.decorators import requires_auth
+
         original_get_current_container = whiskey.core.container.get_current_container
         whiskey.core.container.get_current_container = lambda: None
 
         try:
+
             @requires_auth
             async def protected(message: str) -> str:
                 return f"Protected: {message}"

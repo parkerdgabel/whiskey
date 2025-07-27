@@ -210,9 +210,9 @@ class AuthTestClient:
             original_auth = None
             if AuthContext in self.app.container:
                 original_auth = self.app.container[AuthContext]
-            
+
             self.app.container[AuthContext] = self._auth_context
-            
+
             try:
                 # Use the container as context manager to set it as current
                 async with self.app.container:
@@ -228,7 +228,7 @@ class AuthTestClient:
         else:
             # Call directly if no app or auth context
             return await func(*args, **kwargs)
-    
+
     def call_sync(self, func, *args, **kwargs):
         """Call a sync function with the current auth context.
 
@@ -246,9 +246,9 @@ class AuthTestClient:
             original_auth = None
             if AuthContext in self.app.container:
                 original_auth = self.app.container[AuthContext]
-            
+
             self.app.container[AuthContext] = self._auth_context
-            
+
             try:
                 # Use the container as context manager to set it as current
                 with self.app.container:
@@ -297,7 +297,10 @@ class AuthTestContainer(Container):
         """Resolve with test user support."""
         # Handle CurrentUser/User types
         from whiskey_auth.core import CurrentUser
-        if type_hint is CurrentUser or (hasattr(type_hint, "__name__") and type_hint.__name__ in ("CurrentUser", "User")):
+
+        if type_hint is CurrentUser or (
+            hasattr(type_hint, "__name__") and type_hint.__name__ in ("CurrentUser", "User")
+        ):
             return self._test_user
 
         # Default resolution

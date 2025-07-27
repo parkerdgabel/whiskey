@@ -33,10 +33,12 @@ def requires_auth(func: F) -> F:
         >>>     return f"Hello {user.username}"
     """
     if inspect.iscoroutinefunction(func):
+
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
             # Get the current container and resolve auth context
             from whiskey.core.container import get_current_container
+
             container = get_current_container()
             if container:
                 try:
@@ -45,24 +47,26 @@ def requires_auth(func: F) -> F:
                     auth_context = None
             else:
                 auth_context = kwargs.get("auth_context")
-            
+
             # Check authentication
             if not auth_context or not auth_context.is_authenticated:
                 raise AuthenticationError("Authentication required")
-            
+
             # Remove auth_context from kwargs if it was there
             kwargs.pop("auth_context", None)
-            
+
             # Call original function
             return await func(*args, **kwargs)
-        
+
         # Apply inject to enable DI for the original function
         return inject(async_wrapper)
     else:
+
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
             # Get the current container and resolve auth context
             from whiskey.core.container import get_current_container
+
             container = get_current_container()
             if container:
                 try:
@@ -71,16 +75,16 @@ def requires_auth(func: F) -> F:
                     auth_context = None
             else:
                 auth_context = kwargs.get("auth_context")
-            
+
             # Check authentication
             if not auth_context or not auth_context.is_authenticated:
                 raise AuthenticationError("Authentication required")
-            
+
             # Remove auth_context from kwargs if it was there
             kwargs.pop("auth_context", None)
-            
+
             return func(*args, **kwargs)
-        
+
         # Apply inject to enable DI for the original function
         return inject(sync_wrapper)
 
@@ -107,10 +111,12 @@ def requires_permission(*permissions: str | Permission) -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 # Get the current container and resolve auth context
                 from whiskey.core.container import get_current_container
+
                 container = get_current_container()
                 if container:
                     try:
@@ -119,7 +125,7 @@ def requires_permission(*permissions: str | Permission) -> Callable[[F], F]:
                         auth_context = None
                 else:
                     auth_context = kwargs.get("auth_context")
-                
+
                 # First check authentication
                 if not auth_context or not auth_context.is_authenticated:
                     raise AuthenticationError("Authentication required")
@@ -135,15 +141,17 @@ def requires_permission(*permissions: str | Permission) -> Callable[[F], F]:
 
                 # Remove auth_context from kwargs if it was there
                 kwargs.pop("auth_context", None)
-                
+
                 return await func(*args, **kwargs)
-            
+
             return inject(async_wrapper)
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 # Get the current container and resolve auth context
                 from whiskey.core.container import get_current_container
+
                 container = get_current_container()
                 if container:
                     try:
@@ -152,7 +160,7 @@ def requires_permission(*permissions: str | Permission) -> Callable[[F], F]:
                         auth_context = None
                 else:
                     auth_context = kwargs.get("auth_context")
-                
+
                 # First check authentication
                 if not auth_context or not auth_context.is_authenticated:
                     raise AuthenticationError("Authentication required")
@@ -167,9 +175,9 @@ def requires_permission(*permissions: str | Permission) -> Callable[[F], F]:
 
                 # Remove auth_context from kwargs if it was there
                 kwargs.pop("auth_context", None)
-                
+
                 return func(*args, **kwargs)
-            
+
             return inject(sync_wrapper)
 
     return decorator
@@ -197,10 +205,12 @@ def requires_role(*roles: str | Role) -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 # Get the current container and resolve auth context
                 from whiskey.core.container import get_current_container
+
                 container = get_current_container()
                 if container:
                     try:
@@ -209,7 +219,7 @@ def requires_role(*roles: str | Role) -> Callable[[F], F]:
                         auth_context = None
                 else:
                     auth_context = kwargs.get("auth_context")
-                
+
                 # First check authentication
                 if not auth_context or not auth_context.is_authenticated:
                     raise AuthenticationError("Authentication required")
@@ -223,15 +233,17 @@ def requires_role(*roles: str | Role) -> Callable[[F], F]:
 
                 # Remove auth_context from kwargs if it was there
                 kwargs.pop("auth_context", None)
-                
+
                 return await func(*args, **kwargs)
-            
+
             return inject(async_wrapper)
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 # Get the current container and resolve auth context
                 from whiskey.core.container import get_current_container
+
                 container = get_current_container()
                 if container:
                     try:
@@ -240,7 +252,7 @@ def requires_role(*roles: str | Role) -> Callable[[F], F]:
                         auth_context = None
                 else:
                     auth_context = kwargs.get("auth_context")
-                
+
                 # First check authentication
                 if not auth_context or not auth_context.is_authenticated:
                     raise AuthenticationError("Authentication required")
@@ -253,9 +265,9 @@ def requires_role(*roles: str | Role) -> Callable[[F], F]:
 
                 # Remove auth_context from kwargs if it was there
                 kwargs.pop("auth_context", None)
-                
+
                 return func(*args, **kwargs)
-            
+
             return inject(sync_wrapper)
 
     return decorator
@@ -282,10 +294,12 @@ def requires_all_permissions(*permissions: str | Permission) -> Callable[[F], F]
 
     def decorator(func: F) -> F:
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 # Get the current container and resolve auth context
                 from whiskey.core.container import get_current_container
+
                 container = get_current_container()
                 if container:
                     try:
@@ -294,7 +308,7 @@ def requires_all_permissions(*permissions: str | Permission) -> Callable[[F], F]
                         auth_context = None
                 else:
                     auth_context = kwargs.get("auth_context")
-                
+
                 # First check authentication
                 if not auth_context or not auth_context.is_authenticated:
                     raise AuthenticationError("Authentication required")
@@ -311,15 +325,17 @@ def requires_all_permissions(*permissions: str | Permission) -> Callable[[F], F]
 
                 # Remove auth_context from kwargs if it was there
                 kwargs.pop("auth_context", None)
-                
+
                 return await func(*args, **kwargs)
-            
+
             return inject(async_wrapper)
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 # Get the current container and resolve auth context
                 from whiskey.core.container import get_current_container
+
                 container = get_current_container()
                 if container:
                     try:
@@ -328,8 +344,8 @@ def requires_all_permissions(*permissions: str | Permission) -> Callable[[F], F]
                         auth_context = None
                 else:
                     auth_context = kwargs.get("auth_context")
-                
-                # First check authentication  
+
+                # First check authentication
                 if not auth_context or not auth_context.is_authenticated:
                     raise AuthenticationError("Authentication required")
 
@@ -344,9 +360,9 @@ def requires_all_permissions(*permissions: str | Permission) -> Callable[[F], F]
 
                 # Remove auth_context from kwargs if it was there
                 kwargs.pop("auth_context", None)
-                
+
                 return func(*args, **kwargs)
-            
+
             return inject(sync_wrapper)
 
     return decorator

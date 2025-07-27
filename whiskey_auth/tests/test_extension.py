@@ -13,7 +13,7 @@ from whiskey_auth import (
     auth_extension,
     create_test_user,
 )
-from whiskey_auth.core import AuthContext, User
+from whiskey_auth.core import AuthContext
 from whiskey_auth.providers import ProviderRegistry
 
 
@@ -141,8 +141,8 @@ class TestAuthExtension:
         # Define role
         @app.role("editor")
         class EditorRole:
-            permissions = {"read", "write"}
-            description = "Can read and write"
+            permissions: ClassVar = {"read", "write"}
+            description: ClassVar = "Can read and write"
 
         # Check role is stored
         roles = app._auth_metadata.get("roles", {})
@@ -161,12 +161,12 @@ class TestAuthExtension:
 
         @app.role("reader")
         class ReaderRole:
-            permissions = {"read"}
+            permissions: ClassVar = {"read"}
 
         @app.role("writer")
         class WriterRole:
-            permissions = {"write"}
-            inherits = ["reader"]
+            permissions: ClassVar = {"write"}
+            inherits: ClassVar = ["reader"]
 
         roles = app._auth_metadata.get("roles", {})
 
@@ -189,7 +189,7 @@ class TestAuthExtension:
 
         # Test CurrentUser resolution works
         from whiskey_auth import CurrentUser
-        
+
         # CurrentUser should resolve to the authenticated user
         resolved = await app.container.resolve(CurrentUser)
         assert resolved == user
@@ -202,7 +202,7 @@ class TestAuthExtension:
 
         # No auth context
         from whiskey_auth import CurrentUser
-        
+
         # CurrentUser should resolve to None when not authenticated
         resolved = await app.container.resolve(CurrentUser)
         assert resolved is None
@@ -235,39 +235,41 @@ class TestAuthExtension:
         class MockAsgiManager:
             def __init__(self):
                 self.middlewares = []
-            
+
             def add_middleware(self, metadata):
                 self.middlewares.append(metadata)
-        
+
         app.asgi_manager = MockAsgiManager()
-        
+
         # Apply auth extension
         app.use(auth_extension)
-        
+
         # Mock the ASGI MiddlewareMetadata class
         class MiddlewareMetadata:
             def __init__(self, func, name, priority):
                 self.func = func
                 self.name = name
                 self.priority = priority
-        
+
         # Temporarily replace the import
         import sys
-        sys.modules['whiskey_asgi'] = type(sys)('whiskey_asgi')
-        sys.modules['whiskey_asgi.extension'] = type(sys)('extension')
-        sys.modules['whiskey_asgi.extension'].MiddlewareMetadata = MiddlewareMetadata
-        
+
+        sys.modules["whiskey_asgi"] = type(sys)("whiskey_asgi")
+        sys.modules["whiskey_asgi.extension"] = type(sys)("extension")
+        sys.modules["whiskey_asgi.extension"].MiddlewareMetadata = MiddlewareMetadata
+
         # Register AuthenticationMiddleware
         from whiskey_auth.middleware import AuthenticationMiddleware
+
         app.container.singleton(AuthenticationMiddleware)
-        
+
         # Execute startup hooks directly from the callbacks list
         for callback in app._startup_callbacks:
             if asyncio.iscoroutinefunction(callback):
                 await callback()
             else:
                 callback()
-        
+
         # Check middleware was added
         assert len(app.asgi_manager.middlewares) > 0
         assert any(m.name == "auth" for m in app.asgi_manager.middlewares)

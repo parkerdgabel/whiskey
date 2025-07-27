@@ -72,6 +72,7 @@ class TestDecorators:
 
         # Test without authentication
         from whiskey.core.errors import ResolutionError
+
         with pytest.raises(ResolutionError) as exc:
             await client.call(protected_func, "Hello")
         # Handle multiple wrapping from @inject decorator
@@ -95,6 +96,7 @@ class TestDecorators:
         # Test without permission
         client.authenticate_as(users["reader"])
         from whiskey.core.errors import ResolutionError
+
         with pytest.raises(ResolutionError) as exc:
             await client.call(write_func, "content")
         # Handle multiple wrapping from @inject decorator
@@ -119,6 +121,7 @@ class TestDecorators:
         # Reader can't access (has neither permission)
         client.authenticate_as(users["reader"])
         from whiskey.core.errors import ResolutionError
+
         with pytest.raises(ResolutionError) as exc:
             await client.call(flexible_func)
         # Handle multiple wrapping from @inject decorator
@@ -146,6 +149,7 @@ class TestDecorators:
         # Test without role
         client.authenticate_as(users["writer"])
         from whiskey.core.errors import ResolutionError
+
         with pytest.raises(ResolutionError) as exc:
             await client.call(admin_func, "delete_all")
         # Handle multiple wrapping from @inject decorator
@@ -170,6 +174,7 @@ class TestDecorators:
         # Writer has read and write but not delete
         client.authenticate_as(users["writer"])
         from whiskey.core.errors import ResolutionError
+
         with pytest.raises(ResolutionError) as exc:
             await client.call(full_access_func)
         assert "lacks required permissions: delete" in str(exc.value)
@@ -194,6 +199,7 @@ class TestDecorators:
 
         # Not authenticated
         from whiskey.core.errors import ResolutionError
+
         with pytest.raises(ResolutionError) as exc:
             await client.call(strict_func)
         # Handle multiple wrapping from @inject decorator
@@ -232,12 +238,13 @@ class TestDecorators:
 
         # Test without auth
         from whiskey.core.errors import ResolutionError
+
         with pytest.raises(ResolutionError) as exc:
             client.call_sync(sync_protected)
         # Handle multiple wrapping from @inject decorator
         cause = unwrap_resolution_errors(exc.value)
         assert isinstance(cause, AuthenticationError)
-        
+
         # Test with auth
         client.authenticate_as(users["basic"])
         result = client.call_sync(sync_protected)

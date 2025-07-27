@@ -153,7 +153,7 @@ class AuthContext:
     permissions_cache: set[Permission] | None = None
     roles_cache: set[Role] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    
+
     def __post_init__(self):
         """Set authenticated_at if user is provided but authenticated_at is not."""
         if self.user and not self.authenticated_at:

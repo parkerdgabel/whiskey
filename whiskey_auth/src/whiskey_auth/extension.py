@@ -5,14 +5,13 @@ from __future__ import annotations
 import inspect
 from typing import Callable, TypeVar, get_args, get_origin
 
-from whiskey import Container, Whiskey
+from whiskey import Whiskey
 from whiskey_auth.core import (
     AuthContext,
     AuthProvider,
     CurrentUser,
     Permission,
     Role,
-    User,
 )
 from whiskey_auth.decorators import requires_auth, requires_permission, requires_role
 from whiskey_auth.middleware import AuthenticationMiddleware
@@ -53,8 +52,8 @@ def auth_extension(app: Whiskey) -> None:
     # Create provider registry
     registry = ProviderRegistry()
     app.container[ProviderRegistry] = registry
-    
-    # Create metadata storage for auth configuration  
+
+    # Create metadata storage for auth configuration
     app._auth_metadata = {}
 
     # Register auth context as transient - it will be managed by middleware/tests
@@ -62,6 +61,7 @@ def auth_extension(app: Whiskey) -> None:
 
     # Add extension methods using add_decorator
     app.add_decorator("user_model", lambda cls: _register_user_model(app, cls))
+
     # Auth provider needs special handling for optional name parameter
     def auth_provider_decorator(name_or_cls=None):
         if name_or_cls is None or isinstance(name_or_cls, str):
@@ -70,13 +70,14 @@ def auth_extension(app: Whiskey) -> None:
         else:
             # Called as @app.auth_provider without parentheses
             return _create_auth_provider_decorator(app, registry, None)(name_or_cls)
-    
+
     app.add_decorator("auth_provider", auth_provider_decorator)
     app.add_decorator("permissions", lambda cls: _register_permissions(app, cls))
+
     # Role decorator also needs the name parameter
     def role_decorator(name):
         return _create_role_decorator(app, name)
-    
+
     app.add_decorator("role", role_decorator)
 
     # Add auth decorators
@@ -96,7 +97,10 @@ def auth_extension(app: Whiskey) -> None:
             auth_middleware = await app.container.resolve(AuthenticationMiddleware)
             # Register middleware with ASGI manager
             from whiskey_asgi.extension import MiddlewareMetadata
-            metadata = MiddlewareMetadata(func=auth_middleware.middleware, name="auth", priority=100)
+
+            metadata = MiddlewareMetadata(
+                func=auth_middleware.middleware, name="auth", priority=100
+            )
             app.asgi_manager.add_middleware(metadata)
 
 
@@ -159,16 +163,16 @@ def _create_auth_provider_decorator(
             if class_name.endswith("AuthProvider"):
                 provider_name = class_name[:-12]  # Remove "AuthProvider"
             elif class_name.endswith("Provider"):
-                provider_name = class_name[:-8]   # Remove "Provider"
+                provider_name = class_name[:-8]  # Remove "Provider"
             else:
                 provider_name = class_name
-            
+
             # If we're left with too short a name, keep more of the original
             if len(provider_name) <= 2:
                 # For "MyAuthProvider", we want "myauth"
                 provider_name = class_name.lower()
                 provider_name = provider_name.replace("provider", "")
-                
+
             provider_name = provider_name.lower()
         registry.register(provider_name, cls)
 
@@ -252,6 +256,7 @@ def _register_current_user_resolver(app: Whiskey) -> None:
 
     This allows CurrentUser to be injected into functions and classes.
     """
+
     # Register a factory for CurrentUser that pulls from AuthContext
     async def current_user_factory():
         """Factory for CurrentUser injection."""
