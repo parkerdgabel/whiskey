@@ -426,6 +426,145 @@ class EnrichOrdersPipeline:
     sink = "enriched_orders"
 ```
 
+## Data Validation
+
+Whiskey ETL includes a robust validation framework that integrates seamlessly with pipelines.
+
+### Built-in Validators
+
+```python
+from whiskey_etl import validation_transform, ValidationMode
+
+# Create validation with builder API
+validator = (
+    validation_transform(ValidationMode.FAIL)  # Fail on first error
+    .field("email").required().email().end_field()
+    .field("age").required().type(int).range(18, 100).end_field()
+    .field("status").choices(["active", "inactive"]).end_field()
+    .build()
+)
+
+# Use as transform in pipeline
+@app.pipeline("validated_pipeline")
+class ValidatedPipeline:
+    source = "api"
+    transforms = [validator.transform]
+    sink = "database"
+```
+
+### Validation Modes
+
+- `FAIL`: Raise exception on validation failure (default)
+- `DROP`: Silently drop invalid records
+- `MARK`: Mark records with validation info but pass through
+- `COLLECT`: Collect all errors before failing
+- `QUARANTINE`: Send invalid records to quarantine
+
+### Custom Validators
+
+```python
+# Simple custom validator
+def validate_phone(value, record):
+    """Check if phone number is valid."""
+    import re
+    pattern = r'^\+?1?\d{9,15}$'
+    return bool(re.match(pattern, value))
+
+# Complex validator with ValidationResult
+def validate_address(value, record):
+    from whiskey_etl.validation import ValidationResult
+    
+    result = ValidationResult(valid=True)
+    
+    if not value.get("street"):
+        result.add_error("street", "Street is required")
+    
+    if not value.get("postal_code"):
+        result.add_warning("postal_code", "Postal code recommended")
+    
+    return result
+
+# Use in validation
+validator = (
+    validation_transform()
+    .field("phone").custom(validate_phone, "Invalid phone format").end_field()
+    .field("address").custom(validate_address).end_field()
+    .build()
+)
+```
+
+### Validation Reporting
+
+```python
+from whiskey_etl import ValidationReporter, ValidationQuarantine
+
+# Create reporter
+reporter = ValidationReporter()
+
+# Start report for pipeline run
+report = reporter.start_report("my_pipeline")
+
+# In your pipeline or transform
+async def validate_with_reporting(record):
+    result = await validator.validate_record(record)
+    report.add_validation_result(record, result)
+    
+    if not result.valid:
+        # Add to quarantine
+        quarantine.add(record, result.errors, "my_pipeline")
+    
+    return record if result.valid else None
+
+# After pipeline completes
+reporter.finalize_report("my_pipeline")
+
+# Get report summary
+summary = report.get_summary()
+print(f"Validation rate: {summary['validation_rate']}%")
+print(f"Top errors: {summary['top_field_errors']}")
+
+# Generate HTML report
+html_report = report.to_html()
+```
+
+### Cross-field Validation
+
+```python
+def validate_date_range(record, _):
+    """Ensure start_date is before end_date."""
+    start = record.get("start_date")
+    end = record.get("end_date")
+    
+    if start and end and start > end:
+        result = ValidationResult(valid=False)
+        result.add_error("date_range", "Start must be before end")
+        return result
+    
+    return ValidationResult(valid=True)
+
+# Add to validator
+validator = RecordValidator(
+    field_validators={
+        "start_date": DateValidator(),
+        "end_date": DateValidator(),
+    },
+    record_validators=[CustomValidator(validate_date_range)]
+)
+```
+
+### Available Validators
+
+- `RequiredValidator`: Field must be present and not null
+- `TypeValidator`: Field must be of specific type(s)
+- `RangeValidator`: Numeric value within min/max range
+- `LengthValidator`: String/collection length constraints
+- `PatternValidator`: Regex pattern matching
+- `ChoiceValidator`: Value must be in allowed choices
+- `EmailValidator`: Valid email format
+- `DateValidator`: Date parsing and range validation
+- `UniqueValidator`: Field uniqueness across records
+- `CompositeValidator`: Combine multiple validators
+
 ## Advanced Features
 
 ### Scheduled Pipelines
