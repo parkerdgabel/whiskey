@@ -6,7 +6,17 @@ dependency injection decisions for parameters.
 
 import asyncio
 import inspect
-from typing import Any, ForwardRef, Optional, Protocol, Union, Literal, Callable, List, Dict, TypeVar
+from typing import (
+    Any,
+    Dict,
+    ForwardRef,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+)
 from unittest.mock import Mock
 
 import pytest
@@ -616,7 +626,6 @@ class TestProtocolAnalysis:
         # ServiceProtocol inherits from Protocol
         # But _is_protocol checks internal implementation details
         # Let's test with actual typing.Protocol
-        from typing import Protocol as TypingProtocol
         
         # Test with typing constructs
         assert not analyzer._is_protocol(SimpleService)

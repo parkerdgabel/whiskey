@@ -109,19 +109,11 @@ def cli_extension(app: Whiskey) -> None:
     - @app.argument() and @app.option() for adding parameters
     - app.group() for creating command groups
     - app.run_cli() to run the CLI
-<<<<<<< HEAD
 
     Example:
         app = Application()
         app.use(cli_extension)
 
-=======
-    
-    Example:
-        app = Application()
-        app.use(cli_extension)
-        
->>>>>>> origin/main
         @app.command()
         @app.argument("name")
         @app.option("--greeting", default="Hello")
@@ -170,7 +162,6 @@ def cli_extension(app: Whiskey) -> None:
             # Get command info
             cmd_name = name or func.__name__.replace("_", "-")
             cmd_description = description or func.__doc__
-<<<<<<< HEAD
 
             # Create metadata
             metadata = CommandMetadata(
@@ -292,7 +283,6 @@ def cli_extension(app: Whiskey) -> None:
                     metadata.options.append({"name": opt_args, **kwargs})
                 else:
                     metadata.options.append({"name": name, **kwargs})
-<<<<<<< HEAD
 
             return func
 

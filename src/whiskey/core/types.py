@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Type definitions, protocols, and interfaces for lifecycle management.
 
 This module defines the core protocols and type definitions used throughout
@@ -54,14 +53,10 @@ Note:
     The @runtime_checkable decorator allows isinstance() checks against
     protocols at runtime, enabling dynamic lifecycle management.
 """
-=======
-"""Minimal type definitions for Whiskey framework."""
->>>>>>> origin/main
 
 from typing import Protocol, runtime_checkable
 
 
-<<<<<<< HEAD
 class Inject:
     """Legacy marker class for explicit dependency injection.
 
@@ -141,20 +136,11 @@ class Initializable(Protocol):
             service from being used and may stop application startup
             if the component is marked as critical.
         """
-=======
-@runtime_checkable
-class Initializable(Protocol):
-    """Protocol for services that need initialization."""
-    
-    async def initialize(self) -> None:
-        """Initialize the service."""
->>>>>>> origin/main
         ...
 
 
 @runtime_checkable
 class Disposable(Protocol):
-<<<<<<< HEAD
     """Protocol for services that need cleanup on shutdown.
 
     Services implementing this protocol will have their dispose()
@@ -187,10 +173,3 @@ class Disposable(Protocol):
             called multiple times gracefully.
         """
         ...
-=======
-    """Protocol for services that need cleanup."""
-    
-    async def dispose(self) -> None:
-        """Clean up the service."""
-        ...
->>>>>>> origin/main

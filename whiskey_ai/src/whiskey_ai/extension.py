@@ -25,16 +25,10 @@ if TYPE_CHECKING:
 @dataclass
 class Function:
     """OpenAI function definition."""
-<<<<<<< HEAD
 
     name: str
     description: str | None = None
     parameters: dict[str, Any] | None = None
-=======
-    name: str
-    description: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
->>>>>>> origin/main
 
 
 @dataclass
@@ -76,20 +70,12 @@ class ResponseFormat:
 @dataclass
 class Message:
     """OpenAI-compatible message."""
-<<<<<<< HEAD
 
     role: Literal["system", "user", "assistant", "function", "tool"]
     content: str | None = None
     name: str | None = None
     function_call: FunctionCall | None = None
     tool_calls: list[ToolCall] | None = None
-=======
-    role: Literal["system", "user", "assistant", "function", "tool"]
-    content: Optional[str] = None
-    name: Optional[str] = None
-    function_call: Optional[FunctionCall] = None
-    tool_calls: Optional[List[ToolCall]] = None
->>>>>>> origin/main
 
 
 @dataclass
@@ -105,24 +91,16 @@ class Usage:
 @dataclass
 class Choice:
     """Completion choice."""
-<<<<<<< HEAD
 
     index: int
     message: Message
     finish_reason: str | None
     logprobs: Any | None = None
-=======
-    index: int
-    message: Message
-    finish_reason: Optional[str]
-    logprobs: Optional[Any] = None
->>>>>>> origin/main
 
 
 @dataclass
 class ChatCompletion:
     """OpenAI-compatible chat completion response."""
-<<<<<<< HEAD
 
     id: str
     model: str
@@ -131,55 +109,31 @@ class ChatCompletion:
     object: str = "chat.completion"
     created: int = field(default_factory=lambda: int(time.time()))
     system_fingerprint: str | None = None
-=======
-    id: str
-    model: str
-    choices: List[Choice]
-    usage: Usage
-    object: str = "chat.completion"
-    created: int = field(default_factory=lambda: int(time.time()))
-    system_fingerprint: Optional[str] = None
->>>>>>> origin/main
 
 
 @dataclass
 class Delta:
     """Streaming message delta."""
-<<<<<<< HEAD
 
     content: str | None = None
     function_call: FunctionCall | None = None
     tool_calls: list[ToolCall] | None = None
     role: str | None = None
-=======
-    content: Optional[str] = None
-    function_call: Optional[FunctionCall] = None
-    tool_calls: Optional[List[ToolCall]] = None
-    role: Optional[str] = None
->>>>>>> origin/main
 
 
 @dataclass
 class StreamChoice:
     """Streaming completion choice."""
-<<<<<<< HEAD
 
     index: int
     delta: Delta
     finish_reason: str | None = None
     logprobs: Any | None = None
-=======
-    index: int
-    delta: Delta
-    finish_reason: Optional[str] = None
-    logprobs: Optional[Any] = None
->>>>>>> origin/main
 
 
 @dataclass
 class ChatCompletionChunk:
     """OpenAI-compatible streaming chunk."""
-<<<<<<< HEAD
 
     id: str
     model: str
@@ -187,39 +141,22 @@ class ChatCompletionChunk:
     object: str = "chat.completion.chunk"
     created: int = field(default_factory=lambda: int(time.time()))
     system_fingerprint: str | None = None
-=======
-    id: str
-    model: str
-    choices: List[StreamChoice]
-    object: str = "chat.completion.chunk"
-    created: int = field(default_factory=lambda: int(time.time()))
-    system_fingerprint: Optional[str] = None
->>>>>>> origin/main
 
 
 @dataclass
 class Embedding:
     """Single embedding."""
-<<<<<<< HEAD
 
     index: int
     embedding: list[float]
-=======
-    index: int
-    embedding: List[float]
->>>>>>> origin/main
     object: str = "embedding"
 
 
 @dataclass
 class EmbeddingResponse:
     """OpenAI-compatible embedding response."""
-<<<<<<< HEAD
 
     data: list[Embedding]
-=======
-    data: List[Embedding]
->>>>>>> origin/main
     model: str
     usage: Usage
     object: str = "list"
@@ -286,7 +223,6 @@ class LLMClient(Protocol):
     embeddings: Embeddings
 
 
-<<<<<<< HEAD
 # Manager classes using Whiskey's dict-like patterns
 class ModelManager:
     """Manages LLM model implementations using Whiskey's container patterns."""

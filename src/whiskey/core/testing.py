@@ -4,10 +4,10 @@ This module contains deprecated methods and utilities that are maintained
 for backward compatibility with existing tests.
 """
 
-from typing import Any, Callable
 import asyncio
 import types
-from contextvars import ContextVar
+from typing import Callable
+
 from .container import Container, _active_scopes
 
 

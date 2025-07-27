@@ -7,29 +7,17 @@ from typing import Any, Dict, List, Optional
 
 from whiskey import inject
 
-<<<<<<< HEAD
 from .extension import AgentManager, LLMClient, Message, ToolManager
-=======
-from .extension import LLMClient, Message, ToolManager, AgentManager
->>>>>>> origin/main
 from .tools import ToolExecutor
 
 
 class Agent:
     """Base class for AI agents."""
-<<<<<<< HEAD
 
     def __init__(self, name: str, description: str):
         self.name = name
         self.description = description
 
-=======
-    
-    def __init__(self, name: str, description: str):
-        self.name = name
-        self.description = description
-    
->>>>>>> origin/main
     async def run(self, task: str) -> str:
         """Run the agent on a task."""
         raise NotImplementedError("Agents must implement run()")
@@ -37,43 +25,24 @@ class Agent:
 
 class ConversationMemory:
     """Manages conversation history for agents."""
-<<<<<<< HEAD
 
     def __init__(self, max_messages: int = 20):
         self.messages: List[Message] = []
         self.max_messages = max_messages
 
-=======
-    
-    def __init__(self, max_messages: int = 20):
-        self.messages: List[Message] = []
-        self.max_messages = max_messages
-    
->>>>>>> origin/main
     def add_message(self, role: str, content: str, **kwargs):
         """Add a message to history."""
         message = Message(role=role, content=content, **kwargs)
         self.messages.append(message)
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> origin/main
         # Trim old messages
         if len(self.messages) > self.max_messages:
             # Keep system message if present
             if self.messages[0].role == "system":
-<<<<<<< HEAD
                 self.messages = [self.messages[0]] + self.messages[-(self.max_messages - 1) :]
             else:
                 self.messages = self.messages[-self.max_messages :]
 
-=======
-                self.messages = [self.messages[0]] + self.messages[-(self.max_messages-1):]
-            else:
-                self.messages = self.messages[-self.max_messages:]
-    
->>>>>>> origin/main
     def get_messages(self) -> List[Dict[str, Any]]:
         """Get messages in dict format for API calls."""
         return [
@@ -81,19 +50,11 @@ class ConversationMemory:
                 "role": msg.role,
                 "content": msg.content,
                 "tool_calls": msg.tool_calls,
-<<<<<<< HEAD
                 "function_call": msg.function_call,
             }
             for msg in self.messages
         ]
 
-=======
-                "function_call": msg.function_call
-            }
-            for msg in self.messages
-        ]
-    
->>>>>>> origin/main
     def clear(self):
         """Clear conversation history."""
         self.messages.clear()
@@ -101,11 +62,7 @@ class ConversationMemory:
 
 class LLMAgent(Agent):
     """Agent powered by an LLM with tool support."""
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> origin/main
     @inject
     def __init__(
         self,
@@ -114,11 +71,7 @@ class LLMAgent(Agent):
         client: LLMClient,
         tools: ToolManager,
         system_prompt: Optional[str] = None,
-<<<<<<< HEAD
         model: str = "gpt-4",
-=======
-        model: str = "gpt-4"
->>>>>>> origin/main
     ):
         super().__init__(name, description)
         self.client = client
@@ -127,77 +80,43 @@ class LLMAgent(Agent):
         self.model = model
         self.system_prompt = system_prompt or f"You are {name}. {description}"
         self.memory = ConversationMemory()
-<<<<<<< HEAD
 
         # Add system message
         self.memory.add_message("system", self.system_prompt)
 
-=======
-        
-        # Add system message
-        self.memory.add_message("system", self.system_prompt)
-    
->>>>>>> origin/main
     async def run(self, task: str) -> str:
         """Run the agent on a task."""
         # Add user message
         self.memory.add_message("user", task)
-<<<<<<< HEAD
 
         # Get tool schemas
         tool_schemas = self.tools.all_schemas()
 
-=======
-        
-        # Get tool schemas
-        tool_schemas = self.tools.all_schemas()
-        
->>>>>>> origin/main
         # Call LLM with tools
         response = await self.client.chat.create(
             model=self.model,
             messages=self.memory.get_messages(),
             tools=tool_schemas if tool_schemas else None,
-<<<<<<< HEAD
             tool_choice="auto" if tool_schemas else None,
         )
 
         message = response.choices[0].message
 
-=======
-            tool_choice="auto" if tool_schemas else None
-        )
-        
-        message = response.choices[0].message
-        
->>>>>>> origin/main
         # Handle tool calls
         if message.tool_calls:
             # Add assistant message with tool calls
             self.memory.add_message(
-<<<<<<< HEAD
                 "assistant", content=message.content, tool_calls=message.tool_calls
             )
 
             # Execute tools
             tool_results = await self.tool_executor.execute_all(message.tool_calls)
 
-=======
-                "assistant",
-                content=message.content,
-                tool_calls=message.tool_calls
-            )
-            
-            # Execute tools
-            tool_results = await self.tool_executor.execute_all(message.tool_calls)
-            
->>>>>>> origin/main
             # Add tool results to conversation
             for result in tool_results:
                 self.memory.add_message(
                     "tool",
                     content=json.dumps(result.get("result", result)),
-<<<<<<< HEAD
                     name=result.get("tool_call_id"),
                 )
 
@@ -211,32 +130,12 @@ class LLMAgent(Agent):
         # Add final response
         self.memory.add_message("assistant", message.content)
 
-=======
-                    name=result.get("tool_call_id")
-                )
-            
-            # Get final response
-            response = await self.client.chat.create(
-                model=self.model,
-                messages=self.memory.get_messages()
-            )
-            
-            message = response.choices[0].message
-        
-        # Add final response
-        self.memory.add_message("assistant", message.content)
-        
->>>>>>> origin/main
         return message.content
 
 
 class MultiAgent(Agent):
     """Coordinator agent that delegates to other agents."""
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> origin/main
     @inject
     def __init__(
         self,
@@ -244,36 +143,21 @@ class MultiAgent(Agent):
         description: str,
         client: LLMClient,
         agents: AgentManager,
-<<<<<<< HEAD
         model: str = "gpt-4",
-=======
-        model: str = "gpt-4"
->>>>>>> origin/main
     ):
         super().__init__(name, description)
         self.client = client
         self.agents = agents
         self.model = model
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> origin/main
     async def run(self, task: str) -> str:
         """Delegate task to appropriate agent."""
         # Get available agents
         available_agents = list(self.agents.agents.keys())
-<<<<<<< HEAD
 
         if not available_agents:
             return "No agents available to handle this task."
 
-=======
-        
-        if not available_agents:
-            return "No agents available to handle this task."
-        
->>>>>>> origin/main
         # Decide which agent to use
         prompt = f"""Given this task: "{task}"
 
@@ -281,16 +165,11 @@ Which of these agents would be best suited to handle it?
 {json.dumps(available_agents, indent=2)}
 
 Respond with just the agent name."""
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> origin/main
         response = await self.client.chat.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": "You are a task delegation assistant."},
-<<<<<<< HEAD
                 {"role": "user", "content": prompt},
             ],
             max_tokens=50,
@@ -298,43 +177,23 @@ Respond with just the agent name."""
 
         agent_name = response.choices[0].message.content.strip()
 
-=======
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=50
-        )
-        
-        agent_name = response.choices[0].message.content.strip()
-        
->>>>>>> origin/main
         # Get the agent
         agent = self.agents.get(agent_name)
         if not agent:
             # Fallback to first available agent
             agent_name = available_agents[0]
             agent = self.agents.get(agent_name)
-<<<<<<< HEAD
 
         # Delegate to chosen agent
         result = await agent.run(task)
 
-=======
-        
-        # Delegate to chosen agent
-        result = await agent.run(task)
-        
->>>>>>> origin/main
         return f"[Delegated to {agent_name}]\n\n{result}"
 
 
 # Example specialized agents
 class ResearchAgent(LLMAgent):
     """Agent specialized in research tasks."""
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> origin/main
     @inject
     def __init__(self, client: LLMClient, tools: ToolManager):
         super().__init__(
@@ -350,21 +209,13 @@ class ResearchAgent(LLMAgent):
 5. Acknowledge limitations in available information
 
 Use the available tools to gather information and provide comprehensive answers.""",
-<<<<<<< HEAD
             model="gpt-4",
-=======
-            model="gpt-4"
->>>>>>> origin/main
         )
 
 
 class CodingAgent(LLMAgent):
     """Agent specialized in coding tasks."""
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> origin/main
     @inject
     def __init__(self, client: LLMClient, tools: ToolManager):
         super().__init__(
@@ -384,21 +235,13 @@ When writing code, always:
 - Handle errors gracefully
 - Follow the language's conventions
 - Consider edge cases""",
-<<<<<<< HEAD
             model="gpt-4",
-=======
-            model="gpt-4"
->>>>>>> origin/main
         )
 
 
 class AnalysisAgent(LLMAgent):
     """Agent specialized in data analysis."""
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> origin/main
     @inject
     def __init__(self, client: LLMClient, tools: ToolManager):
         super().__init__(
@@ -414,10 +257,5 @@ class AnalysisAgent(LLMAgent):
 5. Provide actionable recommendations
 
 Use the calculate tool for mathematical operations and provide clear, data-driven insights.""",
-<<<<<<< HEAD
             model="gpt-4",
         )
-=======
-            model="gpt-4"
-        )
->>>>>>> origin/main

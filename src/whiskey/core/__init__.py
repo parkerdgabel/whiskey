@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Core components of the Whiskey dependency injection framework.
 
 This module provides the fundamental building blocks for Whiskey's Pythonic
@@ -35,7 +34,6 @@ For more detailed examples, see the individual module documentation.
 
 from whiskey.core.analyzer import InjectDecision, TypeAnalyzer
 from whiskey.core.application import Whiskey
-# Builder pattern removed - use Whiskey() directly
 from whiskey.core.container import Container, get_current_container, set_current_container
 from whiskey.core.decorators import (
     component,
@@ -46,6 +44,7 @@ from whiskey.core.decorators import (
     on_error,
     on_shutdown,
     on_startup,
+    provide,
     resolve,
     resolve_async,
     scoped,
@@ -67,35 +66,18 @@ from whiskey.core.errors import (
 from whiskey.core.performance import PerformanceMetrics, PerformanceMonitor
 from whiskey.core.registry import Scope, ServiceDescriptor, ServiceRegistry
 from whiskey.core.scopes import ContextVarScope, ScopeType
-=======
-"""Core Whiskey dependency injection framework."""
-
-from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
-from whiskey.core.container import Container
-from whiskey.core.decorators import (
-    factory,
-    get_default_container,
-    inject,
-    provide,
-    scoped,
-    set_default_container,
-    singleton,
-)
-from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
 from whiskey.core.types import Disposable, Initializable
->>>>>>> origin/main
 
 __all__ = [
     # Container
     "Container",
-<<<<<<< HEAD
     "get_current_container",
     "set_current_container",
     # Application
     "Whiskey",
-    # Builder classes removed - use direct instantiation
     # Global decorators
     "component",
+    "provide",
     "singleton",
     "scoped",
     "factory",
@@ -126,6 +108,9 @@ __all__ = [
     # Scopes
     "ContextVarScope",
     "ScopeType",
+    # Types
+    "Initializable",
+    "Disposable",
     # Errors
     "WhiskeyError",
     "ResolutionError",
@@ -136,25 +121,3 @@ __all__ = [
     "ConfigurationError",
     "TypeAnalysisError",
 ]
-=======
-    "get_default_container",
-    "set_default_container",
-    # Decorators
-    "provide",
-    "singleton",
-    "factory",
-    "inject",
-    "scoped",
-    # Application
-    "Application",
-    "ApplicationConfig",
-    "ComponentMetadata",
-    # Scopes
-    "Scope",
-    "ContextVarScope",
-    "ScopeType",
-    # Types
-    "Initializable",
-    "Disposable",
-]
->>>>>>> origin/main
