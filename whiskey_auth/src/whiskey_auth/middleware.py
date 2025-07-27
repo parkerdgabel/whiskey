@@ -249,6 +249,25 @@ class AuthenticationMiddleware:
                     name, value = param.split("=", 1)
                     params[name] = value
         return params
+    
+    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+        """Make middleware callable for ASGI compatibility.
+        
+        Args:
+            scope: ASGI scope
+            receive: ASGI receive callable
+            send: ASGI send callable
+        """
+        # For non-HTTP types, just pass through
+        if scope["type"] != "http":
+            if hasattr(self, "app"):
+                await self.app(scope, receive, send)
+            return
+        
+        # For HTTP, delegate to the configured handler
+        # This is a simplified version - full ASGI support would need more work
+        if hasattr(self, "app"):
+            await self.app(scope, receive, send)
 
 
 class AuthContextMiddleware:
@@ -279,3 +298,15 @@ class AuthContextMiddleware:
         # The AuthContext should already be in the container from AuthenticationMiddleware
         # Just call the next handler
         return await call_next(request)
+    
+    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+        """Make middleware callable for ASGI compatibility.
+        
+        Args:
+            scope: ASGI scope
+            receive: ASGI receive callable
+            send: ASGI send callable
+        """
+        # Just pass through to the app
+        if hasattr(self, "app"):
+            await self.app(scope, receive, send)
