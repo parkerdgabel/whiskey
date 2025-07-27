@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from .extension import cli_extension
 
 if TYPE_CHECKING:
-    from whiskey import Application
+    from whiskey import Whiskey
 
 
 __all__ = [

@@ -2,9 +2,24 @@
 
 from typing import TYPE_CHECKING
 
+from .agents import (
+    Agent,
+    AnalysisAgent,
+    CodingAgent,
+    ConversationMemory,
+    LLMAgent,
+    ResearchAgent,
+)
+from .conversation import (
+    ChatSession,
+    Conversation,
+    ConversationManager,
+)
 from .extension import (
     # Extension
     ai_extension,
+    # Managers
+    AgentManager,
     # OpenAI-compatible types
     ChatCompletion,
     ChatCompletionChunk,
@@ -16,43 +31,28 @@ from .extension import (
     FunctionCall,
     LLMClient,
     Message,
+    ModelManager,
     ResponseFormat,
     StreamChoice,
     Tool,
     ToolCall,
-    Usage,
-    # Managers
-    AgentManager,
-    ModelManager,
     ToolManager,
+    Usage,
 )
 from .providers import (
+    AnthropicClient,
     MockLLMClient,
     OpenAIClient,
-    AnthropicClient,
-)
-from .agents import (
-    Agent,
-    LLMAgent,
-    ResearchAgent,
-    CodingAgent,
-    AnalysisAgent,
-    ConversationMemory,
-)
-from .conversation import (
-    Conversation,
-    ConversationManager,
-    ChatSession,
 )
 from .tools import (
     ToolExecutor,
     calculate,
-    web_search,
     get_current_time,
+    web_search,
 )
 
 if TYPE_CHECKING:
-    from whiskey import Application
+    from whiskey import Whiskey
 
 
 __all__ = [
@@ -86,7 +86,7 @@ __all__ = [
     "Agent",
     "LLMAgent",
     "ResearchAgent",
-    "CodingAgent", 
+    "CodingAgent",
     "AnalysisAgent",
     "ConversationMemory",
     # Conversation
@@ -99,3 +99,12 @@ __all__ = [
     "web_search",
     "get_current_time",
 ]
+
+# Register CLI commands if available
+try:
+    from whiskey_cli import cli_extension
+    # CLI commands are automatically registered when ai_extension is used
+    # after cli_extension in an app
+except ImportError:
+    # CLI extension not available
+    pass
