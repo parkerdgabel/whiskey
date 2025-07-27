@@ -7,6 +7,8 @@ A declarative ETL (Extract, Transform, Load) extension for the Whiskey dependenc
 - **Declarative Pipeline Definition**: Define data pipelines using decorators and classes
 - **Dependency Injection**: Inject services into transforms, sources, and sinks
 - **Built-in Components**: CSV, JSON, and JSON Lines sources/sinks
+- **Database Integration**: Full SQL database support via whiskey_sql
+- **SQL Transforms**: Lookup, join, validate, and aggregate data using SQL
 - **Transform Utilities**: Filter, map, validate, and clean data with ease
 - **Error Handling**: Retry logic, error callbacks, and detailed error reporting
 - **Monitoring**: Track pipeline progress and metrics
@@ -15,7 +17,21 @@ A declarative ETL (Extract, Transform, Load) extension for the Whiskey dependenc
 ## Installation
 
 ```bash
+# Basic installation
 pip install whiskey-etl
+
+# With object store support
+pip install whiskey-etl[s3]          # AWS S3 support
+pip install whiskey-etl[azure]       # Azure Blob Storage support
+pip install whiskey-etl[gcs]         # Google Cloud Storage support
+pip install whiskey-etl[cloud]       # All cloud storage providers
+
+# With additional features
+pip install whiskey-etl[parquet]     # Parquet file format support
+pip install whiskey-etl[compression] # Snappy compression support
+
+# Full installation
+pip install whiskey-etl[cloud,parquet,compression]
 ```
 
 ## Quick Start
@@ -287,6 +303,267 @@ class TestSink(MemorySink):
 result = await app.pipelines.run("my_pipeline")
 assert memory_sink.get_data() == expected_output
 ```
+
+## Database Integration
+
+When using whiskey_sql, ETL pipelines can leverage powerful database sources, sinks, and transforms.
+
+### Database Sources
+
+```python
+# Configure database first
+app.use(sql_extension)
+app.configure_database("postgresql://localhost/mydb")
+
+# Use built-in database source
+@app.pipeline("extract_users")
+class ExtractUsersPipeline:
+    source = "table"  # Built-in table source
+    source_config = {
+        "table_name": "users",
+        "key_column": "id",
+        "batch_size": 1000,
+    }
+    sink = "csv_output"
+
+# Or use custom query source
+@app.source("recent_orders")
+class RecentOrdersSource(QuerySource):
+    def __init__(self, database: Database):
+        super().__init__(
+            database,
+            query="""
+                SELECT * FROM orders 
+                WHERE created_at >= :start_date
+                ORDER BY created_at
+            """
+        )
+```
+
+### Database Sinks
+
+```python
+# Table sink with upsert
+@app.pipeline("sync_products")
+class SyncProductsPipeline:
+    source = "api_products"
+    sink = "upsert"  # Built-in upsert sink
+    sink_config = {
+        "table_name": "products",
+        "key_columns": ["sku"],
+        "update_columns": ["name", "price", "updated_at"],
+    }
+
+# Bulk update sink
+@app.sink("bulk_inventory_update")
+class InventoryUpdateSink(BulkUpdateSink):
+    def __init__(self, database: Database):
+        super().__init__(
+            database,
+            table_name="inventory",
+            key_columns=["warehouse_id", "sku"],
+            update_columns=["quantity", "last_updated"]
+        )
+```
+
+### SQL Transforms
+
+```python
+# Lookup transform with caching
+@app.sql_transform("lookup",
+    lookup_query="SELECT name, email FROM customers WHERE id = :customer_id",
+    input_fields=["customer_id"],
+    output_fields=["customer_name", "customer_email"],
+    cache_size=1000
+)
+async def enrich_customer(record: dict, transform: SQLTransform) -> dict:
+    return await transform.transform(record)
+
+# Join transform
+@app.sql_transform("join",
+    join_table="products",
+    join_keys={"product_id": "id"},
+    select_fields=["name", "category", "price"]
+)
+async def join_product_info(record: dict, transform: SQLTransform) -> dict:
+    return await transform.transform(record)
+
+# Validation transform
+@app.sql_transform("validate",
+    validation_query="SELECT 1 FROM valid_skus WHERE sku = :sku",
+    validation_fields=["sku"],
+    on_invalid="drop"  # or "mark", "error"
+)
+async def validate_sku(record: dict, transform: SQLTransform) -> dict | None:
+    return await transform.transform(record)
+
+# Aggregation transform
+@app.sql_transform("aggregate",
+    aggregate_query="""
+        SELECT COUNT(*) as order_count,
+               SUM(amount) as total_spent,
+               AVG(amount) as avg_order_value
+        FROM orders
+        WHERE customer_id = :customer_id
+    """,
+    group_by_fields=["customer_id"],
+    aggregate_fields=["order_count", "total_spent"]
+)
+async def add_customer_stats(record: dict, transform: SQLTransform) -> dict:
+    return await transform.transform(record)
+
+# Use in pipeline
+@app.pipeline("enrich_orders")
+class EnrichOrdersPipeline:
+    source = "table"
+    source_config = {"table_name": "orders"}
+    transforms = [
+        enrich_customer,
+        join_product_info,
+        validate_sku,
+        add_customer_stats
+    ]
+    sink = "enriched_orders"
+```
+
+## Data Validation
+
+Whiskey ETL includes a robust validation framework that integrates seamlessly with pipelines.
+
+### Built-in Validators
+
+```python
+from whiskey_etl import validation_transform, ValidationMode
+
+# Create validation with builder API
+validator = (
+    validation_transform(ValidationMode.FAIL)  # Fail on first error
+    .field("email").required().email().end_field()
+    .field("age").required().type(int).range(18, 100).end_field()
+    .field("status").choices(["active", "inactive"]).end_field()
+    .build()
+)
+
+# Use as transform in pipeline
+@app.pipeline("validated_pipeline")
+class ValidatedPipeline:
+    source = "api"
+    transforms = [validator.transform]
+    sink = "database"
+```
+
+### Validation Modes
+
+- `FAIL`: Raise exception on validation failure (default)
+- `DROP`: Silently drop invalid records
+- `MARK`: Mark records with validation info but pass through
+- `COLLECT`: Collect all errors before failing
+- `QUARANTINE`: Send invalid records to quarantine
+
+### Custom Validators
+
+```python
+# Simple custom validator
+def validate_phone(value, record):
+    """Check if phone number is valid."""
+    import re
+    pattern = r'^\+?1?\d{9,15}$'
+    return bool(re.match(pattern, value))
+
+# Complex validator with ValidationResult
+def validate_address(value, record):
+    from whiskey_etl.validation import ValidationResult
+    
+    result = ValidationResult(valid=True)
+    
+    if not value.get("street"):
+        result.add_error("street", "Street is required")
+    
+    if not value.get("postal_code"):
+        result.add_warning("postal_code", "Postal code recommended")
+    
+    return result
+
+# Use in validation
+validator = (
+    validation_transform()
+    .field("phone").custom(validate_phone, "Invalid phone format").end_field()
+    .field("address").custom(validate_address).end_field()
+    .build()
+)
+```
+
+### Validation Reporting
+
+```python
+from whiskey_etl import ValidationReporter, ValidationQuarantine
+
+# Create reporter
+reporter = ValidationReporter()
+
+# Start report for pipeline run
+report = reporter.start_report("my_pipeline")
+
+# In your pipeline or transform
+async def validate_with_reporting(record):
+    result = await validator.validate_record(record)
+    report.add_validation_result(record, result)
+    
+    if not result.valid:
+        # Add to quarantine
+        quarantine.add(record, result.errors, "my_pipeline")
+    
+    return record if result.valid else None
+
+# After pipeline completes
+reporter.finalize_report("my_pipeline")
+
+# Get report summary
+summary = report.get_summary()
+print(f"Validation rate: {summary['validation_rate']}%")
+print(f"Top errors: {summary['top_field_errors']}")
+
+# Generate HTML report
+html_report = report.to_html()
+```
+
+### Cross-field Validation
+
+```python
+def validate_date_range(record, _):
+    """Ensure start_date is before end_date."""
+    start = record.get("start_date")
+    end = record.get("end_date")
+    
+    if start and end and start > end:
+        result = ValidationResult(valid=False)
+        result.add_error("date_range", "Start must be before end")
+        return result
+    
+    return ValidationResult(valid=True)
+
+# Add to validator
+validator = RecordValidator(
+    field_validators={
+        "start_date": DateValidator(),
+        "end_date": DateValidator(),
+    },
+    record_validators=[CustomValidator(validate_date_range)]
+)
+```
+
+### Available Validators
+
+- `RequiredValidator`: Field must be present and not null
+- `TypeValidator`: Field must be of specific type(s)
+- `RangeValidator`: Numeric value within min/max range
+- `LengthValidator`: String/collection length constraints
+- `PatternValidator`: Regex pattern matching
+- `ChoiceValidator`: Value must be in allowed choices
+- `EmailValidator`: Valid email format
+- `DateValidator`: Date parsing and range validation
+- `UniqueValidator`: Field uniqueness across records
+- `CompositeValidator`: Combine multiple validators
 
 ## Advanced Features
 

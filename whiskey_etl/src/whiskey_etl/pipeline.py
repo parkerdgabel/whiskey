@@ -14,6 +14,8 @@ from typing import (
 from whiskey import Container
 
 from .errors import PipelineError, TransformError
+from .validation import RecordValidator, ValidationMode
+from .validation_reporting import ValidationReport, ValidationReporter
 
 
 class PipelineState(Enum):
@@ -125,9 +127,17 @@ class Pipeline:
     retry_delay: float = 1.0
     error_handler: str | None = None
     enable_checkpointing: bool = False
+    
+    # Validation configuration
+    validators: RecordValidator | None = None
+    validation_mode: ValidationMode = ValidationMode.FAIL
+    enable_validation_reporting: bool = True
+    quarantine_sink: str | None = None
 
     def __init__(self, context: PipelineContext):
         self.context = context
+        self._validation_report: ValidationReport | None = None
+        self._validation_reporter: ValidationReporter | None = None
 
     # Lifecycle hooks (optional)
     async def on_start(self, context: PipelineContext) -> None:
