@@ -42,7 +42,7 @@ Example:
     >>> 
     >>> # Run the application
     >>> async with app:
-    ...     service = await app.resolve(EmailService)
+    ...     component = await app.resolve(EmailService)
     
 See Also:
     - whiskey.core.container: Base container functionality
@@ -146,11 +146,11 @@ class Whiskey:
     # Direct registration methods
     
     def register(self, key: str | type, provider: Any, **kwargs) -> None:
-        """Register a service directly.
+        """Register a component directly.
         
         Args:
-            key: Service key
-            provider: Service provider
+            key: Component key
+            provider: Component provider
             **kwargs: Additional registration options
         """
         if provider is None:
@@ -158,11 +158,11 @@ class Whiskey:
         self.container.register(key, provider, **kwargs)
     
     def transient(self, key: str | type, provider: Any = None, **kwargs) -> None:
-        """Register a transient service.
+        """Register a transient component.
         
         Args:
-            key: Service key
-            provider: Service provider (uses key if None and key is a type)
+            key: Component key
+            provider: Component provider (uses key if None and key is a type)
             **kwargs: Additional registration options
         """
         if provider is None and isinstance(key, type):
@@ -188,9 +188,9 @@ class Whiskey:
 
         Args:
             cls: The class to register (when used without parentheses)
-            key: Optional service key (defaults to class)
-            name: Optional name for named services
-            scope: Service scope (default: transient)
+            key: Optional component key (defaults to class)
+            name: Optional name for named components
+            scope: Component scope (default: transient)
             tags: Set of tags for categorization
             condition: Optional registration condition
             lazy: Whether to use lazy resolution
@@ -246,10 +246,10 @@ class Whiskey:
             return cls
 
         if cls is None:
-            # Used with parentheses: @app.service(...)
+            # Used with parentheses: @app.component(...)
             return decorator
         else:
-            # Used without parentheses: @app.service
+            # Used without parentheses: @app.component
             return decorator(cls)
 
     def singleton(
@@ -263,7 +263,7 @@ class Whiskey:
         lazy: bool = False,
         instance: Any = None,
     ) -> type[T] | Callable[[type[T]], type[T]]:
-        """Decorator to register a class as a singleton service."""
+        """Decorator to register a class as a singleton component."""
         # If instance is provided, register it directly
         if instance is not None:
             component_key = key or cls or type(instance)
@@ -299,7 +299,7 @@ class Whiskey:
         condition: Callable[[], bool] | None = None,
         lazy: bool = False,
     ) -> type[T] | Callable[[type[T]], type[T]]:
-        """Decorator to register a class as a scoped service."""
+        """Decorator to register a class as a scoped component."""
         return self.component(
             cls, key=key, name=name, scope=Scope.SCOPED, tags=tags, condition=condition, lazy=lazy
         )
@@ -318,10 +318,10 @@ class Whiskey:
         """Register a function as a factory.
 
         Args:
-            key: Service key (required for factories)
+            key: Component key (required for factories)
             func: The factory function to register
-            name: Optional name for named services
-            scope: Service scope (default: transient)
+            name: Optional name for named components
+            scope: Component scope (default: transient)
             tags: Set of tags for categorization
             condition: Optional registration condition
             lazy: Whether to use lazy resolution
@@ -443,7 +443,7 @@ class Whiskey:
         try:
             self._is_running = True
             
-            # Initialize all services that implement Initializable
+            # Initialize all components that implement Initializable
             for descriptor in self.container.registry.list_all():
                 # Get or create instance
                 instance = await self.container.resolve(descriptor.component_type)
@@ -503,7 +503,7 @@ class Whiskey:
                 # Log error but don't stop shutdown process
                 print(f"Error in shutdown callback: {e}")
         
-        # Dispose all services that implement Disposable
+        # Dispose all components that implement Disposable
         disposed_instances = set()
         for descriptor in self.container.registry.list_all():
             if descriptor.scope == Scope.SINGLETON:
@@ -738,11 +738,11 @@ class Whiskey:
         
         async with app.lifespan():
             # Async context
-            await app.resolve(Service)
+            await app.resolve(Component)
             
         with app.lifespan():
             # Sync context (requires no running event loop)
-            app.resolve_sync(Service)
+            app.resolve_sync(Component)
         """
         return self
     
@@ -797,11 +797,11 @@ class Whiskey:
     # Convenience methods
 
     def resolve(self, key: str | type, **kwargs) -> Any:
-        """Resolve a service from the container."""
+        """Resolve a component from the container."""
         return self.container.resolve_sync(key, **kwargs)
 
     async def resolve_async(self, key: str | type, **kwargs) -> Any:
-        """Resolve a service asynchronously."""
+        """Resolve a component asynchronously."""
         return await self.container.resolve(key, **kwargs)
 
     def configure(self, config_func: Callable[[Whiskey], None]) -> Whiskey:
@@ -812,15 +812,15 @@ class Whiskey:
     # Dictionary-like access to container
 
     def __getitem__(self, key: str | type) -> Any:
-        """Get a service using dict-like syntax."""
+        """Get a component using dict-like syntax."""
         return self.container[key]
 
     def __setitem__(self, key: str | type, value: Any) -> None:
-        """Register a service using dict-like syntax."""
+        """Register a component using dict-like syntax."""
         self.container[key] = value
 
     def __contains__(self, key: str | type) -> bool:
-        """Check if a service is registered."""
+        """Check if a component is registered."""
         return key in self.container
     
     # Extension methods

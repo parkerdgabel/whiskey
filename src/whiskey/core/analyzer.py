@@ -44,12 +44,12 @@ Example:
     >>> 
     >>> results = analyzer.analyze_callable(process)
     >>> # results['name'] = InjectResult(NO, str, "built-in type")
-    >>> # results['db'] = InjectResult(YES, Database, "registered service")
+    >>> # results['db'] = InjectResult(YES, Database, "registered component")
     >>> # results['cache'] = InjectResult(OPTIONAL, Cache, "optional type")
 
 See Also:
     - whiskey.core.container: Uses analyzer for injection decisions
-    - whiskey.core.registry: Service registration state
+    - whiskey.core.registry: Component registration state
 """
 
 from __future__ import annotations
@@ -637,13 +637,13 @@ class TypeAnalyzer:
 
         Args:
             type_hint: The full generic type
-            origin: The origin type (e.g., Service)
+            origin: The origin type (e.g., Component)
             args: Type arguments (e.g., (T,))
 
         Returns:
             InjectResult with decision
         """
-        # For generic service types, we try to resolve the origin type
+        # For generic component types, we try to resolve the origin type
         # The container might have a factory that handles the generic parameters
 
         if self.registry and self.registry.has(origin):

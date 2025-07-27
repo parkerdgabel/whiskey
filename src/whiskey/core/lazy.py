@@ -1,6 +1,6 @@
 """Lazy dependency resolution for improved performance and flexibility.
 
-This module implements lazy resolution patterns that defer service instantiation
+This module implements lazy resolution patterns that defer component instantiation
 until first access. This is crucial for breaking circular dependencies, improving
 startup performance, and handling optional dependencies elegantly.
 
@@ -15,12 +15,12 @@ Key Benefits:
     - Break circular dependencies without restructuring
     - Improve startup time by deferring expensive initializations
     - Handle optional dependencies that may not be used
-    - Reduce memory usage for rarely-used services
+    - Reduce memory usage for rarely-used components
     - Enable conditional dependency resolution
 
 Usage Patterns:
     1. Automatic Injection:
-       Services with Lazy[T] type hints are automatically wrapped
+       Components with Lazy[T] type hints are automatically wrapped
     
     2. Manual Creation:
        Use lazy_inject() for explicit lazy dependencies
@@ -44,7 +44,7 @@ Example:
     ... class OptimizedService:
     ...     def __init__(self, lazy_expensive: Lazy[ExpensiveService]):
     ...         self._expensive = lazy_expensive
-    ...         print("Service created without loading expensive data")
+    ...         print("Component created without loading expensive data")
     ...     
     ...     def process_if_needed(self, condition: bool):
     ...         if condition:
@@ -84,7 +84,7 @@ T = TypeVar("T")
 class Lazy(Generic[T]):
     """A lazy wrapper that defers dependency resolution until first access.
 
-    This class acts as a proxy for a service, resolving it from the container
+    This class acts as a proxy for a component, resolving it from the container
     only when it's first accessed. This is useful for:
     - Breaking circular dependencies
     - Improving startup performance
@@ -98,7 +98,7 @@ class Lazy(Generic[T]):
         _resolved: Whether the dependency has been resolved
 
     Examples:
-        Using Lazy in a service:
+        Using Lazy in a component:
 
         >>> class ExpensiveService:
         ...     def __init__(self):
@@ -147,7 +147,7 @@ class Lazy(Generic[T]):
         """Get the resolved value, resolving it if necessary.
 
         Returns:
-            The resolved service instance
+            The resolved component instance
 
         Raises:
             RuntimeError: If resolution fails or no container is available
@@ -190,7 +190,7 @@ class Lazy(Generic[T]):
                 # For now, raise an error suggesting to use await on the container directly
                 raise RuntimeError(
                     "Cannot resolve Lazy values synchronously in async context. "
-                    "Consider resolving the service directly with 'await container.resolve()'"
+                    "Consider resolving the component directly with 'await container.resolve()'"
                 )
             except RuntimeError as e:
                 if "no running event loop" not in str(e):
@@ -276,7 +276,7 @@ class LazyDescriptor(Generic[T]):
             owner: The class that owns this descriptor
 
         Returns:
-            A Lazy instance for the service type
+            A Lazy instance for the component type
         """
         if instance is None:
             return self  # type: ignore

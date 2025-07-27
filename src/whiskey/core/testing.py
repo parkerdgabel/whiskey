@@ -68,7 +68,7 @@ def add_test_compatibility_methods(container: Container) -> None:
         return scope_context
 
     def exit_scope(self, scope_name: str):
-        """Exit a scope and clean up its services."""
+        """Exit a scope and clean up its components."""
         if hasattr(self, '_scopes') and scope_name in self._scopes:
             del self._scopes[scope_name]
 
@@ -107,15 +107,15 @@ def add_test_compatibility_methods(container: Container) -> None:
                 else:
                     callback()
 
-    # Service lifecycle methods
+    # Component lifecycle methods
     async def _initialize_service(self, service):
-        """Initialize a service if it implements Initializable."""
+        """Initialize a component if it implements Initializable."""
         from .types import Initializable
         if isinstance(service, Initializable):
             await service.initialize()
 
     async def _dispose_service(self, service):
-        """Dispose a service if it implements Disposable."""
+        """Dispose a component if it implements Disposable."""
         from .types import Disposable
         if isinstance(service, Disposable):
             await service.dispose()

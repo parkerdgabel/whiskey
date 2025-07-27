@@ -1,4 +1,4 @@
-"""Service container with dict-like interface and automatic dependency resolution.
+"""Component container with dict-like interface and automatic dependency resolution.
 
 This module implements Whiskey's core Container class, which serves as the central
 component registry and dependency resolver. The Container provides a Pythonic,
@@ -6,7 +6,7 @@ dict-like interface for component registration while handling complex dependency
 graphs, circular dependency detection, and scope management automatically.
 
 Key Features:
-    - Dict-like syntax: container[Service] = implementation
+    - Dict-like syntax: container[Component] = implementation
     - Automatic dependency injection based on type hints
     - Scope management (singleton, transient, scoped)
     - Circular dependency detection with clear error messages
@@ -23,7 +23,7 @@ Functions:
 Example:
     >>> container = Container()
     >>> 
-    >>> # Register services using dict syntax
+    >>> # Register components using dict syntax
     >>> container[Database] = PostgresDatabase
     >>> container['cache'] = RedisCache()
     >>> 
@@ -36,7 +36,7 @@ Example:
     >>> # UserService dependencies are automatically resolved
     
 See Also:
-    - whiskey.core.registry: Service metadata and registration
+    - whiskey.core.registry: Component metadata and registration
     - whiskey.core.analyzer: Type analysis for injection decisions
     - whiskey.core.scopes: Lifecycle scope management
 """
@@ -83,7 +83,7 @@ class Container:
     for component registration and resolution with smart dependency injection.
 
     Features:
-        - Dict-like interface: container['service'] = implementation
+        - Dict-like interface: container['component'] = implementation
         - Smart type analysis for automatic injection
         - Scope management (singleton, transient, scoped)
         - Circular dependency detection
@@ -193,7 +193,7 @@ class Container:
         
         # If key is a type, check if it's registered with any name
         if isinstance(key, type):
-            # Check if any services of this type are registered
+            # Check if any components of this type are registered
             descriptors = self.registry.find_by_type(key)
             return len(descriptors) > 0
             
@@ -292,7 +292,7 @@ class Container:
             if callable(descriptor.provider) and asyncio.iscoroutinefunction(descriptor.provider):
                 raise RuntimeError(f"Cannot resolve async factory '{key}' synchronously")
         except KeyError:
-            pass  # Service not registered, let normal resolution handle it
+            pass  # Component not registered, let normal resolution handle it
         
         # Pass overrides through context
         if overrides:
@@ -331,7 +331,7 @@ class Container:
         try:
             descriptor = self.registry.get(key, name)
         except KeyError:
-            # Service not explicitly registered - try auto-creation
+            # Component not explicitly registered - try auto-creation
             if isinstance(key, type):
                 # Check if it's an abstract class
                 import inspect
@@ -520,7 +520,7 @@ class Container:
         try:
             descriptor = self.registry.get(key, name)
         except KeyError:
-            # Service not explicitly registered - try auto-creation
+            # Component not explicitly registered - try auto-creation
             if isinstance(key, type):
                 # Check if it's an abstract class
                 import inspect
@@ -778,7 +778,7 @@ class Container:
     # Batch registration methods
 
     def services(self, **services) -> Container:
-        """Register multiple services at once.
+        """Register multiple components at once.
 
         Args:
             **services: Mapping of keys to providers

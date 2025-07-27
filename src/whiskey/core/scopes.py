@@ -1,8 +1,8 @@
-"""Service lifecycle scope management with automatic cleanup.
+"""Component lifecycle scope management with automatic cleanup.
 
-This module implements Whiskey's scope system, which controls service instance
+This module implements Whiskey's scope system, which controls component instance
 lifecycles and ensures proper resource management. Scopes define boundaries
-within which service instances are shared and when they should be cleaned up.
+within which component instances are shared and when they should be cleaned up.
 
 Classes:
     Scope: Base class for custom scope implementations
@@ -17,7 +17,7 @@ Built-in Scopes:
 
 Scope Lifecycle:
     1. Scope Entry: Context manager __enter__ or manual activation
-    2. Service Resolution: Instances cached within scope
+    2. Component Resolution: Instances cached within scope
     3. Scope Exit: Automatic cleanup via __exit__
     4. Resource Disposal: dispose() called on all instances
 
@@ -65,7 +65,7 @@ T = TypeVar("T")
 class Scope:
     """Base class for dependency injection scopes.
 
-    A scope controls the lifecycle of service instances. When a service is
+    A scope controls the lifecycle of component instances. When a component is
     resolved within a scope, the same instance is returned for all resolutions
     within that scope's lifetime.
 
@@ -84,9 +84,9 @@ class Scope:
 
         >>> with container.scope("request") as scope:
         ...     # All resolutions within this block share instances
-        ...     service1 = await container.resolve(RequestService)
-        ...     service2 = await container.resolve(RequestService)
-        ...     assert service1 is service2  # Same instance
+        ...     component1 = await container.resolve(RequestService)
+        ...     component2 = await container.resolve(RequestService)
+        ...     assert component1 is component2  # Same instance
         ... # Resources cleaned up here
 
     Attributes:

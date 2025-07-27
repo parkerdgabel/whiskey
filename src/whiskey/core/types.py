@@ -1,26 +1,26 @@
 """Type definitions, protocols, and interfaces for lifecycle management.
 
 This module defines the core protocols and type definitions used throughout
-the Whiskey framework. It provides standard interfaces for service lifecycle
-management, allowing services to hook into initialization and disposal phases.
+the Whiskey framework. It provides standard interfaces for component lifecycle
+management, allowing components to hook into initialization and disposal phases.
 
 Classes:
     Inject: DEPRECATED - Legacy marker for explicit injection
-    Initializable: Protocol for services requiring async initialization
-    Disposable: Protocol for services requiring cleanup
+    Initializable: Protocol for components requiring async initialization
+    Disposable: Protocol for components requiring cleanup
 
 Protocols:
     The module uses Python's Protocol feature (PEP 544) to define structural
-    interfaces that services can implement without explicit inheritance. This
+    interfaces that components can implement without explicit inheritance. This
     provides duck-typing with static type checking support.
 
 Lifecycle Patterns:
-    Services can implement these protocols to participate in lifecycle:
+    Components can implement these protocols to participate in lifecycle:
     
     1. Initialization (Initializable):
        - Called during app startup or first resolution
        - Used for async setup (connections, resource allocation)
-       - Failures prevent service usage
+       - Failures prevent component usage
     
     2. Disposal (Disposable):
        - Called during app shutdown or scope cleanup
@@ -102,9 +102,9 @@ class Inject:
 
 @runtime_checkable
 class Initializable(Protocol):
-    """Protocol for services that need asynchronous initialization.
+    """Protocol for components that need asynchronous initialization.
 
-    Services implementing this protocol will have their initialize()
+    Components implementing this protocol will have their initialize()
     method called during application startup or when first resolved,
     depending on the configuration.
 
@@ -122,10 +122,10 @@ class Initializable(Protocol):
     """
 
     async def initialize(self) -> None:
-        """Initialize the service.
+        """Initialize the component.
 
         This method should perform any asynchronous setup required
-        before the service can be used, such as:
+        before the component can be used, such as:
         - Establishing network connections
         - Loading configuration
         - Warming up caches
@@ -133,7 +133,7 @@ class Initializable(Protocol):
 
         Raises:
             Any exception during initialization will prevent the
-            service from being used and may stop application startup
+            component from being used and may stop application startup
             if the component is marked as critical.
         """
         ...
@@ -141,9 +141,9 @@ class Initializable(Protocol):
 
 @runtime_checkable
 class Disposable(Protocol):
-    """Protocol for services that need cleanup on shutdown.
+    """Protocol for components that need cleanup on shutdown.
 
-    Services implementing this protocol will have their dispose()
+    Components implementing this protocol will have their dispose()
     method called during application shutdown or when their scope ends.
 
     Examples:
@@ -160,9 +160,9 @@ class Disposable(Protocol):
     """
 
     async def dispose(self) -> None:
-        """Clean up the service resources.
+        """Clean up the component resources.
 
-        This method should release any resources held by the service:
+        This method should release any resources held by the component:
         - Close network connections
         - Flush buffers
         - Release file handles
