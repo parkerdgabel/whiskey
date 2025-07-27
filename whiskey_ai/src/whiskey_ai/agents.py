@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from whiskey import inject
 
@@ -27,7 +27,7 @@ class ConversationMemory:
     """Manages conversation history for agents."""
 
     def __init__(self, max_messages: int = 20):
-        self.messages: List[Message] = []
+        self.messages: list[Message] = []
         self.max_messages = max_messages
 
     def add_message(self, role: str, content: str, **kwargs):
@@ -39,11 +39,11 @@ class ConversationMemory:
         if len(self.messages) > self.max_messages:
             # Keep system message if present
             if self.messages[0].role == "system":
-                self.messages = [self.messages[0]] + self.messages[-(self.max_messages - 1) :]
+                self.messages = [self.messages[0], *self.messages[-(self.max_messages - 1) :]]
             else:
                 self.messages = self.messages[-self.max_messages :]
 
-    def get_messages(self) -> List[Dict[str, Any]]:
+    def get_messages(self) -> list[dict[str, Any]]:
         """Get messages in dict format for API calls."""
         return [
             {
@@ -70,7 +70,7 @@ class LLMAgent(Agent):
         description: str,
         client: LLMClient,
         tools: ToolManager,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         model: str = "gpt-4",
     ):
         super().__init__(name, description)

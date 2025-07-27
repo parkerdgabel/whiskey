@@ -1,5 +1,6 @@
 """Whiskey AI extension - Build AI-powered applications with OpenAI-compatible APIs."""
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from .agents import (
@@ -16,8 +17,6 @@ from .conversation import (
     ConversationManager,
 )
 from .extension import (
-    # Extension
-    ai_extension,
     # Managers
     AgentManager,
     # OpenAI-compatible types
@@ -38,6 +37,8 @@ from .extension import (
     ToolCall,
     ToolManager,
     Usage,
+    # Extension
+    ai_extension,
 )
 from .providers import (
     AnthropicClient,
@@ -52,59 +53,56 @@ from .tools import (
 )
 
 if TYPE_CHECKING:
-    from whiskey import Whiskey
+    from whiskey import Whiskey  # noqa: F401
 
 
 __all__ = [
-    # Extension
-    "ai_extension",
+    # Agents
+    "Agent",
+    # Managers
+    "AgentManager",
+    "AnalysisAgent",
+    "AnthropicClient",
     # Types
     "ChatCompletion",
     "ChatCompletionChunk",
+    "ChatSession",
     "Choice",
+    "CodingAgent",
+    # Conversation
+    "Conversation",
+    "ConversationManager",
+    "ConversationMemory",
     "Delta",
     "Embedding",
     "EmbeddingResponse",
     "Function",
     "FunctionCall",
+    "LLMAgent",
     "LLMClient",
     "Message",
+    # Providers
+    "MockLLMClient",
+    "ModelManager",
+    "OpenAIClient",
+    "ResearchAgent",
     "ResponseFormat",
     "StreamChoice",
     "Tool",
     "ToolCall",
-    "Usage",
-    # Managers
-    "AgentManager",
-    "ModelManager",
-    "ToolManager",
-    # Providers
-    "MockLLMClient",
-    "OpenAIClient",
-    "AnthropicClient",
-    # Agents
-    "Agent",
-    "LLMAgent",
-    "ResearchAgent",
-    "CodingAgent",
-    "AnalysisAgent",
-    "ConversationMemory",
-    # Conversation
-    "Conversation",
-    "ConversationManager",
-    "ChatSession",
     # Tools
     "ToolExecutor",
+    "ToolManager",
+    "Usage",
+    # Extension
+    "ai_extension",
     "calculate",
-    "web_search",
     "get_current_time",
+    "web_search",
 ]
 
 # Register CLI commands if available
-try:
-    from whiskey_cli import cli_extension
+with contextlib.suppress(ImportError):
+    import whiskey_cli  # noqa: F401
     # CLI commands are automatically registered when ai_extension is used
     # after cli_extension in an app
-except ImportError:
-    # CLI extension not available
-    pass

@@ -1,8 +1,11 @@
 """Tests for HTTP extension core functionality."""
 
+from typing import ClassVar
+
 import pytest
+
 from whiskey import Whiskey
-from whiskey_http import http_extension, HTTPClientManager
+from whiskey_http import HTTPClientManager, http_extension
 
 
 @pytest.fixture
@@ -49,7 +52,7 @@ def test_http_client_with_class_attributes(app):
     @app.http_client("api")
     class APIClient:
         base_url = "https://api.example.com"
-        headers = {"X-API-Version": "v1"}
+        headers: ClassVar = {"X-API-Version": "v1"}
         timeout = 60.0
 
     config = app.http_manager._configs["api"]
@@ -89,7 +92,7 @@ async def test_shutdown_cleanup(app):
         pass
 
     # Get client to create instance
-    client = app.get_http_client("test")
+    app.get_http_client("test")
 
     # Run shutdown handlers
     await app.shutdown()

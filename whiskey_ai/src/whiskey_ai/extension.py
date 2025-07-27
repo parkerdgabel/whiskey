@@ -35,7 +35,6 @@ class Function:
 class Tool:
     """OpenAI tool definition."""
 
-
     type: Literal["function"]
     function: Function
 
@@ -43,7 +42,6 @@ class Tool:
 @dataclass
 class FunctionCall:
     """Function call in a message."""
-
 
     name: str
     arguments: str
@@ -53,7 +51,6 @@ class FunctionCall:
 class ToolCall:
     """Tool call in a message."""
 
-
     id: str
     type: Literal["function"]
     function: FunctionCall
@@ -62,7 +59,6 @@ class ToolCall:
 @dataclass
 class ResponseFormat:
     """Response format specification."""
-
 
     type: Literal["text", "json_object"]
 
@@ -81,7 +77,6 @@ class Message:
 @dataclass
 class Usage:
     """Token usage information."""
-
 
     prompt_tokens: int
     completion_tokens: int
@@ -167,7 +162,6 @@ class EmbeddingResponse:
 class ChatCompletions(Protocol):
     """OpenAI-compatible chat completions interface."""
 
-
     async def create(
         self,
         *,
@@ -199,12 +193,11 @@ class ChatCompletions(Protocol):
 class Embeddings(Protocol):
     """OpenAI-compatible embeddings interface."""
 
-
     async def create(
         self,
         *,
         model: str,
-        input: str | list[str],
+        input_text: str | list[str],
         encoding_format: Literal["float", "base64"] | None = "float",
         dimensions: int | None = None,
         user: str | None = None,
@@ -217,7 +210,6 @@ class Embeddings(Protocol):
 @runtime_checkable
 class LLMClient(Protocol):
     """OpenAI-compatible client interface."""
-
 
     chat: ChatCompletions
     embeddings: Embeddings
@@ -249,11 +241,11 @@ class ModelManager:
         """Configure and instantiate a model."""
         if name not in self._model_classes:
             raise ValueError(f"Model '{name}' not registered")
-        
+
         # Create instance and store in container
         instance = self._model_classes[name](**kwargs)
         self.container[f"ai.model.instance.{name}"] = instance
-        
+
         # Also register as the default LLMClient if it's the first one
         if LLMClient not in self.container:
             self.container[LLMClient] = instance
@@ -296,7 +288,12 @@ class ToolManager:
         # Find all schema keys and return their values
         schemas = []
         for key, value in self.container.items():
-            if isinstance(key, str) and key.startswith("ai.tool.schema.") and isinstance(value, dict) and "schema" in value:
+            if (
+                isinstance(key, str)
+                and key.startswith("ai.tool.schema.")
+                and isinstance(value, dict)
+                and "schema" in value
+            ):
                 schemas.append(value["schema"])
         return schemas
 
@@ -317,14 +314,11 @@ class AgentManager:
     def get(self, name: str) -> Any:
         """Get an agent class (not instance) by name."""
         key = f"ai.agent.{name}"
-        return self.container[key] if key in self.container else None
-
-
+        return self.container.get(key, None)
 
 
 class ConversationScope(ContextVarScope):
     """Scope for conversation/chat sessions - isolated per async context."""
-
 
     def __init__(self):
         super().__init__("conversation")
@@ -394,7 +388,7 @@ def ai_extension(app: Whiskey) -> None:
     app.container[ModelManager] = model_manager
     app.container[ToolManager] = tool_manager
     app.container[AgentManager] = agent_manager
-    
+
     # Also register by string key for easier access
     app.container["model_manager"] = model_manager
     app.container["tool_manager"] = tool_manager
@@ -480,6 +474,7 @@ def ai_extension(app: Whiskey) -> None:
         Agents are classes that can be injected and perform
         complex tasks using LLMs and tools.
         """
+
         def decorator(cls: type) -> type:
             agent_manager.register(name, cls)
             # Register the agent class in the container
@@ -513,13 +508,15 @@ def ai_extension(app: Whiskey) -> None:
             default_model = app.config.get("ai.default_model")
             if default_model in model_manager.instances:
                 app.container[LLMClient] = model_manager.instances[default_model]
-    
+
     # Register CLI commands if whiskey-cli is available
     try:
-        from whiskey_cli import cli_extension
+        import whiskey_cli  # noqa: F401
+
         # Check if CLI extension is loaded
-        if hasattr(app, 'command'):
+        if hasattr(app, "command"):
             from .cli import register_ai_cli_commands
+
             register_ai_cli_commands(app)
     except ImportError:
         # CLI extension not available, skip CLI registration

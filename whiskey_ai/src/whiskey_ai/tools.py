@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from whiskey import inject
 
@@ -18,7 +18,7 @@ class ToolExecutor:
     def __init__(self, tools: ToolManager):
         self.tools = tools
 
-    async def execute(self, tool_call: ToolCall) -> Dict[str, Any]:
+    async def execute(self, tool_call: ToolCall) -> dict[str, Any]:
         """Execute a single tool call."""
         tool_name = tool_call.function.name
         tool = self.tools.get(tool_name)
@@ -46,7 +46,7 @@ class ToolExecutor:
         except Exception as e:
             return {"tool_call_id": tool_call.id, "error": f"Tool execution failed: {e}"}
 
-    async def execute_all(self, tool_calls: List[ToolCall]) -> List[Dict[str, Any]]:
+    async def execute_all(self, tool_calls: list[ToolCall]) -> list[dict[str, Any]]:
         """Execute multiple tool calls concurrently."""
         tasks = [self.execute(call) for call in tool_calls]
         return await asyncio.gather(*tasks)
@@ -89,7 +89,7 @@ def calculate(expression: str) -> float:
     return eval_expr(tree.body)
 
 
-async def web_search(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+async def web_search(query: str, max_results: int = 5) -> list[dict[str, str]]:
     """Search the web for information.
 
     Args:
@@ -116,7 +116,7 @@ async def web_search(query: str, max_results: int = 5) -> List[Dict[str, str]]:
     return results
 
 
-def get_current_time(timezone: Optional[str] = None) -> str:
+def get_current_time(timezone: str | None = None) -> str:
     """Get the current time.
 
     Args:
@@ -149,7 +149,7 @@ class ConversationTools:
         self.client = client
 
     async def summarize_conversation(
-        self, messages: List[Dict[str, str]], style: str = "concise"
+        self, messages: list[dict[str, str]], style: str = "concise"
     ) -> str:
         """Summarize a conversation.
 
@@ -175,7 +175,7 @@ Summary:"""
 
         return response.choices[0].message.content
 
-    async def extract_action_items(self, messages: List[Dict[str, str]]) -> List[str]:
+    async def extract_action_items(self, messages: list[dict[str, str]]) -> list[str]:
         """Extract action items from a conversation.
 
         Args:
@@ -202,5 +202,5 @@ Action items:"""
         try:
             result = json.loads(response.choices[0].message.content)
             return result.get("action_items", [])
-        except:
+        except (json.JSONDecodeError, AttributeError, KeyError):
             return []

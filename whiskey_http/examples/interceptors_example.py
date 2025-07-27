@@ -1,10 +1,9 @@
 """Example demonstrating request/response interceptors."""
 
-import asyncio
 import time
+
 from whiskey import Whiskey, inject
 from whiskey_http import http_extension
-
 
 app = Whiskey()
 app.use(http_extension)

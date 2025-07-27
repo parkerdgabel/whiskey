@@ -1,6 +1,7 @@
 """Common test fixtures for whiskey_auth."""
 
 import pytest
+
 from whiskey import Whiskey
 from whiskey_auth import auth_extension
 

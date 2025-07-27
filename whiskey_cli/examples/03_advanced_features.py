@@ -14,15 +14,16 @@ Usage:
     python 03_advanced_features.py status
     python 03_advanced_features.py process data.txt --format json
     python 03_advanced_features.py admin:reset --force
-    
+
     # Run with --main flag to use custom main function
     python 03_advanced_features.py --main
 """
 
-import sys
 import asyncio
+import sys
 from typing import Optional
-from whiskey import Whiskey, inject, singleton, component
+
+from whiskey import Whiskey, component, inject, singleton
 from whiskey_cli import cli_extension
 
 
@@ -30,7 +31,7 @@ from whiskey_cli import cli_extension
 @singleton
 class ConfigService:
     """Application configuration."""
-    
+
     def __init__(self):
         self.debug = "--debug" in sys.argv
         self.environment = "development"
@@ -40,27 +41,22 @@ class ConfigService:
 @component
 class DataProcessor:
     """Process data in various formats."""
-    
-    async def process(self, filename: str, format: str) -> dict:
+
+    async def process(self, filename: str, file_format: str) -> dict:
         """Simulate async data processing."""
-        print(f"🔄 Processing {filename} as {format}...")
+        print(f"🔄 Processing {filename} as {file_format}...")
         await asyncio.sleep(1)  # Simulate work
-        return {
-            "file": filename,
-            "format": format,
-            "records": 42,
-            "status": "success"
-        }
+        return {"file": filename, "format": file_format, "records": 42, "status": "success"}
 
 
 @singleton
 class EventLogger:
     """Log application events."""
-    
+
     def __init__(self):
         self.events = []
-    
-    def log(self, event: str, data: dict = None):
+
+    def log(self, event: str, data: Optional[dict] = None):
         """Log an event."""
         self.events.append({"event": event, "data": data})
         if len(self.events) % 5 == 0:
@@ -99,12 +95,12 @@ def log_command(command: str, logger: EventLogger):
 @inject
 def status(config: ConfigService, logger: EventLogger):
     """Show application status."""
-    print(f"✅ Application Status")
+    print("✅ Application Status")
     print(f"   Environment: {config.environment}")
     print(f"   Debug: {config.debug}")
     print(f"   API URL: {config.api_url}")
     print(f"   Events logged: {len(logger.events)}")
-    
+
     # Emit event
     app.emit("command.executed", "status")
 
@@ -116,23 +112,23 @@ def status(config: ConfigService, logger: EventLogger):
 @inject
 async def process(
     filename: str,
-    format: str,
+    file_format: str,
     output: Optional[str],
     processor: DataProcessor,
-    logger: EventLogger
+    logger: EventLogger,
 ):
     """Process a data file asynchronously."""
     # Process the file
-    result = await processor.process(filename, format)
-    
+    result = await processor.process(filename, file_format)
+
     # Show results
-    print(f"✅ Processing complete!")
+    print("✅ Processing complete!")
     print(f"   Records: {result['records']}")
     print(f"   Status: {result['status']}")
-    
+
     if output:
         print(f"   Output saved to: {output}")
-    
+
     # Log event
     logger.log("file.processed", result)
     app.emit("command.executed", "process")
@@ -150,6 +146,7 @@ def admin_reset(config: ConfigService):
 
 # Command available only with --admin flag
 if "--admin" in sys.argv:
+
     @app.command(name="admin:users", group="admin")
     @inject
     def list_users(logger: EventLogger):
@@ -162,26 +159,22 @@ if "--admin" in sys.argv:
 
 # Custom main function (alternative to CLI)
 @inject
-async def custom_main(
-    config: ConfigService,
-    processor: DataProcessor,
-    logger: EventLogger
-):
+async def custom_main(config: ConfigService, processor: DataProcessor, logger: EventLogger):
     """Run custom logic instead of CLI."""
     print("🎯 Running custom main function\n")
-    
+
     # Show config
-    print(f"Configuration:")
+    print("Configuration:")
     print(f"  Environment: {config.environment}")
     print(f"  Debug: {config.debug}")
-    
+
     # Process some data
     result = await processor.process("example.json", "json")
     print(f"\nProcessed {result['records']} records")
-    
+
     # Show event log
     print(f"\nLogged {len(logger.events)} events during this session")
-    
+
     return "Custom main completed successfully"
 
 
@@ -196,7 +189,7 @@ if __name__ == "__main__":
     else:
         # Run as CLI (default)
         app.run()
-        
+
     # Note: You can also mix both modes in your application:
     # - Use CLI for administration tasks
     # - Use custom main for batch processing

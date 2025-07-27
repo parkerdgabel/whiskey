@@ -1,12 +1,10 @@
 """Integration example showing HTTP extension with other Whiskey features."""
 
-import asyncio
 from dataclasses import dataclass
-from typing import List
-from whiskey import Whiskey, inject
-from whiskey_http import http_extension
-from whiskey_asgi import asgi_extension
 
+from whiskey import Whiskey, inject
+from whiskey_asgi import asgi_extension
+from whiskey_http import http_extension
 
 # Create app with both HTTP and ASGI extensions
 app = Whiskey()
@@ -20,7 +18,7 @@ class Post:
     id: int
     title: str
     body: str
-    userId: int
+    user_id: int
 
 
 @dataclass
@@ -51,7 +49,7 @@ class BlogService:
         self.api = api
         self._cache = {}
 
-    async def get_posts(self, limit: int = 10) -> List[Post]:
+    async def get_posts(self, limit: int = 10) -> list[Post]:
         """Get posts from API with caching."""
         cache_key = f"posts:{limit}"
 
@@ -158,7 +156,7 @@ if hasattr(app, "command"):  # Check if CLI extension is loaded
         if posts:
             post = await service.get_post(posts[0].id)
             user = await service.get_user(post.userId)
-            print(f"📝 First post details:")
+            print("📝 First post details:")
             print(f"  Title: {post.title}")
             print(f"  Author: {user.name} ({user.email})")
 

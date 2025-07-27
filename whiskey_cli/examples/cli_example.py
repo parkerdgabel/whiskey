@@ -1,7 +1,7 @@
 """CLI application example using Whiskey's IoC system."""
 
 import asyncio
-from typing import List, Optional
+from typing import Optional
 
 from whiskey import Application, inject, singleton
 from whiskey_cli import cli_extension
@@ -10,8 +10,9 @@ from whiskey_cli import cli_extension
 # Domain models
 class Task:
     """A task in our todo app."""
-    def __init__(self, id: int, title: str, completed: bool = False):
-        self.id = id
+
+    def __init__(self, task_id: int, title: str, completed: bool = False):
+        self.id = task_id
         self.title = title
         self.completed = completed
 
@@ -20,32 +21,32 @@ class Task:
 @singleton
 class TaskService:
     """Service for managing tasks."""
-    
+
     def __init__(self):
-        self._tasks: List[Task] = []
+        self._tasks: list[Task] = []
         self._next_id = 1
         # Add some sample tasks
         self.add("Learn Whiskey framework")
         self.add("Build a CLI app", completed=True)
-    
+
     def add(self, title: str, completed: bool = False) -> Task:
         """Add a new task."""
         task = Task(self._next_id, title, completed)
         self._tasks.append(task)
         self._next_id += 1
         return task
-    
-    def list_all(self) -> List[Task]:
+
+    def list_all(self) -> list[Task]:
         """List all tasks."""
         return self._tasks.copy()
-    
+
     def get(self, task_id: int) -> Optional[Task]:
         """Get a task by ID."""
         for task in self._tasks:
             if task.id == task_id:
                 return task
         return None
-    
+
     def complete(self, task_id: int) -> bool:
         """Mark a task as completed."""
         task = self.get(task_id)
@@ -53,7 +54,7 @@ class TaskService:
             task.completed = True
             return True
         return False
-    
+
     def delete(self, task_id: int) -> bool:
         """Delete a task."""
         for i, task in enumerate(self._tasks):
@@ -66,7 +67,7 @@ class TaskService:
 @singleton
 class ConfigService:
     """Application configuration."""
-    
+
     def __init__(self):
         self.app_name = "Whiskey Todo CLI"
         self.version = "1.0.0"
@@ -90,7 +91,7 @@ async def add(title: str, task_service: TaskService):
     """Add a new task."""
     task = task_service.add(title)
     print(f"✅ Added task #{task.id}: {task.title}")
-    
+
     # Emit event
     await app.emit("task.created", {"id": task.id, "title": task.title})
 
@@ -100,26 +101,26 @@ async def add(title: str, task_service: TaskService):
 def list_tasks(task_service: TaskService, config: ConfigService):
     """List all tasks."""
     tasks = task_service.list_all()
-    
+
     if not tasks:
         print("No tasks found. Use 'add' to create one!")
         return
-    
+
     print(f"\n{config.app_name} - Tasks:\n")
-    
+
     pending = [t for t in tasks if not t.completed]
     completed = [t for t in tasks if t.completed]
-    
+
     if pending:
         print("📋 Pending:")
         for task in pending:
             print(f"  [{task.id}] {task.title}")
-    
+
     if completed and config.show_completed:
         print("\n✅ Completed:")
         for task in completed:
             print(f"  [{task.id}] {task.title}")
-    
+
     print(f"\nTotal: {len(pending)} pending, {len(completed)} completed")
 
 
@@ -198,12 +199,12 @@ async def cleanup_old_tasks(task_service: TaskService):
 if __name__ == "__main__":
     # Run as CLI
     app.run_cli()
-    
+
     # Alternative: Run with a main function
     # @app.main
     # @inject
     # async def main(task_service: TaskService):
     #     tasks = task_service.list_all()
     #     print(f"Running with {len(tasks)} tasks")
-    # 
+    #
     # app.run()

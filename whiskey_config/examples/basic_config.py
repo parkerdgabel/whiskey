@@ -3,7 +3,7 @@
 import os
 from dataclasses import dataclass
 
-from whiskey import inject
+from whiskey import Application, inject
 from whiskey_config import Setting, config_extension
 
 

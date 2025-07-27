@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from whiskey import inject
 
@@ -18,25 +18,25 @@ class ConversationMetadata:
     id: str
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
-    title: Optional[str] = None
-    tags: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    title: str | None = None
+    tags: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class Conversation:
     """Manages a conversation with an LLM."""
 
     def __init__(
-        self, conversation_id: str, system_prompt: Optional[str] = None, max_messages: int = 100
+        self, conversation_id: str, system_prompt: str | None = None, max_messages: int = 100
     ):
         self.metadata = ConversationMetadata(id=conversation_id)
-        self.messages: List[Message] = []
+        self.messages: list[Message] = []
         self.max_messages = max_messages
 
         if system_prompt:
             self.add_message("system", system_prompt)
 
-    def add_message(self, role: str, content: Optional[str] = None, **kwargs) -> Message:
+    def add_message(self, role: str, content: str | None = None, **kwargs) -> Message:
         """Add a message to the conversation."""
         message = Message(role=role, content=content, **kwargs)
         self.messages.append(message)
@@ -46,13 +46,13 @@ class Conversation:
         if len(self.messages) > self.max_messages:
             # Keep system message if present
             if self.messages[0].role == "system":
-                self.messages = [self.messages[0]] + self.messages[-(self.max_messages - 1) :]
+                self.messages = [self.messages[0], *self.messages[-(self.max_messages - 1) :]]
             else:
                 self.messages = self.messages[-self.max_messages :]
 
         return message
 
-    def get_messages(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_messages(self, limit: int | None = None) -> list[dict[str, Any]]:
         """Get messages in dict format for API calls."""
         messages = self.messages[-limit:] if limit else self.messages
 
@@ -71,14 +71,14 @@ class Conversation:
             for msg in messages
         ]
 
-    def get_last_user_message(self) -> Optional[str]:
+    def get_last_user_message(self) -> str | None:
         """Get the last user message."""
         for msg in reversed(self.messages):
             if msg.role == "user":
                 return msg.content
         return None
 
-    def get_last_assistant_message(self) -> Optional[str]:
+    def get_last_assistant_message(self) -> str | None:
         """Get the last assistant message."""
         for msg in reversed(self.messages):
             if msg.role == "assistant":
@@ -97,7 +97,7 @@ class Conversation:
 
         self.metadata.updated_at = time.time()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert conversation to dict."""
         return {
             "metadata": {
@@ -116,22 +116,22 @@ class ConversationManager:
     """Manages multiple conversations."""
 
     def __init__(self):
-        self.conversations: Dict[str, Conversation] = {}
+        self.conversations: dict[str, Conversation] = {}
 
     def create(
-        self, conversation_id: str, system_prompt: Optional[str] = None, **kwargs
+        self, conversation_id: str, system_prompt: str | None = None, **kwargs
     ) -> Conversation:
         """Create a new conversation."""
         conversation = Conversation(conversation_id, system_prompt=system_prompt, **kwargs)
         self.conversations[conversation_id] = conversation
         return conversation
 
-    def get(self, conversation_id: str) -> Optional[Conversation]:
+    def get(self, conversation_id: str) -> Conversation | None:
         """Get a conversation by ID."""
         return self.conversations.get(conversation_id)
 
     def get_or_create(
-        self, conversation_id: str, system_prompt: Optional[str] = None, **kwargs
+        self, conversation_id: str, system_prompt: str | None = None, **kwargs
     ) -> Conversation:
         """Get or create a conversation."""
         conversation = self.get(conversation_id)
@@ -146,7 +146,7 @@ class ConversationManager:
             return True
         return False
 
-    def list_conversations(self) -> List[ConversationMetadata]:
+    def list_conversations(self) -> list[ConversationMetadata]:
         """List all conversation metadata."""
         return [conv.metadata for conv in self.conversations.values()]
 
@@ -161,7 +161,7 @@ class ChatSession:
         conversation: Conversation,
         model: str = "gpt-4",
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
     ):
         self.client = client
         self.conversation = conversation
@@ -224,6 +224,6 @@ class ChatSession:
         """Reset the conversation."""
         self.conversation.clear()
 
-    def get_history(self) -> List[Dict[str, Any]]:
+    def get_history(self) -> list[dict[str, Any]]:
         """Get conversation history."""
         return self.conversation.get_messages()

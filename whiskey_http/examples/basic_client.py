@@ -1,9 +1,7 @@
 """Basic HTTP client example using whiskey-http."""
 
-import asyncio
 from whiskey import Whiskey, inject
 from whiskey_http import http_extension
-
 
 # Create app and use HTTP extension
 app = Whiskey()

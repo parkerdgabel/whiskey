@@ -68,10 +68,10 @@ def version():
 if __name__ == "__main__":
     # The new way: app.run() automatically uses the CLI runner
     app.run()
-    
+
     # You can also use app.run_cli() for direct CLI execution
     # app.run_cli()
-    
+
     # Or run with a custom main function instead of CLI
     # @inject
     # async def main(service: GreetingService):

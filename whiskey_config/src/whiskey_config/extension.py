@@ -2,6 +2,8 @@
 
 from typing import Any, Optional, Union
 
+from whiskey import Application
+
 from .manager import ConfigurationManager
 from .schema import is_dataclass_type
 from .sources import ConfigurationSource

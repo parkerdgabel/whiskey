@@ -6,7 +6,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from .extension import (
     ChatCompletion,
@@ -37,10 +37,10 @@ class MockChatCompletions:
         self,
         *,
         model: str,
-        messages: List[Dict[str, Any]],
-        stream: Optional[bool] = False,
+        messages: list[dict[str, Any]],
+        stream: bool | None = False,
         **kwargs,
-    ) -> Union[ChatCompletion, AsyncIterator[ChatCompletionChunk]]:
+    ) -> ChatCompletion | AsyncIterator[ChatCompletionChunk]:
         """Create a mock chat completion."""
         if stream:
             return self._stream_response(model, messages, **kwargs)
@@ -90,7 +90,7 @@ class MockChatCompletions:
         )
 
     async def _stream_response(
-        self, model: str, messages: List[Dict[str, Any]], **kwargs
+        self, model: str, messages: list[dict[str, Any]], **kwargs
     ) -> AsyncIterator[ChatCompletionChunk]:
         """Stream a mock response."""
         last_message = messages[-1]["content"] if messages else ""
@@ -124,11 +124,11 @@ class MockEmbeddings:
     """Mock embeddings for testing."""
 
     async def create(
-        self, *, model: str, input: Union[str, List[str]], **kwargs
+        self, *, model: str, input_text: str | list[str], **kwargs
     ) -> EmbeddingResponse:
         """Create mock embeddings."""
         # Ensure input is a list
-        inputs = [input] if isinstance(input, str) else input
+        inputs = [input_text] if isinstance(input_text, str) else input_text
 
         # Generate mock embeddings (768 dimensions like ada-002)
         embeddings = []
@@ -202,10 +202,10 @@ try:
             self,
             *,
             model: str,
-            messages: List[Dict[str, Any]],
-            stream: Optional[bool] = False,
+            messages: list[dict[str, Any]],
+            stream: bool | None = False,
             **kwargs,
-        ) -> Union[ChatCompletion, AsyncIterator[ChatCompletionChunk]]:
+        ) -> ChatCompletion | AsyncIterator[ChatCompletionChunk]:
             """Create chat completion using Anthropic API."""
             # Convert messages to Anthropic format
             system_message = None
@@ -254,7 +254,7 @@ try:
                 ),
             )
 
-        def _map_stop_reason(self, reason: Optional[str]) -> str:
+        def _map_stop_reason(self, reason: str | None) -> str:
             """Map Anthropic stop reason to OpenAI."""
             if reason == "end_turn":
                 return "stop"

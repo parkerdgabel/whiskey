@@ -5,8 +5,8 @@ import random
 from datetime import datetime
 
 from whiskey import Whiskey
-from whiskey_jobs import jobs_extension
 
+from whiskey_jobs import jobs_extension
 
 # Create application
 app = Whiskey()
@@ -73,52 +73,45 @@ async def slow_job(duration: int = 5):
 async def main():
     print("🚀 Whiskey Jobs - Basic Example")
     print("=" * 50)
-    
+
     # Enqueue some jobs
     print("\n📋 Enqueuing jobs...")
-    
+
     # Email job
-    email_job = await app.jobs.enqueue(
-        "send_welcome_email",
-        user_id=123,
-        email="user@example.com"
-    )
+    email_job = await app.jobs.enqueue("send_welcome_email", user_id=123, email="user@example.com")
     print(f"  - Email job: {email_job.job_id}")
-    
+
     # Data processing job
     data_job = await app.jobs.enqueue(
         "process_user_data",
         user_id=123,
-        data={"name": "John", "age": 30, "interests": ["coding", "music"]}
+        data={"name": "John", "age": 30, "interests": ["coding", "music"]},
     )
     print(f"  - Data job: {data_job.job_id}")
-    
+
     # Flaky job (will retry on failure)
     flaky = await app.jobs.enqueue("flaky_job", success_rate=0.3)
     print(f"  - Flaky job: {flaky.job_id}")
-    
+
     # Slow job (might timeout)
     slow = await app.jobs.enqueue("slow_job", duration=2)  # Won't timeout
     timeout = await app.jobs.enqueue("slow_job", duration=5)  # Will timeout
     print(f"  - Slow job (ok): {slow.job_id}")
     print(f"  - Slow job (timeout): {timeout.job_id}")
-    
+
     # Ad-hoc job
-    adhoc = await app.jobs.enqueue_func(
-        lambda: print("🎯 Ad-hoc job executed!"),
-        queue="quick"
-    )
+    adhoc = await app.jobs.enqueue_func(lambda: print("🎯 Ad-hoc job executed!"), queue="quick")
     print(f"  - Ad-hoc job: {adhoc.job_id}")
-    
+
     # Wait for some jobs to complete
     print("\n⏳ Waiting for jobs to complete...")
-    
+
     # Wait for email job
     email_result = await app.jobs.wait_for_job(email_job, timeout=10)
     print(f"\n📧 Email job result: {email_result.status.value}")
     if email_result.is_success:
         print(f"   Result: {email_result.result}")
-    
+
     # Check data job status
     await asyncio.sleep(3)
     data_result = app.jobs.get_job_result(data_job.job_id)
@@ -126,21 +119,21 @@ async def main():
         print(f"\n🔄 Data job result: {data_result.status.value}")
         if data_result.is_success:
             print(f"   Result: {data_result.result}")
-    
+
     # Show statistics
     await asyncio.sleep(5)  # Let more jobs complete
     stats = app.jobs.get_stats()
     print("\n📊 Job Statistics:")
     print(f"   Registered jobs: {stats['registered_jobs']}")
-    print(f"   Worker pool:")
+    print("   Worker pool:")
     print(f"     - Processed: {stats['worker_pool']['total_processed']}")
     print(f"     - Failed: {stats['worker_pool']['total_failed']}")
     print(f"     - Current: {stats['worker_pool']['total_current_jobs']}")
-    
+
     # Keep running for a bit to see retries
     print("\n⏰ Running for 10 more seconds to see retries...")
     await asyncio.sleep(10)
-    
+
     # Final stats
     final_stats = app.jobs.get_stats()
     print("\n📊 Final Statistics:")

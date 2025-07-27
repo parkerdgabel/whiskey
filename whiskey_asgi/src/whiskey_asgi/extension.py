@@ -8,7 +8,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from re import Pattern
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from .types import ASGIReceive, ASGISend, Scope
 
@@ -22,17 +22,17 @@ class RouteMetadata:
 
     func: Callable
     path: str
-    methods: List[str]
-    name: Optional[str] = None
-    pattern: Optional[Pattern[str]] = None
-    param_names: List[str] = field(default_factory=list)
+    methods: list[str]
+    name: str | None = None
+    pattern: Pattern[str] | None = None
+    param_names: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         """Convert path to regex pattern."""
         if self.pattern is None:
             self.pattern, self.param_names = self._path_to_pattern(self.path)
 
-    def _path_to_pattern(self, path: str) -> Tuple[Pattern[str], List[str]]:
+    def _path_to_pattern(self, path: str) -> tuple[Pattern[str], list[str]]:
         """Convert a path with parameters to a regex pattern."""
         param_names = []
         pattern_parts = []
@@ -50,7 +50,7 @@ class RouteMetadata:
         pattern = "^" + "/".join(pattern_parts) + "$"
         return re.compile(pattern), param_names
 
-    def match(self, path: str, method: str) -> Optional[Dict[str, str]]:
+    def match(self, path: str, method: str) -> dict[str, str] | None:
         """Check if this route matches the given path and method."""
         if method not in self.methods:
             return None
@@ -72,7 +72,7 @@ class MiddlewareMetadata:
     """Metadata for middleware."""
 
     func: Callable
-    name: Optional[str] = None
+    name: str | None = None
     priority: int = 0
 
 
@@ -82,9 +82,9 @@ class WebSocketMetadata:
 
     func: Callable
     path: str
-    name: Optional[str] = None
-    pattern: Optional[Pattern[str]] = None
-    param_names: List[str] = field(default_factory=list)
+    name: str | None = None
+    pattern: Pattern[str] | None = None
+    param_names: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         """Convert path to regex pattern."""
@@ -98,10 +98,10 @@ class Request:
     def __init__(self, scope: Scope, receive: ASGIReceive):
         self.scope = scope
         self._receive = receive
-        self._body: Optional[bytes] = None
-        self._json: Optional[Any] = None
-        self._form: Optional[Dict[str, Any]] = None
-        self.route_params: Dict[str, str] = {}
+        self._body: bytes | None = None
+        self._json: Any | None = None
+        self._form: dict[str, Any] | None = None
+        self.route_params: dict[str, str] = {}
 
     @property
     def method(self) -> str:
@@ -119,7 +119,7 @@ class Request:
         return self.scope.get("query_string", b"")
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         """Request headers as a dict."""
         headers = {}
         for name, value in self.scope.get("headers", []):
@@ -127,7 +127,7 @@ class Request:
         return headers
 
     @property
-    def cookies(self) -> Dict[str, str]:
+    def cookies(self) -> dict[str, str]:
         """Parse cookies from headers."""
         cookie_header = self.headers.get("cookie", "")
         cookies = {}
@@ -161,7 +161,7 @@ class Request:
                 self._json = None
         return self._json
 
-    async def form(self) -> Dict[str, Any]:
+    async def form(self) -> dict[str, Any]:
         """Parse body as form data."""
         if self._form is None:
             # Simplified form parsing - real implementation would handle multipart
@@ -182,7 +182,7 @@ class WebSocket:
         self.scope = scope
         self._receive = receive
         self._send = send
-        self.route_params: Dict[str, str] = {}
+        self.route_params: dict[str, str] = {}
         self._accepted = False
 
     @property
@@ -191,14 +191,14 @@ class WebSocket:
         return self.scope["path"]
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         """Request headers as a dict."""
         headers = {}
         for name, value in self.scope.get("headers", []):
             headers[name.decode("latin-1").lower()] = value.decode("latin-1")
         return headers
 
-    async def accept(self, subprotocol: Optional[str] = None) -> None:
+    async def accept(self, subprotocol: str | None = None) -> None:
         """Accept the WebSocket connection."""
         await self._send(
             {
@@ -208,7 +208,7 @@ class WebSocket:
         )
         self._accepted = True
 
-    async def send(self, data: Union[str, bytes]) -> None:
+    async def send(self, data: str | bytes) -> None:
         """Send data to the client."""
         if not self._accepted:
             raise RuntimeError("WebSocket not accepted")
@@ -228,7 +228,7 @@ class WebSocket:
                 }
             )
 
-    async def receive(self) -> Union[str, bytes]:
+    async def receive(self) -> str | bytes:
         """Receive data from the client."""
         if not self._accepted:
             raise RuntimeError("WebSocket not accepted")
@@ -257,12 +257,12 @@ class WebSocket:
         """Allow async iteration over messages."""
         return self
 
-    async def __anext__(self) -> Union[str, bytes]:
+    async def __anext__(self) -> str | bytes:
         """Get next message."""
         try:
             return await self.receive()
         except ConnectionError:
-            raise StopAsyncIteration
+            raise StopAsyncIteration from None
 
 
 class ASGIManager:
@@ -270,12 +270,12 @@ class ASGIManager:
 
     def __init__(self, app: Whiskey):
         self.app = app
-        self.routes: List[RouteMetadata] = []
-        self.middleware: List[MiddlewareMetadata] = []
-        self.websockets: List[WebSocketMetadata] = []
-        self.before_request: List[Callable] = []
-        self.after_request: List[Callable] = []
-        self.error_handlers: Dict[int, Callable] = {}
+        self.routes: list[RouteMetadata] = []
+        self.middleware: list[MiddlewareMetadata] = []
+        self.websockets: list[WebSocketMetadata] = []
+        self.before_request: list[Callable] = []
+        self.after_request: list[Callable] = []
+        self.error_handlers: dict[int, Callable] = {}
 
     def add_route(self, metadata: RouteMetadata) -> None:
         """Add a route."""
@@ -291,7 +291,7 @@ class ASGIManager:
         """Add a WebSocket handler."""
         self.websockets.append(metadata)
 
-    def find_route(self, path: str, method: str) -> Optional[Tuple[RouteMetadata, Dict[str, str]]]:
+    def find_route(self, path: str, method: str) -> tuple[RouteMetadata, dict[str, str]] | None:
         """Find a matching route."""
         for route in self.routes:
             params = route.match(path, method)
@@ -299,7 +299,7 @@ class ASGIManager:
                 return route, params
         return None
 
-    def find_websocket(self, path: str) -> Optional[Tuple[WebSocketMetadata, Dict[str, str]]]:
+    def find_websocket(self, path: str) -> tuple[WebSocketMetadata, dict[str, str]] | None:
         """Find a matching WebSocket handler."""
         for ws in self.websockets:
             match = ws.pattern.match(path)
@@ -477,7 +477,7 @@ class ASGIHandler:
             status = 200
 
         # Determine content type and body
-        if isinstance(body, dict) or isinstance(body, list):
+        if isinstance(body, (dict, list)):
             # JSON response
             content = json.dumps(body).encode("utf-8")
             content_type = "application/json"
@@ -593,8 +593,8 @@ def asgi_extension(app: Whiskey) -> None:
     app.add_scope("session", SessionScope)
 
     # Create route decorators
-    def create_route_decorator(methods: List[str]):
-        def route(path: str, name: Optional[str] = None):
+    def create_route_decorator(methods: list[str]):
+        def route(path: str, name: str | None = None):
             def decorator(func: Callable) -> Callable:
                 metadata = RouteMetadata(
                     func=func, path=path, methods=methods, name=name or func.__name__
@@ -620,7 +620,7 @@ def asgi_extension(app: Whiskey) -> None:
     app.add_decorator("options", create_route_decorator(["OPTIONS"]))
 
     # WebSocket decorator
-    def websocket(path: str, name: Optional[str] = None):
+    def websocket(path: str, name: str | None = None):
         def decorator(func: Callable) -> Callable:
             metadata = WebSocketMetadata(func=func, path=path, name=name or func.__name__)
             manager.add_websocket(metadata)
@@ -631,7 +631,7 @@ def asgi_extension(app: Whiskey) -> None:
     app.add_decorator("websocket", websocket)
 
     # Middleware decorator
-    def middleware(name: Optional[str] = None, priority: int = 0):
+    def middleware(name: str | None = None, priority: int = 0):
         def decorator(func: Callable) -> Callable:
             metadata = MiddlewareMetadata(func=func, name=name or func.__name__, priority=priority)
             manager.add_middleware(metadata)
@@ -644,7 +644,7 @@ def asgi_extension(app: Whiskey) -> None:
     # Helper methods
     def run_asgi(host: str = "127.0.0.1", port: int = 8000, **kwargs) -> None:
         """Run the ASGI application with uvicorn.
-        
+
         Args:
             host: Host to bind to
             port: Port to bind to
@@ -655,14 +655,14 @@ def asgi_extension(app: Whiskey) -> None:
         except ImportError:
             raise ImportError(
                 "uvicorn is required to run ASGI apps. Install with: pip install uvicorn"
-            )
+            ) from None
 
         # The ASGI handler already manages lifecycle via the lifespan protocol
         # So we can run uvicorn directly without additional lifecycle management
         uvicorn.run(app.asgi, host=host, port=port, **kwargs)
-    
+
     # Register the ASGI runner with the new standardized API
     app.register_runner("asgi", run_asgi)
-    
+
     # Also make it available as a method for backward compatibility
     app.run_asgi = run_asgi

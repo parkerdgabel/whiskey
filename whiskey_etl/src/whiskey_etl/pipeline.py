@@ -3,18 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from typing import (
     Any,
     AsyncIterator,
     Callable,
-    Dict,
-    List,
-    Optional,
-    Type,
-    Union,
 )
 
 from whiskey import Container
@@ -24,7 +18,7 @@ from .errors import PipelineError, TransformError
 
 class PipelineState(Enum):
     """Pipeline execution states."""
-    
+
     IDLE = "idle"
     STARTING = "starting"
     RUNNING = "running"
@@ -37,7 +31,7 @@ class PipelineState(Enum):
 
 class StageType(Enum):
     """Types of pipeline stages."""
-    
+
     EXTRACT = "extract"
     TRANSFORM = "transform"
     LOAD = "load"
@@ -45,35 +39,35 @@ class StageType(Enum):
 
 class PipelineContext:
     """Runtime context for pipeline execution."""
-    
+
     def __init__(
         self,
         pipeline_name: str,
         run_id: str,
         container: Container,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
     ):
         self.pipeline_name = pipeline_name
         self.run_id = run_id
         self.container = container
         self.config = config or {}
         self.start_time = datetime.now()
-        self.end_time: Optional[datetime] = None
+        self.end_time: datetime | None = None
         self.state = PipelineState.IDLE
-        self.metrics: Dict[str, Any] = {
+        self.metrics: dict[str, Any] = {
             "records_processed": 0,
             "records_failed": 0,
             "stages_completed": 0,
         }
-        self.checkpoints: Dict[str, Any] = {}
-        self.errors: List[Exception] = []
-        
+        self.checkpoints: dict[str, Any] = {}
+        self.errors: list[Exception] = []
+
     async def log(self, message: str, level: str = "INFO") -> None:
         """Log a message."""
         # TODO: Integrate with logging system
         timestamp = datetime.now().isoformat()
         print(f"[{timestamp}] [{level}] {self.pipeline_name}: {message}")
-    
+
     async def emit_metrics(self) -> None:
         """Emit pipeline metrics."""
         # TODO: Integrate with monitoring system
@@ -83,15 +77,15 @@ class PipelineContext:
             f"Records: {self.metrics['records_processed']}, "
             f"Failed: {self.metrics['records_failed']}"
         )
-    
+
     def checkpoint(self, stage: str, data: Any) -> None:
         """Save a checkpoint."""
         self.checkpoints[stage] = {
             "timestamp": datetime.now(),
             "data": data,
         }
-    
-    def get_checkpoint(self, stage: str) -> Optional[Any]:
+
+    def get_checkpoint(self, stage: str) -> Any | None:
         """Retrieve a checkpoint."""
         checkpoint = self.checkpoints.get(stage)
         return checkpoint["data"] if checkpoint else None
@@ -99,15 +93,15 @@ class PipelineContext:
 
 class Stage:
     """Pipeline stage definition."""
-    
+
     def __init__(
         self,
         name: str,
         stage_type: StageType,
-        handler: Optional[Union[str, Callable]] = None,
+        handler: str | Callable | None = None,
         parallel: bool = False,
         workers: int = 1,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
     ):
         self.name = name
         self.stage_type = stage_type
@@ -117,79 +111,85 @@ class Stage:
         self.config = config or {}
 
 
-class Pipeline(ABC):
+class Pipeline:
     """Base class for ETL pipelines."""
-    
+
     # Required attributes (to be defined by subclasses)
-    source: Optional[str] = None
-    sink: Optional[str] = None
-    transforms: List[Union[str, Callable]] = []
-    
+    source: str | None = None
+    sink: str | None = None
+    transforms: list[str | Callable] = []
+
     # Optional configuration
     batch_size: int = 1000
     max_retries: int = 3
     retry_delay: float = 1.0
-    error_handler: Optional[str] = None
+    error_handler: str | None = None
     enable_checkpointing: bool = False
-    
+
     def __init__(self, context: PipelineContext):
         self.context = context
-    
+
     # Lifecycle hooks (optional)
     async def on_start(self, context: PipelineContext) -> None:
         """Called when pipeline starts."""
         pass
-    
+
     async def on_complete(self, context: PipelineContext) -> None:
         """Called when pipeline completes successfully."""
         pass
-    
-    async def on_error(self, error: Exception, record: Optional[Any] = None) -> None:
+
+    async def on_error(self, error: Exception, record: Any | None = None) -> None:
         """Called when an error occurs."""
         pass
-    
+
     async def on_batch_complete(self, batch_num: int, records_processed: int) -> None:
         """Called after each batch is processed."""
         pass
-    
+
     # Optional custom stages method
-    def get_stages(self) -> List[Stage]:
+    def get_stages(self) -> list[Stage]:
         """Get custom pipeline stages.
-        
+
         Override this to define complex multi-stage pipelines.
         """
         stages = []
-        
+
         # Extract stage
         if self.source:
-            stages.append(Stage(
-                name="extract",
-                stage_type=StageType.EXTRACT,
-                handler=self.source,
-            ))
-        
+            stages.append(
+                Stage(
+                    name="extract",
+                    stage_type=StageType.EXTRACT,
+                    handler=self.source,
+                )
+            )
+
         # Transform stages
         for i, transform in enumerate(self.transforms):
-            stages.append(Stage(
-                name=f"transform_{i}",
-                stage_type=StageType.TRANSFORM,
-                handler=transform,
-            ))
-        
+            stages.append(
+                Stage(
+                    name=f"transform_{i}",
+                    stage_type=StageType.TRANSFORM,
+                    handler=transform,
+                )
+            )
+
         # Load stage
         if self.sink:
-            stages.append(Stage(
-                name="load",
-                stage_type=StageType.LOAD,
-                handler=self.sink,
-            ))
-        
+            stages.append(
+                Stage(
+                    name="load",
+                    stage_type=StageType.LOAD,
+                    handler=self.sink,
+                )
+            )
+
         return stages
 
 
 class PipelineResult:
     """Result of pipeline execution."""
-    
+
     def __init__(
         self,
         pipeline_name: str,
@@ -199,7 +199,7 @@ class PipelineResult:
         records_failed: int,
         start_time: datetime,
         end_time: datetime,
-        errors: Optional[List[Exception]] = None,
+        errors: list[Exception] | None = None,
     ):
         self.pipeline_name = pipeline_name
         self.run_id = run_id
@@ -210,12 +210,12 @@ class PipelineResult:
         self.end_time = end_time
         self.duration = end_time - start_time
         self.errors = errors or []
-    
+
     @property
     def is_success(self) -> bool:
         """Check if pipeline succeeded."""
         return self.state == PipelineState.COMPLETED
-    
+
     @property
     def error_rate(self) -> float:
         """Calculate error rate."""
@@ -225,33 +225,28 @@ class PipelineResult:
 
 class PipelineRegistry:
     """Registry for pipeline definitions."""
-    
+
     def __init__(self):
-        self._pipelines: Dict[str, Dict[str, Any]] = {}
-    
-    def register(
-        self,
-        name: str,
-        pipeline_class: Type[Pipeline],
-        **metadata
-    ) -> None:
+        self._pipelines: dict[str, dict[str, Any]] = {}
+
+    def register(self, name: str, pipeline_class: type[Pipeline], **metadata) -> None:
         """Register a pipeline."""
         self._pipelines[name] = {
             "class": pipeline_class,
             "metadata": metadata,
         }
-    
-    def get(self, name: str) -> Optional[Type[Pipeline]]:
+
+    def get(self, name: str) -> type[Pipeline] | None:
         """Get pipeline class by name."""
         entry = self._pipelines.get(name)
         return entry["class"] if entry else None
-    
-    def get_metadata(self, name: str) -> Optional[Dict[str, Any]]:
+
+    def get_metadata(self, name: str) -> dict[str, Any] | None:
         """Get pipeline metadata."""
         entry = self._pipelines.get(name)
         return entry["metadata"] if entry else None
-    
-    def list_pipelines(self) -> Dict[str, Dict[str, Any]]:
+
+    def list_pipelines(self) -> dict[str, dict[str, Any]]:
         """List all registered pipelines."""
         return {
             name: {
@@ -266,7 +261,7 @@ class PipelineRegistry:
 
 class PipelineManager:
     """Manages pipeline execution."""
-    
+
     def __init__(
         self,
         container: Container,
@@ -290,46 +285,39 @@ class PipelineManager:
         self.enable_monitoring = enable_monitoring
         self.max_retries = max_retries
         self.retry_delay = retry_delay
-        self._running_pipelines: Dict[str, PipelineContext] = {}
+        self._running_pipelines: dict[str, PipelineContext] = {}
         self._run_counter = 0
-    
+
     async def initialize(self) -> None:
         """Initialize the pipeline manager."""
         # TODO: Setup monitoring, checkpointing, etc.
         pass
-    
+
     async def shutdown(self) -> None:
         """Shutdown the pipeline manager."""
         # Stop all running pipelines
         for context in list(self._running_pipelines.values()):
             await self._stop_pipeline(context)
-    
-    async def run(
-        self,
-        pipeline_name: str,
-        **kwargs
-    ) -> PipelineResult:
+
+    async def run(self, pipeline_name: str, **kwargs) -> PipelineResult:
         """Run a pipeline.
-        
+
         Args:
             pipeline_name: Name of registered pipeline
             **kwargs: Runtime arguments passed to source/sink/transforms
-            
+
         Returns:
             PipelineResult with execution details
         """
         # Get pipeline class
         pipeline_class = self.pipeline_registry.get(pipeline_name)
         if not pipeline_class:
-            raise PipelineError(
-                pipeline_name,
-                f"Pipeline '{pipeline_name}' not found"
-            )
-        
+            raise PipelineError(pipeline_name, f"Pipeline '{pipeline_name}' not found")
+
         # Generate run ID
         self._run_counter += 1
         run_id = f"{pipeline_name}_{self._run_counter}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         # Create context
         context = PipelineContext(
             pipeline_name=pipeline_name,
@@ -337,17 +325,17 @@ class PipelineManager:
             container=self.container,
             config=kwargs,
         )
-        
+
         # Store running pipeline
         self._running_pipelines[run_id] = context
-        
+
         try:
             # Create pipeline instance
             pipeline = pipeline_class(context)
-            
+
             # Run pipeline
             await self._execute_pipeline(pipeline, context)
-            
+
             # Create result
             result = PipelineResult(
                 pipeline_name=pipeline_name,
@@ -359,13 +347,13 @@ class PipelineManager:
                 end_time=context.end_time or datetime.now(),
                 errors=context.errors,
             )
-            
+
             return result
-            
+
         finally:
             # Remove from running
             self._running_pipelines.pop(run_id, None)
-    
+
     async def _execute_pipeline(
         self,
         pipeline: Pipeline,
@@ -376,62 +364,55 @@ class PipelineManager:
             # Update state
             context.state = PipelineState.STARTING
             await context.log(f"Starting pipeline run: {context.run_id}")
-            
+
             # Call on_start hook
             await pipeline.on_start(context)
-            
+
             # Get stages
             stages = pipeline.get_stages()
             if not stages:
-                raise PipelineError(
-                    context.pipeline_name,
-                    "Pipeline has no stages defined"
-                )
-            
+                raise PipelineError(context.pipeline_name, "Pipeline has no stages defined")
+
             # Update state
             context.state = PipelineState.RUNNING
-            
+
             # Execute stages
-            data_stream: Optional[AsyncIterator[Any]] = None
-            
+            data_stream: AsyncIterator[Any] | None = None
+
             for stage in stages:
                 await context.log(f"Executing stage: {stage.name}")
-                
+
                 if stage.stage_type == StageType.EXTRACT:
-                    data_stream = await self._execute_extract(
-                        stage, pipeline, context
-                    )
+                    data_stream = await self._execute_extract(stage, pipeline, context)
                 elif stage.stage_type == StageType.TRANSFORM:
                     data_stream = await self._execute_transform(
                         stage, data_stream, pipeline, context
                     )
                 elif stage.stage_type == StageType.LOAD:
-                    await self._execute_load(
-                        stage, data_stream, pipeline, context
-                    )
-                
+                    await self._execute_load(stage, data_stream, pipeline, context)
+
                 context.metrics["stages_completed"] += 1
-            
+
             # Update state
             context.state = PipelineState.COMPLETED
             context.end_time = datetime.now()
-            
+
             # Call on_complete hook
             await pipeline.on_complete(context)
             await context.emit_metrics()
-            
+
         except Exception as e:
             # Update state
             context.state = PipelineState.FAILED
             context.end_time = datetime.now()
             context.errors.append(e)
-            
+
             # Call error handler
             await pipeline.on_error(e)
-            
+
             # Re-raise
             raise
-    
+
     async def _execute_extract(
         self,
         stage: Stage,
@@ -448,10 +429,10 @@ class PipelineManager:
                 f"Source '{source_name}' not found",
                 stage=stage.name,
             )
-        
+
         # Resolve source instance
         source = await self.container.resolve(source_class)
-        
+
         # Extract data
         async def extract_generator():
             try:
@@ -463,10 +444,10 @@ class PipelineManager:
                     context.pipeline_name,
                     f"Extract failed: {e}",
                     stage=stage.name,
-                )
-        
+                ) from e
+
         return extract_generator()
-    
+
     async def _execute_transform(
         self,
         stage: Stage,
@@ -481,7 +462,7 @@ class PipelineManager:
                 "No data stream for transform stage",
                 stage=stage.name,
             )
-        
+
         # Get transform function
         transform = stage.handler
         if isinstance(transform, str):
@@ -492,57 +473,64 @@ class PipelineManager:
                     f"Transform '{stage.handler}' not found",
                     stage=stage.name,
                 )
-        
+
         # Apply transform
         async def transform_generator():
             async for record in data_stream:
                 try:
                     # Apply transform - check if it needs DI resolution
                     import inspect
+
                     sig = inspect.signature(transform)
                     params = list(sig.parameters.values())
-                    
+
                     # If transform only takes record parameter, call directly
-                    if len(params) == 1 and params[0].name == 'record':
+                    if len(params) == 1 and params[0].name == "record":
                         result = await transform(record)
                     else:
                         # Otherwise, use DI resolution
                         from whiskey.core.decorators import inject
+
                         injected_transform = inject(transform)
                         result = await injected_transform(record)
-                    
+
                     if result is not None:
                         yield result
                 except Exception as e:
                     # Handle transform error
                     context.metrics["records_failed"] += 1
                     await pipeline.on_error(e, record)
-                    
+
                     # Retry logic
                     for retry in range(pipeline.max_retries):
                         await asyncio.sleep(pipeline.retry_delay * (retry + 1))
                         try:
                             # Apply transform again with same logic
-                            if len(params) == 1 and params[0].name == 'record':
+                            if len(params) == 1 and params[0].name == "record":
                                 result = await transform(record)
                             else:
                                 from whiskey.core.decorators import inject
+
                                 injected_transform = inject(transform)
                                 result = await injected_transform(record)
-                            
+
                             if result is not None:
                                 yield result
                                 break
-                        except Exception:
+                        except Exception as e:
                             if retry == pipeline.max_retries - 1:
                                 raise TransformError(
-                                    stage.handler if isinstance(stage.handler, str) else stage.handler.__name__,
+                                    (
+                                        stage.handler
+                                        if isinstance(stage.handler, str)
+                                        else stage.handler.__name__
+                                    ),
                                     f"Transform failed after {pipeline.max_retries} retries",
                                     record=record,
-                                )
-        
+                                ) from e
+
         return transform_generator()
-    
+
     async def _execute_load(
         self,
         stage: Stage,
@@ -557,7 +545,7 @@ class PipelineManager:
                 "No data stream for load stage",
                 stage=stage.name,
             )
-        
+
         # Get sink
         sink_name = stage.handler
         sink_class = self.sink_registry.get(sink_name)
@@ -567,35 +555,35 @@ class PipelineManager:
                 f"Sink '{sink_name}' not found",
                 stage=stage.name,
             )
-        
+
         # Resolve sink instance
         sink = await self.container.resolve(sink_class)
-        
+
         # Process in batches
-        batch: List[Any] = []
+        batch: list[Any] = []
         batch_num = 0
-        
+
         async for record in data_stream:
             batch.append(record)
             context.metrics["records_processed"] += 1
-            
+
             if len(batch) >= pipeline.batch_size:
                 # Load batch with config kwargs
                 await sink.load(batch, **context.config)
-                
+
                 # Call batch complete hook
                 batch_num += 1
                 await pipeline.on_batch_complete(batch_num, len(batch))
-                
+
                 # Clear batch
                 batch = []
-        
+
         # Load remaining records
         if batch:
             await sink.load(batch, **context.config)
             batch_num += 1
             await pipeline.on_batch_complete(batch_num, len(batch))
-    
+
     async def _stop_pipeline(self, context: PipelineContext) -> None:
         """Stop a running pipeline."""
         context.state = PipelineState.STOPPING

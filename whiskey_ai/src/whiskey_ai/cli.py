@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING
 
 import click
+
 from whiskey import inject
 
 if TYPE_CHECKING:
     from whiskey import Whiskey
-    from whiskey_ai.extension import ModelManager, ToolManager, AgentManager
+    from whiskey_ai.extension import AgentManager, ModelManager, ToolManager
 
 
 def register_ai_cli_commands(app: Whiskey) -> None:
     """Register AI-specific CLI commands."""
-    
+
     # Model management commands
     @app.command(name="models", group="ai", description="List available AI models")
     @inject
@@ -27,16 +28,20 @@ def register_ai_cli_commands(app: Whiskey) -> None:
         """List all registered models."""
         click.echo("Available AI Models:")
         click.echo("=" * 50)
-        
+
         if not model_manager._model_classes:
             click.echo("No models registered.")
             return
-        
+
         for name, model_class in model_manager._model_classes.items():
             configured = f"ai.model.instance.{name}" in model_manager.container
-            status = click.style("✓ Configured", fg="green") if configured else click.style("✗ Not configured", fg="yellow")
+            status = (
+                click.style("✓ Configured", fg="green")
+                if configured
+                else click.style("✗ Not configured", fg="yellow")
+            )
             click.echo(f"  {name}: {model_class.__name__} [{status}]")
-    
+
     @app.command(name="model-info", group="ai", description="Show detailed model information")
     @app.argument("model_name")
     @inject
@@ -45,22 +50,22 @@ def register_ai_cli_commands(app: Whiskey) -> None:
         if model_name not in model_manager._model_classes:
             click.echo(f"Error: Model '{model_name}' not found.", err=True)
             sys.exit(1)
-        
+
         model_class = model_manager._model_classes[model_name]
         click.echo(f"\nModel: {model_name}")
         click.echo(f"Class: {model_class.__module__}.{model_class.__name__}")
         click.echo(f"Docstring: {model_class.__doc__ or 'No documentation'}")
-        
+
         # Check if configured
         if f"ai.model.instance.{model_name}" in model_manager.container:
             click.echo(f"Status: {click.style('Configured', fg='green')}")
             model = model_manager.get(model_name)
-            if hasattr(model, 'model_info'):
+            if hasattr(model, "model_info"):
                 info = await model.model_info()
                 click.echo(f"Model Info: {json.dumps(info, indent=2)}")
         else:
             click.echo(f"Status: {click.style('Not configured', fg='yellow')}")
-    
+
     # Prompt management commands
     @app.command(name="prompts", group="ai", description="Manage prompts")
     @app.option("-l/--list", is_flag=True, help="List all prompts")
@@ -69,13 +74,10 @@ def register_ai_cli_commands(app: Whiskey) -> None:
     @app.option("-v/--version", help="Show prompt version history")
     @inject
     async def manage_prompts(
-        list: bool,
-        create: Optional[str],
-        test: Optional[str],
-        version: Optional[str]
+        list_prompts: bool, create: str | None, test: str | None, version: str | None
     ):
         """Manage prompts in your AI application."""
-        if list:
+        if list_prompts:
             await list_all_prompts()
         elif create:
             await create_prompt(create)
@@ -85,7 +87,7 @@ def register_ai_cli_commands(app: Whiskey) -> None:
             await show_prompt_versions(version)
         else:
             click.echo("Please specify an action: --list, --create, --test, or --version")
-    
+
     # Agent management commands
     @app.command(name="agents", group="ai", description="List available AI agents")
     @inject
@@ -93,7 +95,7 @@ def register_ai_cli_commands(app: Whiskey) -> None:
         """List all registered agents."""
         click.echo("Available AI Agents:")
         click.echo("=" * 50)
-        
+
         agent_count = 0
         for key in agent_manager.container.registry._descriptors:
             if isinstance(key, str) and key.startswith("ai.agent."):
@@ -102,10 +104,10 @@ def register_ai_cli_commands(app: Whiskey) -> None:
                 if agent_class:
                     click.echo(f"  {agent_name}: {type(agent_class).__name__}")
                     agent_count += 1
-        
+
         if agent_count == 0:
             click.echo("No agents registered.")
-    
+
     @app.command(name="agent-scaffold", group="ai", description="Scaffold a new AI agent")
     @app.argument("agent_name")
     @app.option("-t/--tools", multiple=True, help="Tools to include in the agent")
@@ -113,28 +115,29 @@ def register_ai_cli_commands(app: Whiskey) -> None:
     async def scaffold_agent(agent_name: str, tools: tuple, template: str):
         """Scaffold a new AI agent with boilerplate code."""
         # Convert agent name to PascalCase for class name
-        class_name = ''.join(word.capitalize() for word in agent_name.split('_'))
-        
+        class_name = "".join(word.capitalize() for word in agent_name.split("_"))
+
         template_code = generate_agent_template(class_name, agent_name, tools, template)
-        
+
         # Create agent file
         agent_file = Path(f"agents/{agent_name}_agent.py")
         agent_file.parent.mkdir(exist_ok=True)
-        
-        if agent_file.exists():
-            if not click.confirm(f"Agent file {agent_file} already exists. Overwrite?"):
-                return
-        
+
+        if agent_file.exists() and not click.confirm(
+            f"Agent file {agent_file} already exists. Overwrite?"
+        ):
+            return
+
         agent_file.write_text(template_code)
         click.echo(f"✓ Created agent at {agent_file}")
-        
+
         # Create test file
         test_file = Path(f"tests/test_{agent_name}_agent.py")
         test_file.parent.mkdir(exist_ok=True)
         test_code = generate_agent_test_template(class_name, agent_name)
         test_file.write_text(test_code)
         click.echo(f"✓ Created test at {test_file}")
-    
+
     # Tool management commands
     @app.command(name="tools", group="ai", description="List available AI tools")
     @inject
@@ -142,41 +145,43 @@ def register_ai_cli_commands(app: Whiskey) -> None:
         """List all registered tools."""
         click.echo("Available AI Tools:")
         click.echo("=" * 50)
-        
+
         schemas = tool_manager.all_schemas()
         if not schemas:
             click.echo("No tools registered.")
             return
-        
+
         for schema in schemas:
             func_info = schema["function"]
             click.echo(f"\n  {func_info['name']}:")
             click.echo(f"    Description: {func_info.get('description', 'No description')}")
-            if func_info.get('parameters', {}).get('properties'):
+            if func_info.get("parameters", {}).get("properties"):
                 click.echo("    Parameters:")
-                for param, info in func_info['parameters']['properties'].items():
-                    required = param in func_info['parameters'].get('required', [])
+                for param, info in func_info["parameters"]["properties"].items():
+                    required = param in func_info["parameters"].get("required", [])
                     req_marker = "*" if required else ""
-                    click.echo(f"      - {param}{req_marker} ({info['type']}): {info.get('description', '')}")
-    
+                    click.echo(
+                        f"      - {param}{req_marker} ({info['type']}): {info.get('description', '')}"
+                    )
+
     @app.command(name="tool-test", group="ai", description="Test a tool with sample inputs")
     @app.argument("tool_name")
     @app.option("-i/--input", help="JSON input for the tool")
     @inject
-    async def test_tool(tool_name: str, input: Optional[str], tool_manager: ToolManager):
+    async def test_tool(tool_name: str, tool_input: str | None, tool_manager: ToolManager):
         """Test a tool with sample inputs."""
         tool = tool_manager.get(tool_name)
         if not tool:
             click.echo(f"Error: Tool '{tool_name}' not found.", err=True)
             sys.exit(1)
-        
+
         # Parse input
         try:
-            args = json.loads(input) if input else {}
+            args = json.loads(tool_input) if tool_input else {}
         except json.JSONDecodeError:
             click.echo("Error: Invalid JSON input.", err=True)
             sys.exit(1)
-        
+
         # Execute tool
         try:
             click.echo(f"Executing {tool_name} with args: {args}")
@@ -185,7 +190,7 @@ def register_ai_cli_commands(app: Whiskey) -> None:
         except Exception as e:
             click.echo(f"Error: {e}", err=True)
             sys.exit(1)
-    
+
     # Evaluation and testing commands
     @app.command(name="eval", group="ai", description="Run AI evaluations")
     @app.argument("eval_suite")
@@ -193,33 +198,26 @@ def register_ai_cli_commands(app: Whiskey) -> None:
     @app.option("-o/--output", help="Output file for results")
     @app.option("-v/--verbose", is_flag=True, help="Verbose output")
     async def run_evaluations(
-        eval_suite: str,
-        model: Optional[str],
-        output: Optional[str],
-        verbose: bool
+        eval_suite: str, model: str | None, output: str | None, verbose: bool
     ):
         """Run evaluation suite against AI models."""
         click.echo(f"Running evaluation suite: {eval_suite}")
-        
+
         # TODO: Implement evaluation runner
         results = {
             "suite": eval_suite,
             "model": model or "default",
             "timestamp": datetime.now().isoformat(),
-            "results": {
-                "accuracy": 0.95,
-                "latency_ms": 250,
-                "cost_per_1k_tokens": 0.002
-            }
+            "results": {"accuracy": 0.95, "latency_ms": 250, "cost_per_1k_tokens": 0.002},
         }
-        
+
         if verbose:
             click.echo(json.dumps(results, indent=2))
-        
+
         if output:
             Path(output).write_text(json.dumps(results, indent=2))
             click.echo(f"✓ Results saved to {output}")
-    
+
     # Chat/Interactive commands
     @app.command(name="chat", group="ai", description="Start interactive chat session")
     @app.option("-m/--model", default="default", help="Model to use")
@@ -228,23 +226,24 @@ def register_ai_cli_commands(app: Whiskey) -> None:
     @inject
     async def interactive_chat(
         model: str,
-        agent: Optional[str],
+        agent: str | None,
         tools: bool,
         model_manager: ModelManager,
-        agent_manager: AgentManager
+        agent_manager: AgentManager,
+        tool_manager: ToolManager,
     ):
         """Start an interactive chat session."""
         click.echo("Starting AI chat session...")
         click.echo("Type 'exit' or 'quit' to end the session.")
         click.echo("-" * 50)
-        
+
         # Get model
         try:
             llm_client = model_manager.get(model)
         except ValueError:
             click.echo(f"Error: Model '{model}' not configured.", err=True)
             sys.exit(1)
-        
+
         # Get agent if specified
         chat_agent = None
         if agent:
@@ -252,19 +251,19 @@ def register_ai_cli_commands(app: Whiskey) -> None:
             if not chat_agent:
                 click.echo(f"Error: Agent '{agent}' not found.", err=True)
                 sys.exit(1)
-        
+
         # Chat loop
         messages = []
         while True:
             try:
                 user_input = click.prompt("\nYou", type=str)
-                
-                if user_input.lower() in ['exit', 'quit']:
+
+                if user_input.lower() in ["exit", "quit"]:
                     click.echo("Goodbye!")
                     break
-                
+
                 messages.append({"role": "user", "content": user_input})
-                
+
                 # Get response
                 if chat_agent:
                     response = await chat_agent.run(user_input)
@@ -272,13 +271,13 @@ def register_ai_cli_commands(app: Whiskey) -> None:
                     completion = await llm_client.chat.create(
                         model=model,
                         messages=messages,
-                        tools=tool_manager.all_schemas() if tools else None
+                        tools=tool_manager.all_schemas() if tools else None,
                     )
                     response = completion.choices[0].message.content
-                
+
                 messages.append({"role": "assistant", "content": response})
                 click.echo(f"\nAssistant: {response}")
-                
+
             except KeyboardInterrupt:
                 click.echo("\nGoodbye!")
                 break
@@ -290,24 +289,24 @@ def generate_agent_template(class_name: str, agent_name: str, tools: tuple, temp
     """Generate agent template code."""
     tools_imports = "\n".join(f"from whiskey_ai.tools import {tool}" for tool in tools)
     tools_list = ", ".join(tools) if tools else ""
-    
+
     if template == "basic":
         return f"""\"\"\"AI Agent: {agent_name}\"\"\"
 
 from typing import Any, List, Optional
 from whiskey import inject
 from whiskey_ai import Agent, LLMClient, ConversationMemory
-{tools_imports if tools else ''}
+{tools_imports if tools else ""}
 
 
 class {class_name}(Agent):
-    \"\"\"AI agent for {agent_name.replace('_', ' ')}.\"\"\"
+    \"\"\"AI agent for {agent_name.replace("_", " ")}.\"\"\"
     
     @inject
     def __init__(
         self,
         name: str = "{agent_name}",
-        description: str = "AI agent for {agent_name.replace('_', ' ')}",
+        description: str = "AI agent for {agent_name.replace("_", " ")}",
         client: LLMClient = None,
         tools: List[Any] = None
     ):
@@ -339,7 +338,7 @@ class {class_name}(Agent):
         # TODO: Implement step execution
         return f"Executed: {{step}}"
 """
-    
+
     elif template == "research":
         return f"""\"\"\"Research Agent: {agent_name}\"\"\"
 
@@ -347,11 +346,11 @@ from typing import Any, List, Optional
 from whiskey import inject
 from whiskey_ai import Agent, LLMClient, ConversationMemory
 from whiskey_ai.tools import web_search, calculate, get_current_time
-{tools_imports if tools else ''}
+{tools_imports if tools else ""}
 
 
 class {class_name}(Agent):
-    \"\"\"Research agent for {agent_name.replace('_', ' ')}.\"\"\"
+    \"\"\"Research agent for {agent_name.replace("_", " ")}.\"\"\"
     
     @inject
     def __init__(
@@ -362,7 +361,7 @@ class {class_name}(Agent):
     ):
         super().__init__(name, description)
         self.client = client
-        self.tools = [web_search, calculate, get_current_time{', ' + tools_list if tools else ''}]
+        self.tools = [web_search, calculate, get_current_time{", " + tools_list if tools else ""}]
         self.memory = ConversationMemory()
         self.research_context = {{}}
     
@@ -404,18 +403,18 @@ class {class_name}(Agent):
         # TODO: Use LLM to synthesize findings
         return "Research synthesis pending implementation"
 """
-    
+
     else:  # template == "conversational"
         return f"""\"\"\"Conversational Agent: {agent_name}\"\"\"
 
 from typing import Any, List, Optional
 from whiskey import inject
 from whiskey_ai import Agent, LLMClient, ConversationMemory, ChatSession
-{tools_imports if tools else ''}
+{tools_imports if tools else ""}
 
 
 class {class_name}(Agent):
-    \"\"\"Conversational agent for {agent_name.replace('_', ' ')}.\"\"\"
+    \"\"\"Conversational agent for {agent_name.replace("_", " ")}.\"\"\"
     
     @inject
     def __init__(
@@ -574,7 +573,7 @@ async def create_prompt(name: str):
     # Create prompt file
     prompt_file = Path(f"prompts/{name}.yaml")
     prompt_file.parent.mkdir(exist_ok=True)
-    
+
     template = f"""# Prompt: {name}
 version: 1.0
 description: "Description of the prompt"
@@ -602,7 +601,7 @@ tests:
       user_input: "What is 2+2?"
     expected_contains: ["4", "four"]
 """
-    
+
     prompt_file.write_text(template)
     click.echo(f"✓ Created prompt template at {prompt_file}")
     click.echo("Edit the file to customize your prompt.")
@@ -614,7 +613,7 @@ async def test_prompt(name: str):
     if not prompt_file.exists():
         click.echo(f"Error: Prompt '{name}' not found.", err=True)
         sys.exit(1)
-    
+
     # TODO: Load and test prompt
     click.echo(f"Testing prompt: {name}")
     click.echo("Test implementation pending...")
@@ -627,5 +626,4 @@ async def show_prompt_versions(name: str):
     click.echo("Version tracking not yet implemented.")
 
 
-# Helper to ensure imports are available
-import asyncio
+# Helper functions have been imported at the top

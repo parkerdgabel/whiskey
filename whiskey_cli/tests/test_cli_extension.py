@@ -2,7 +2,7 @@
 
 from click.testing import CliRunner
 
-from whiskey import inject
+from whiskey import Application, inject
 from whiskey_cli import cli_extension
 
 
