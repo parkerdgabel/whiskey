@@ -331,6 +331,7 @@ def ai_extension(app: Whiskey) -> None:
     - Agent framework with @app.agent decorator
     - Conversation management
     - Streaming support
+    - CLI commands for AI development
 
     Example:
         app = Application()
@@ -504,3 +505,14 @@ def ai_extension(app: Whiskey) -> None:
             default_model = app.config.get("ai.default_model")
             if default_model in model_manager.instances:
                 app.container[LLMClient] = model_manager.instances[default_model]
+    
+    # Register CLI commands if whiskey-cli is available
+    try:
+        from whiskey_cli import cli_extension
+        # Check if CLI extension is loaded
+        if hasattr(app, 'command'):
+            from .cli import register_ai_cli_commands
+            register_ai_cli_commands(app)
+    except ImportError:
+        # CLI extension not available, skip CLI registration
+        pass
