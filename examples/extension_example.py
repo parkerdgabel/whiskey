@@ -1,13 +1,13 @@
 """Example showing the new extension pattern for Whiskey."""
 
 import asyncio
-from whiskey import Application, inject, singleton
+from whiskey import Whiskey, inject, singleton
 
 
 # Extension functions - the new way to extend Whiskey
 # =====================================================
 
-def redis_extension(app: Application) -> None:
+def redis_extension(app: Whiskey) -> None:
     """Add Redis support to the application."""
     
     @singleton
@@ -36,7 +36,7 @@ def redis_extension(app: Application) -> None:
             print(f"SET {key} = {value}")
 
 
-def cache_extension(app: Application) -> None:
+def cache_extension(app: Whiskey) -> None:
     """Add caching support using Redis."""
     
     @app.service
@@ -61,7 +61,7 @@ def cache_extension(app: Application) -> None:
             await self.redis.set(key, value)
 
 
-def metrics_extension(app: Application) -> None:
+def metrics_extension(app: Whiskey) -> None:
     """Add metrics collection."""
     
     @singleton
@@ -90,13 +90,13 @@ def metrics_extension(app: Application) -> None:
 
 async def main():
     # Method 1: Using extend()
-    app1 = Application()
+    app1 = Whiskey()
     app1.extend(redis_extension)
     app1.extend(cache_extension)
     app1.extend(metrics_extension)
     
     # Method 2: Using use() for multiple extensions
-    app2 = Application().use(
+    app2 = Whiskey().use(
         redis_extension,
         cache_extension,
         metrics_extension,
@@ -104,7 +104,7 @@ async def main():
     
     # Method 3: Inline extensions with lambdas
     app3 = (
-        Application()
+        Whiskey()
         .use(redis_extension, cache_extension)
         .extend(lambda app: app.container.register_singleton(
             str, instance="Hello World", name="greeting"
@@ -112,9 +112,9 @@ async def main():
     )
     
     # Method 4: Using configuration
-    from whiskey import ApplicationConfig
+    from whiskey import WhiskeyConfig
     
-    app4 = Application(ApplicationConfig(
+    app4 = Whiskey(WhiskeyConfig(
         name="MyApp",
         extensions=[redis_extension, cache_extension, metrics_extension]
     ))
@@ -150,7 +150,7 @@ async def example_with_first_party():
     
     # Create app with AI and web capabilities
     app = (
-        Application()
+        Whiskey()
         .use(ai_extension, asgi_extension)
         .use(redis_extension, cache_extension)
     )
@@ -169,7 +169,7 @@ async def example_with_first_party():
 
 def create_database_extension(connection_string: str):
     """Factory function that creates a configured extension."""
-    def database_extension(app: Application) -> None:
+    def database_extension(app: Whiskey) -> None:
         @singleton
         class Database:
             def __init__(self):
@@ -188,7 +188,7 @@ def create_database_extension(connection_string: str):
 
 # Using the factory
 db_extension = create_database_extension("postgresql://localhost/mydb")
-app_with_db = Application().extend(db_extension)
+app_with_db = Whiskey().extend(db_extension)
 
 
 if __name__ == "__main__":

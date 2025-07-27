@@ -2,14 +2,14 @@
 
 from typing import Any, Optional, Union
 
-from whiskey import Application
+from whiskey import Whiskey
 
 from .manager import ConfigurationManager
 from .schema import is_dataclass_type
 from .sources import ConfigurationSource
 
 
-def config_extension(app: Application) -> None:
+def config_extension(app: Whiskey) -> None:
     """Configuration extension that adds configuration management to Whiskey applications.
 
     This extension provides:
@@ -24,7 +24,7 @@ def config_extension(app: Application) -> None:
         from whiskey import Whiskey
         from whiskey_config import config_extension
 
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         @dataclass

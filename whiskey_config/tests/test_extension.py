@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_config import Setting, config_extension
 
 
@@ -39,7 +39,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_extension_setup(self):
         """Test basic extension setup."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         # Check that extension adds required attributes
@@ -68,7 +68,7 @@ class TestConfigExtension:
             )
         )
 
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         app.configure_config(schema=TestAppConfig, sources=[str(config_file)], env_prefix="TEST_")
@@ -84,7 +84,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_config_decorator(self):
         """Test @app.config decorator."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         @app.config("database")
@@ -117,7 +117,7 @@ class TestConfigExtension:
             )
         )
 
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
         app.configure_config(sources=[str(config_file)])
 
@@ -146,7 +146,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_setting_default_value(self):
         """Test Setting with default value."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
         app.configure_config(sources=[])
 
@@ -163,7 +163,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_feature_flag(self):
         """Test feature flag functionality."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         # Configure with features
@@ -201,7 +201,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_configuration_events(self):
         """Test configuration events."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         events = []
@@ -236,7 +236,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_update_config_method(self):
         """Test update_config method."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
         app.configure_config(sources=[])
 
@@ -251,7 +251,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_get_config_method(self):
         """Test get_config method."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
         app.configure_config(sources=[])
 
@@ -268,7 +268,7 @@ class TestConfigExtension:
         config_file = temp_dir / "config.json"
         config_file.write_text('{"counter": 0}')
 
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         changes = []
@@ -299,7 +299,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_schema_validation_error(self):
         """Test schema validation error handling."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         with pytest.raises(ValueError, match="Schema must be a dataclass"):
@@ -308,7 +308,7 @@ class TestConfigExtension:
     @pytest.mark.asyncio
     async def test_config_decorator_validation(self):
         """Test config decorator validation."""
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
 
         with pytest.raises(ValueError, match="must be a dataclass"):
@@ -327,7 +327,7 @@ class TestConfigExtension:
         monkeypatch.setenv("MYAPP_DEBUG", "true")
         monkeypatch.setenv("MYAPP_PORT", "9000")
 
-        app = Application()
+        app = Whiskey()
         app.use(config_extension)
         app.configure_config(sources=[str(config_file), "ENV"], env_prefix="MYAPP_")
 

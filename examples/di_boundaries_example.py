@@ -1,7 +1,7 @@
 """Example demonstrating dependency injection at all framework boundaries."""
 
 import asyncio
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 
 
 # Sample services
@@ -49,7 +49,7 @@ class MetricsService:
 
 
 # Create application
-app = Application()
+app = Whiskey()
 
 # Register services as singletons so they share state
 app.container.register(Database, scope="singleton")
@@ -143,7 +143,7 @@ async def handle_errors(error_data: dict, email: EmailService):
 
 
 # Alternative usage without @app.main decorator
-async def alt_main(app: Application):
+async def alt_main(app: Whiskey):
     """Alternative main without @inject - receives app instance."""
     print("\n🎯 Alternative main (without DI)")
     # Manual resolution needed

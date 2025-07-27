@@ -79,8 +79,7 @@ from whiskey.core.registry import Scope
 from whiskey.core.scopes import ContextVarScope, ScopeType
 from whiskey.core.types import Disposable, Initializable, Inject
 
-# Legacy alias for backward compatibility
-Application = Whiskey
+# Application class has been renamed to Whiskey
 
 __all__ = [
     # Core DI
@@ -93,7 +92,6 @@ __all__ = [
     "provide",  # Alias for component
     # Application Framework
     "Whiskey",
-    "Application",  # Legacy alias
     # Scopes
     "Scope",
     "ContextVarScope",

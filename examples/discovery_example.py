@@ -14,7 +14,7 @@ import asyncio
 from typing import Annotated, Protocol
 
 from whiskey import (
-    Application,
+    Whiskey,
     ComponentDiscoverer,
     Container,
     Inject,
@@ -317,7 +317,7 @@ async def usage_demo():
     print("==============================\n")
 
     # Create application and discover components
-    app = Application()
+    app = Whiskey()
 
     # Discover all services in this module
     components = app.discover(__name__, decorator_name="_service", auto_register=True)

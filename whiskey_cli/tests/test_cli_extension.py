@@ -2,7 +2,7 @@
 
 from click.testing import CliRunner
 
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_cli import cli_extension
 
 
@@ -11,7 +11,7 @@ class TestCLIExtension:
 
     def test_extension_adds_decorators(self):
         """Test that extension adds command and group decorators."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         # Check decorators were added
@@ -23,7 +23,7 @@ class TestCLIExtension:
 
     def test_simple_command(self):
         """Test registering a simple command."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -39,7 +39,7 @@ class TestCLIExtension:
 
     def test_command_with_arguments(self):
         """Test command with arguments."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -55,7 +55,7 @@ class TestCLIExtension:
 
     def test_command_with_injection(self):
         """Test command with dependency injection."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         class GreetingService:
@@ -79,7 +79,7 @@ class TestCLIExtension:
 
     def test_async_command(self):
         """Test async command execution."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -95,7 +95,7 @@ class TestCLIExtension:
 
     def test_command_groups(self):
         """Test command groups."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         db_group = app.group("db")
@@ -123,7 +123,7 @@ class TestCLIExtension:
 
     def test_command_in_group_decorator(self):
         """Test adding command to group via decorator."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command(group="admin")
@@ -144,7 +144,7 @@ class TestCLIExtension:
 
     def test_app_info_command(self):
         """Test built-in app-info command."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         # Register a component
@@ -161,7 +161,7 @@ class TestCLIExtension:
 
     def test_custom_command_name(self):
         """Test custom command name."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command(name="say-hello")
@@ -177,7 +177,7 @@ class TestCLIExtension:
 
     def test_run_cli_without_args(self):
         """Test run_cli shows help."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -194,7 +194,7 @@ class TestCLIExtension:
 
     def test_command_with_options(self):
         """Test command with options."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.option("--count", default=1, help="Number of greetings")
@@ -217,7 +217,7 @@ class TestCLIExtension:
 
     def test_command_with_shorthand_options(self):
         """Test command with shorthand options."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.option("-v/--verbose", is_flag=True, help="Verbose output")
@@ -250,7 +250,7 @@ class TestCLIExtension:
 
     def test_command_with_arguments_and_options(self):
         """Test command with both arguments and options."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.argument("message")
@@ -273,7 +273,7 @@ class TestCLIExtension:
 
     def test_async_command_with_injection(self):
         """Test async command with dependency injection."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         class AsyncService:
@@ -297,7 +297,7 @@ class TestCLIExtension:
 
     def test_lazy_click_group_finalization(self):
         """Test that LazyClickGroup finalizes pending commands."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         # Add a command without finalizing
@@ -320,7 +320,7 @@ class TestCLIExtension:
 
     def test_lazy_click_group_help_exit_code(self):
         """Test that LazyClickGroup returns 0 for help display."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -335,7 +335,7 @@ class TestCLIExtension:
 
     def test_command_error_handling(self):
         """Test error handling in commands."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -351,7 +351,7 @@ class TestCLIExtension:
 
     def test_injection_fallback(self):
         """Test fallback when injection fails."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         # Command that would need injection but service isn't registered
@@ -368,7 +368,7 @@ class TestCLIExtension:
 
     def test_run_cli_with_args(self):
         """Test run_cli with specific arguments."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -391,7 +391,7 @@ class TestCLIExtension:
 
     def test_run_cli_in_event_loop(self):
         """Test run_cli when already in an event loop."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -415,7 +415,7 @@ class TestCLIExtension:
 
     def test_group_creation(self):
         """Test creating command groups."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         # Create a group
@@ -436,7 +436,7 @@ class TestCLIExtension:
 
     def test_multiple_option_formats(self):
         """Test different option name formats."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.option("--verbose", is_flag=True)
@@ -461,7 +461,7 @@ class TestCLIExtension:
 
     def test_command_auto_argument_detection(self):
         """Test automatic argument detection from function signature."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -477,7 +477,7 @@ class TestCLIExtension:
 
     def test_command_with_defaults_become_options(self):
         """Test that parameters with defaults become options."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -494,7 +494,7 @@ class TestCLIExtension:
 
     def test_command_with_varargs_kwargs(self):
         """Test command with *args and **kwargs parameters."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -510,7 +510,7 @@ class TestCLIExtension:
 
     def test_command_with_inject_and_basic_types(self):
         """Test command with @inject that has basic type parameters."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         class MyService:
@@ -534,7 +534,7 @@ class TestCLIExtension:
 
     def test_option_decorator_on_non_command_function(self):
         """Test applying @app.option to a function that's not a command."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         def regular_function():
@@ -547,7 +547,7 @@ class TestCLIExtension:
 
     def test_argument_decorator_on_non_command_function(self):
         """Test applying @app.argument to a function that's not a command."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         def regular_function():
@@ -560,7 +560,7 @@ class TestCLIExtension:
 
     def test_command_with_wrapped_function_detection(self):
         """Test command with wrapped function for argument detection."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         def original_func(name: str):
@@ -587,7 +587,7 @@ class TestCLIExtension:
 
     def test_lazy_click_group_system_exit_non_help(self):
         """Test LazyClickGroup with non-help SystemExit."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -603,7 +603,7 @@ class TestCLIExtension:
 
     def test_run_cli_system_exit_handling(self):
         """Test run_cli system exit handling."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -620,7 +620,7 @@ class TestCLIExtension:
 
     def test_run_cli_exception_handling(self):
         """Test run_cli exception handling."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()
@@ -643,7 +643,7 @@ class TestCLIExtension:
 
     def test_option_list_format(self):
         """Test option with list format (multiple values)."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.option(["-v", "--verbose"], is_flag=True)
@@ -662,7 +662,7 @@ class TestCLIExtension:
 
     def test_finalize_pending_with_no_manager_attribute(self):
         """Test finalize_pending when manager doesn't have the method."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         # Create a mock manager without finalize_pending
@@ -684,7 +684,7 @@ class TestCLIExtension:
 
     def test_app_info_with_many_services(self):
         """Test app-info command with many registered services."""
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         # Register many services to test the truncation

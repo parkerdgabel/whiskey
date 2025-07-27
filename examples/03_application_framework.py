@@ -16,8 +16,8 @@ Run this example:
 import asyncio
 
 from whiskey import (
-    Application,
-    ApplicationConfig,
+    Whiskey,
+    WhiskeyConfig,
     Disposable,
     Initializable,
 )
@@ -265,14 +265,14 @@ async def main():
     print("=" * 50)
 
     # Create application with rich configuration
-    config = ApplicationConfig(
+    config = WhiskeyConfig(
         name="WhiskeyDemo",
         version="1.0.0",
         debug=True,
         description="Demonstration of Whiskey's Application framework",
     )
 
-    app = Application(config=config)
+    app = Whiskey(config=config)
 
     # Step 3a: Register Components with Metadata
     # ===========================================

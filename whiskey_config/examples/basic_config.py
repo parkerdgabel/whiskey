@@ -3,7 +3,7 @@
 import os
 from dataclasses import dataclass
 
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_config import Setting, config_extension
 
 
@@ -55,7 +55,7 @@ class AppConfig:
 
 
 # Create application
-app = Application()
+app = Whiskey()
 app.use(config_extension)
 
 # Configure with multiple sources

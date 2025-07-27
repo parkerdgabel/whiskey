@@ -42,11 +42,11 @@ pip install whiskey-asgi
 
 ```python
 <<<<<<< HEAD
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_asgi import asgi_extension
 
 # Create app with ASGI extension
-app = Application()
+app = Whiskey()
 app.use(asgi_extension)
 
 # Define your services
@@ -514,11 +514,11 @@ We welcome contributions! See the main [CONTRIBUTING.md](../CONTRIBUTING.md) for
 
 MIT License - see [LICENSE](../LICENSE) for details.
 =======
-from whiskey import Application, inject, singleton
+from whiskey import Whiskey, inject, singleton
 from whiskey_asgi import ASGIApp
 
 # Create Whiskey app with ASGI plugin
-app = Application(plugins=["whiskey-asgi"])
+app = Whiskey(plugins=["whiskey-asgi"])
 asgi = ASGIApp(app)
 
 # Define a service
@@ -553,7 +553,7 @@ This plugin follows Whiskey's philosophy of being minimal and extensible:
 
 The plugin provides:
 
-1. **ASGIApp**: The main ASGI application that wraps a Whiskey Application
+1. **ASGIApp**: The main ASGI application that wraps a Whiskey Whiskey
 2. **Request/Response**: Minimal wrappers around ASGI scope and callables
 3. **Router**: Simple path-based routing with parameter extraction
 4. **Middleware**: Composable middleware interface
