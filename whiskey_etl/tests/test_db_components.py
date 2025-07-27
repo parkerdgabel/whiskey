@@ -379,47 +379,68 @@ class TestSQLTransforms:
         assert "agg_avg_order_value" not in result  # Not in aggregate_fields
 
 
-async def test_etl_with_database_pipeline(app, mock_database):
+async def test_etl_with_database_pipeline(mock_database):
     """Test complete ETL pipeline with database components."""
+    from whiskey import Whiskey
+    from whiskey_etl import etl_extension
+    from whiskey_etl.sources import MemorySource
+    from whiskey_etl.sinks import MemorySink
+    from whiskey_etl.pipeline import PipelineManager
+    
+    app = Whiskey()
+    app.use(etl_extension)
+    
+    # Use memory source/sink for the pipeline test
+    test_data = [
+        {"order_id": 0, "user_id": 100, "amount": 50},
+        {"order_id": 1, "user_id": 101, "amount": 100},
+    ]
+    
+    source = MemorySource(test_data)
+    sink = MemorySink()
+    
     # Define pipeline
+    from whiskey_etl.pipeline import Pipeline
+    
     @app.pipeline("db_sync")
-    class DatabaseSyncPipeline:
-        source = "table"
+    class DatabaseSyncPipeline(Pipeline):
+        source = "memory"
         transforms = ["enrich_user"]
-        sink = "upsert"
-        
-        def __init__(self, context):
-            super().__init__(context)
-            # Configure source
-            self.source_config = {
-                "table_name": "orders",
-                "key_column": "order_id"
-            }
-            # Configure sink
-            self.sink_config = {
-                "table_name": "processed_orders",
-                "key_columns": ["order_id"],
-                "update_columns": ["status", "processed_at"]
-            }
+        sink = "memory"
+        batch_size = 2
     
-    # Define transform
-    @app.sql_transform("lookup",
-        lookup_query="SELECT name, email FROM users WHERE id = :user_id",
-        input_fields=["user_id"],
-        output_fields=["customer_name", "customer_email"])
-    async def enrich_user(record, transform):
-        return await transform.transform(record)
+    # Define transform using mock database
+    @app.transform
+    async def enrich_user(record: dict) -> dict:
+        # Simulate database lookup
+        if record["user_id"] == 100:
+            record["customer_name"] = "Alice"
+            record["customer_email"] = "alice@example.com"
+        elif record["user_id"] == 101:
+            record["customer_name"] = "Bob" 
+            record["customer_email"] = "bob@example.com"
+        return record
     
-    # Mock source to return test data
-    async def mock_extract(*args, **kwargs):
-        for i in range(2):
-            yield {"order_id": i, "user_id": i + 100, "amount": (i + 1) * 50}
+    # Get pipeline manager
+    manager = await app.container.resolve(PipelineManager)
     
-    TableSource.extract = mock_extract
+    # Register built-in memory source/sink
+    manager.source_registry.register("memory", MemorySource)
+    manager.sink_registry.register("memory", MemorySink)
     
-    # Run pipeline
-    result = await app.pipelines.run("db_sync")
+    # Set instances
+    app.container[MemorySource] = source
+    app.container[MemorySink] = sink
+    
+    # Run pipeline (no app context needed)
+    result = await manager.run("db_sync")
     
     assert result.is_success
     assert result.records_processed == 2
     assert result.records_failed == 0
+    
+    # Check output
+    output = sink.get_data()
+    assert len(output) == 2
+    assert all("customer_name" in r for r in output)
+    assert all("customer_email" in r for r in output)

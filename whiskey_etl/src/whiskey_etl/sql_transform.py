@@ -7,6 +7,7 @@ from typing import Any, Callable
 from whiskey_sql import SQL, Database
 
 from .errors import TransformError
+from .transforms import Transform
 
 
 class SQLTransform:
@@ -383,4 +384,109 @@ def create_sql_transform(
     transform_class = transform_classes[transform_type]
     transform = transform_class(database, **config)
 
+    return transform.transform
+
+
+# Transform function factories that follow the Transform type alias
+def create_lookup_transform(
+    database: Database,
+    lookup_query: str | SQL,
+    input_fields: list[str],
+    output_fields: list[str] | None = None,
+    on_missing: str = "keep",
+    cache_size: int = 1000,
+) -> Transform[dict[str, Any]]:
+    """Create a lookup transform function.
+
+    Args:
+        database: Database instance
+        lookup_query: SQL query with parameters matching input_fields
+        input_fields: Fields from record to use as lookup parameters
+        output_fields: Fields to add from lookup result (None = all)
+        on_missing: What to do when lookup returns no results
+        cache_size: Number of lookups to cache (0 to disable)
+
+    Returns:
+        Transform function
+    """
+    transform = LookupTransform(
+        database, lookup_query, input_fields, output_fields, on_missing, cache_size
+    )
+    return transform.transform
+
+
+def create_join_transform(
+    database: Database,
+    join_table: str,
+    join_keys: dict[str, str],
+    select_fields: list[str] | None = None,
+    join_type: str = "LEFT",
+    where: str | None = None,
+) -> Transform[dict[str, Any]]:
+    """Create a join transform function.
+
+    Args:
+        database: Database instance
+        join_table: Table to join with
+        join_keys: Mapping of record fields to table fields
+        select_fields: Fields to select from join table
+        join_type: Type of join (LEFT, INNER, RIGHT)
+        where: Additional WHERE conditions
+
+    Returns:
+        Transform function
+    """
+    transform = JoinTransform(
+        database, join_table, join_keys, select_fields, join_type, where
+    )
+    return transform.transform
+
+
+def create_validate_transform(
+    database: Database,
+    validation_query: str | SQL,
+    validation_fields: list[str],
+    on_invalid: str = "drop",
+    invalid_field: str = "_is_valid",
+) -> Transform[dict[str, Any]]:
+    """Create a validation transform function.
+
+    Args:
+        database: Database instance
+        validation_query: Query that returns a result if record is valid
+        validation_fields: Fields to use for validation
+        on_invalid: What to do with invalid records
+        invalid_field: Field to mark invalid records (for "mark" mode)
+
+    Returns:
+        Transform function
+    """
+    transform = ValidateTransform(
+        database, validation_query, validation_fields, on_invalid, invalid_field
+    )
+    return transform.transform
+
+
+def create_aggregate_transform(
+    database: Database,
+    aggregate_query: str | SQL,
+    group_by_fields: list[str],
+    aggregate_fields: list[str],
+    cache_size: int = 100,
+) -> Transform[dict[str, Any]]:
+    """Create an aggregate transform function.
+
+    Args:
+        database: Database instance
+        aggregate_query: Query that returns aggregated values
+        group_by_fields: Fields to group by
+        aggregate_fields: Names of aggregated fields to add
+        cache_size: Number of aggregations to cache
+
+    Returns:
+        Transform function
+    """
+    transform = AggregateTransform(
+        database, aggregate_query, group_by_fields, aggregate_fields, cache_size
+    )
     return transform.transform

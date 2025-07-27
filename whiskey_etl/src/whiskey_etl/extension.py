@@ -97,15 +97,8 @@ def etl_extension(
         sink_registry.register("bulk_update", BulkUpdateSink)
         sink_registry.register("sql_execute", SQLExecuteSink)
 
-        # Also register the concrete classes in the container
-        app.container[DatabaseSource] = DatabaseSource
-        app.container[TableSource] = TableSource
-        app.container[QuerySource] = QuerySource
-        app.container[SQLFileSource] = SQLFileSource
-        app.container[TableSink] = TableSink
-        app.container[UpsertSink] = UpsertSink
-        app.container[BulkUpdateSink] = BulkUpdateSink
-        app.container[SQLExecuteSink] = SQLExecuteSink
+        # Don't register the concrete classes directly - they need Database injection
+        # They will be created when needed with proper dependencies
 
     except ImportError:
         # whiskey_sql not available - database features disabled
@@ -310,12 +303,11 @@ def etl_extension(
         def decorator(func: Callable) -> Callable:
             transform_name = name or func.__name__
 
-            # Create the SQL transform factory
-            async def sql_transform_wrapper(
-                record: dict[str, Any], database: Database
-            ) -> dict[str, Any] | None:
-                from .sql_transform import create_sql_transform
-
+            # Create the SQL transform wrapper that will get database injected
+            from .sql_transform import create_sql_transform
+            
+            async def sql_transform_wrapper(record: dict[str, Any], database: Database) -> dict[str, Any] | None:
+                # Create transform with injected database
                 transform_func = create_sql_transform(transform_type, database, **config)
                 return await transform_func(record)
 

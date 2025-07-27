@@ -12,7 +12,11 @@ from whiskey_etl.sql_transform import (
     LookupTransform,
     SQLTransform,
     ValidateTransform,
+    create_aggregate_transform,
+    create_join_transform,
+    create_lookup_transform,
     create_sql_transform,
+    create_validate_transform,
 )
 
 __version__ = "0.1.0"
@@ -43,4 +47,8 @@ __all__ = [
     "ValidateTransform",
     "AggregateTransform",
     "create_sql_transform",
+    "create_lookup_transform",
+    "create_join_transform",
+    "create_validate_transform",
+    "create_aggregate_transform",
 ]
