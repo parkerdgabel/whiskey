@@ -54,19 +54,19 @@ def auth_extension(app: Whiskey) -> None:
     registry = ProviderRegistry()
     app.container[ProviderRegistry] = registry
 
-    # Register auth context as scoped
-    app.container.scoped(AuthContext)
+    # Register auth context as transient - it will be managed by middleware/tests
+    app.container.register(AuthContext, AuthContext)
 
-    # Add extension methods
-    app.user_model = lambda cls: _register_user_model(app, cls)
-    app.auth_provider = lambda name=None: _create_auth_provider_decorator(app, registry, name)
-    app.permissions = lambda cls: _register_permissions(app, cls)
-    app.role = lambda name: _create_role_decorator(app, name)
+    # Add extension methods using add_decorator
+    app.add_decorator("user_model", lambda cls: _register_user_model(app, cls))
+    app.add_decorator("auth_provider", lambda name=None: _create_auth_provider_decorator(app, registry, name))
+    app.add_decorator("permissions", lambda cls: _register_permissions(app, cls))
+    app.add_decorator("role", lambda name: _create_role_decorator(app, name))
 
     # Add auth decorators
-    app.requires_auth = requires_auth
-    app.requires_permission = requires_permission
-    app.requires_role = requires_role
+    app.add_decorator("requires_auth", requires_auth)
+    app.add_decorator("requires_permission", requires_permission)
+    app.add_decorator("requires_role", requires_role)
 
     # Add CurrentUser resolver
     _register_current_user_resolver(app)
@@ -75,10 +75,13 @@ def auth_extension(app: Whiskey) -> None:
     @app.on_startup
     async def setup_auth_middleware():
         """Setup authentication middleware."""
-        if hasattr(app, "_middleware_stack"):
+        if hasattr(app, "asgi_manager"):
             # Add auth middleware if ASGI extension is present
             auth_middleware = await app.container.resolve(AuthenticationMiddleware)
-            app._middleware_stack.append(auth_middleware)
+            # Register middleware with ASGI manager
+            from whiskey_asgi.extension import MiddlewareMetadata
+            metadata = MiddlewareMetadata(func=auth_middleware.middleware, name="auth", priority=100)
+            app.asgi_manager.add_middleware(metadata)
 
 
 def _register_user_model(app: Whiskey, cls: type[T]) -> type[T]:
@@ -159,8 +162,12 @@ def _register_permissions(app: Whiskey, cls: type) -> type:
             elif isinstance(value, Permission):
                 permissions[name] = value
 
-    # Store permissions
-    app.container["__auth_permissions__"] = permissions
+    # Store permissions in container
+    existing_perms = {}
+    if "__auth_permissions__" in app.container:
+        existing_perms = app.container["__auth_permissions__"]
+    existing_perms.update(permissions)
+    app.container["__auth_permissions__"] = existing_perms
 
     # Make permissions available on class
     for name, perm in permissions.items():
@@ -197,10 +204,12 @@ def _create_role_decorator(app: Whiskey, name: str) -> Callable[[type], type]:
         # Create Role instance
         role = Role(name=name, permissions=permissions, inherits=inherits, description=description)
 
-        # Store role
-        roles = app.container.get("__auth_roles__", {})
-        roles[name] = role
-        app.container["__auth_roles__"] = roles
+        # Store role in container
+        existing_roles = {}
+        if "__auth_roles__" in app.container:
+            existing_roles = app.container["__auth_roles__"]
+        existing_roles[name] = role
+        app.container["__auth_roles__"] = existing_roles
 
         return cls
 
@@ -212,20 +221,30 @@ def _register_current_user_resolver(app: Whiskey) -> None:
 
     This allows CurrentUser to be injected into functions and classes.
     """
-
-    async def resolve_current_user(container: Container) -> User | None:
-        """Resolve current user from auth context."""
+    # Register a factory for CurrentUser that pulls from AuthContext
+    async def current_user_factory() -> User | None:
+        """Factory for CurrentUser injection."""
         try:
-            auth_context = await container.resolve(AuthContext)
+            auth_context = await app.container.resolve(AuthContext)
             return auth_context.user if auth_context.is_authenticated else None
         except Exception:
             return None
 
-    # Register resolver for CurrentUser type and its variations
-    app.container._resolvers[CurrentUser] = resolve_current_user
-    app.container._resolvers[User] = resolve_current_user
+    app.factory(CurrentUser, current_user_factory)
 
-    # Also handle Optional[CurrentUser] and similar
+    # Also register for User type if not already registered
+    if User not in app.container:
+        async def user_factory() -> User | None:
+            """Factory for User injection."""
+            try:
+                auth_context = await app.container.resolve(AuthContext)
+                return auth_context.user if auth_context.is_authenticated else None
+            except Exception:
+                return None
+        
+        app.factory(User, user_factory)
+
+    # Store type checker for middleware to use
     def is_current_user_type(tp: type) -> bool:
         """Check if type is CurrentUser or related."""
         if tp is CurrentUser or tp is User:
@@ -239,5 +258,4 @@ def _register_current_user_resolver(app: Whiskey) -> None:
 
         return False
 
-    # Store type checker for middleware to use
     app.container["__auth_current_user_checker__"] = is_current_user_type

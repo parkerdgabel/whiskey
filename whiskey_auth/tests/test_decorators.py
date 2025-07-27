@@ -30,9 +30,9 @@ class TestDecorators:
         return app
 
     @pytest.fixture
-    def client(self):
+    def client(self, app):
         """Create test client."""
-        return AuthTestClient()
+        return AuthTestClient(app)
 
     @pytest.fixture
     def users(self):
@@ -145,9 +145,11 @@ class TestDecorators:
 
         # Writer has read and write but not delete
         client.authenticate_as(users["writer"])
-        with pytest.raises(AuthorizationError) as exc:
+        from whiskey.core.errors import ResolutionError
+        with pytest.raises(ResolutionError) as exc:
             await client.call(full_access_func)
         assert "lacks required permissions: delete" in str(exc.value)
+        assert isinstance(exc.value.__cause__, AuthorizationError)
 
         # Admin has all permissions
         client.authenticate_as(users["admin"])
@@ -165,18 +167,22 @@ class TestDecorators:
             return f"Strict access for {user.username}"
 
         # Not authenticated
-        with pytest.raises(AuthenticationError):
+        from whiskey.core.errors import ResolutionError
+        with pytest.raises(ResolutionError) as exc:
             await client.call(strict_func)
+        assert isinstance(exc.value.__cause__, AuthenticationError)
 
         # Authenticated but no permissions/roles
         client.authenticate_as(users["basic"])
-        with pytest.raises(AuthorizationError):
+        with pytest.raises(ResolutionError) as exc:
             await client.call(strict_func)
+        assert isinstance(exc.value.__cause__, AuthorizationError)
 
         # Has permission but not role
         client.authenticate_as(users["reader"]).with_permissions("write")
-        with pytest.raises(AuthorizationError):
+        with pytest.raises(ResolutionError) as exc:
             await client.call(strict_func)
+        assert isinstance(exc.value.__cause__, AuthorizationError)
 
         # Has everything
         client.authenticate_as(users["writer"])
@@ -191,16 +197,15 @@ class TestDecorators:
         def sync_protected(user: CurrentUser) -> str:
             return f"Sync: {user.username}"
 
-        # Sync functions need special handling in tests
-        # In real apps, the framework handles this
+        # Test without auth
+        from whiskey.core.errors import ResolutionError
+        with pytest.raises(ResolutionError) as exc:
+            client.call_sync(sync_protected)
+        assert isinstance(exc.value.__cause__, AuthenticationError)
+        
+        # Test with auth
         client.authenticate_as(users["basic"])
-
-        # For testing sync functions, we need to handle differently
-        from whiskey_auth.core import AuthContext
-
-        auth_context = AuthContext(user=users["basic"])
-
-        result = sync_protected(__auth_context__=auth_context)
+        result = client.call_sync(sync_protected)
         assert result == "Sync: basic"
 
     @pytest.mark.asyncio

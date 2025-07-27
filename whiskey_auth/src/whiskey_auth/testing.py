@@ -204,12 +204,66 @@ class AuthTestClient:
         Returns:
             Function result
         """
-        # Inject auth context
-        if self._auth_context:
-            kwargs["__auth_context__"] = self._auth_context
+        # Create a temporary container with the auth context
+        if self.app and self._auth_context:
+            # Store auth context in the app's container for the call
+            original_auth = None
+            if AuthContext in self.app.container:
+                original_auth = self.app.container[AuthContext]
+            
+            self.app.container[AuthContext] = self._auth_context
+            
+            try:
+                # Use the container as context manager to set it as current
+                async with self.app.container:
+                    # Call function through the app's container to enable DI
+                    result = await self.app.container.call(func, *args, **kwargs)
+                    return result
+            finally:
+                # Restore original auth context
+                if original_auth:
+                    self.app.container[AuthContext] = original_auth
+                elif AuthContext in self.app.container:
+                    del self.app.container[AuthContext]
+        else:
+            # Call directly if no app or auth context
+            return await func(*args, **kwargs)
+    
+    def call_sync(self, func, *args, **kwargs):
+        """Call a sync function with the current auth context.
 
-        # Call function
-        return await func(*args, **kwargs)
+        Args:
+            func: Function to call
+            *args: Positional arguments
+            **kwargs: Keyword arguments
+
+        Returns:
+            Function result
+        """
+        # Create a temporary container with the auth context
+        if self.app and self._auth_context:
+            # Store auth context in the app's container for the call
+            original_auth = None
+            if AuthContext in self.app.container:
+                original_auth = self.app.container[AuthContext]
+            
+            self.app.container[AuthContext] = self._auth_context
+            
+            try:
+                # Use the container as context manager to set it as current
+                with self.app.container:
+                    # Call function through the app's container to enable DI
+                    result = self.app.container.call_sync(func, *args, **kwargs)
+                    return result
+            finally:
+                # Restore original auth context
+                if original_auth:
+                    self.app.container[AuthContext] = original_auth
+                elif AuthContext in self.app.container:
+                    del self.app.container[AuthContext]
+        else:
+            # Call directly if no app or auth context
+            return func(*args, **kwargs)
 
 
 class AuthTestContainer(Container):
@@ -232,18 +286,19 @@ class AuthTestContainer(Container):
             self._test_auth_context = AuthContext(
                 user=user, provider="test", authenticated_at=datetime.now()
             )
+            # Register the test auth context
+            self[AuthContext] = self._test_auth_context
         else:
             self._test_auth_context = None
+            if AuthContext in self:
+                del self[AuthContext]
 
     async def resolve(self, type_hint: type[T], **kwargs) -> T:
         """Resolve with test user support."""
         # Handle CurrentUser/User types
-        if type_hint.__name__ in ("CurrentUser", "User"):
+        from whiskey_auth.core import CurrentUser
+        if type_hint is CurrentUser or (hasattr(type_hint, "__name__") and type_hint.__name__ in ("CurrentUser", "User")):
             return self._test_user
-
-        # Handle AuthContext
-        if type_hint is AuthContext and self._test_auth_context:
-            return self._test_auth_context
 
         # Default resolution
         return await super().resolve(type_hint, **kwargs)
