@@ -17,7 +17,21 @@ A declarative ETL (Extract, Transform, Load) extension for the Whiskey dependenc
 ## Installation
 
 ```bash
+# Basic installation
 pip install whiskey-etl
+
+# With object store support
+pip install whiskey-etl[s3]          # AWS S3 support
+pip install whiskey-etl[azure]       # Azure Blob Storage support
+pip install whiskey-etl[gcs]         # Google Cloud Storage support
+pip install whiskey-etl[cloud]       # All cloud storage providers
+
+# With additional features
+pip install whiskey-etl[parquet]     # Parquet file format support
+pip install whiskey-etl[compression] # Snappy compression support
+
+# Full installation
+pip install whiskey-etl[cloud,parquet,compression]
 ```
 
 ## Quick Start
