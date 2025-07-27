@@ -33,11 +33,11 @@ pip install whiskey-cli
 ## Quick Start
 
 ```python
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_cli import cli_extension
 
 # Create app with CLI extension
-app = Application()
+app = Whiskey()
 app.use(cli_extension)
 
 <<<<<<< HEAD
@@ -221,7 +221,7 @@ async def setup(
     config = {}
     
     config['app_name'] = await prompt.text(
-        "Application name:",
+        "Whiskey name:",
         default="MyApp"
     )
     
@@ -380,7 +380,7 @@ Extend your CLI with plugin commands:
 
 ```python
 # In your plugin
-def register_commands(app: Application):
+def register_commands(app: Whiskey):
     """Register plugin commands."""
     
     plugin_group = app.group("myplugin", help="My plugin commands")
@@ -687,7 +687,7 @@ async def fetch_data():
     print("Data fetched!")
 ```
 
-### Application Lifespan
+### Whiskey Lifespan
 
 Commands run within the application's lifespan, ensuring proper initialization:
 
@@ -741,9 +741,9 @@ See the [examples directory](examples/) for complete examples including:
 - `simple_cli.py` - Basic CLI with dependency injection
 - `cli_example.py` - Full-featured todo list CLI application
 
-## Integration with Application
+## Integration with Whiskey
 
-The CLI extension integrates seamlessly with Whiskey's Application class:
+The CLI extension integrates seamlessly with Whiskey's Whiskey class:
 
 ```python
 # If no main function is provided, app.run() runs the CLI

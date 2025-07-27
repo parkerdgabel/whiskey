@@ -804,6 +804,29 @@ class Whiskey:
         """Resolve a component asynchronously."""
         return await self.container.resolve(key, **kwargs)
 
+    def scope(self, scope_name: str):
+        """Create a context manager for a named scope.
+
+        This method creates a scope boundary within which all scoped components
+        will share the same instance. When the scope exits, all instances are
+        properly disposed.
+
+        Args:
+            scope_name: The name of the scope (e.g., "request", "session")
+
+        Returns:
+            A context manager that activates/deactivates the scope
+
+        Examples:
+            >>> async with app.scope("request"):
+            ...     # All request-scoped services share instances here
+            ...     service1 = await app.resolve_async(RequestService)
+            ...     service2 = await app.resolve_async(RequestService)
+            ...     assert service1 is service2
+            ... # Instances are disposed when scope exits
+        """
+        return self.container.scope(scope_name)
+
     def configure(self, config_func: Callable[[Whiskey], None]) -> Whiskey:
         """Apply a configuration function to this application."""
         config_func(self)

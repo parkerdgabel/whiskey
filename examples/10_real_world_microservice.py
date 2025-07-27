@@ -23,8 +23,8 @@ from datetime import datetime
 from typing import Annotated, Protocol
 
 from whiskey import (
-    Application,
-    ApplicationConfig,
+    Whiskey,
+    WhiskeyConfig,
     Container,
     Disposable,
     Initializable,
@@ -579,7 +579,7 @@ def setup_environment(scenario: str):
         # No Redis, no messaging
 
 
-async def create_order_processing_microservice(scenario: str) -> Application:
+async def create_order_processing_microservice(scenario: str) -> Whiskey:
     """Create and configure the order processing microservice."""
 
     print(f"\n{'=' * 60}")
@@ -596,8 +596,8 @@ async def create_order_processing_microservice(scenario: str) -> Application:
         print(f"  {var}: {value}")
 
     # Create application
-    app = Application(
-        ApplicationConfig(
+    app = Whiskey(
+        WhiskeyConfig(
             name="OrderProcessingService",
             version="2.0.0",
             description=f"Order processing microservice ({scenario} environment)",

@@ -2,7 +2,7 @@
 
 import asyncio
 
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_asgi import WebSocket, asgi_extension
 
 
@@ -55,7 +55,7 @@ class ChatService:
 
 
 # Create app with ASGI extension
-app = Application()
+app = Whiskey()
 app.use(asgi_extension)
 
 # Register service as singleton

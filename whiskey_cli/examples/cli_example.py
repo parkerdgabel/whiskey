@@ -3,7 +3,7 @@
 import asyncio
 from typing import Optional
 
-from whiskey import Application, inject, singleton
+from whiskey import Whiskey, inject, singleton
 from whiskey_cli import cli_extension
 
 
@@ -75,7 +75,7 @@ class ConfigService:
 
 
 # Create the application
-app = Application()
+app = Whiskey()
 app.use(cli_extension)
 
 # Register services

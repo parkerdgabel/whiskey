@@ -15,7 +15,7 @@ Run this example:
 import asyncio
 from typing import Annotated
 
-from whiskey import ApplicationConfig, Inject, inject
+from whiskey import WhiskeyConfig, Inject, inject, Whiskey
 
 # Step 1: Core Services for Event-Driven Architecture
 # ====================================================
@@ -269,7 +269,7 @@ async def main():
     print("=" * 55)
 
     # Create application
-    app = Application(ApplicationConfig(name="EventDrivenApp", version="1.0.0", debug=True))
+    app = Whiskey(WhiskeyConfig(name="EventDrivenApp", version="1.0.0", debug=True))
 
     # Register services
     app.component(EventStore)

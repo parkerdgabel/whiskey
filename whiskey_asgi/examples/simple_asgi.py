@@ -1,6 +1,6 @@
 """Simple ASGI example showing the new API."""
 
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_asgi import Request, asgi_extension
 
 
@@ -17,7 +17,7 @@ class GreetingService:
 
 
 # Create app with ASGI extension
-app = Application()
+app = Whiskey()
 app.use(asgi_extension)
 
 # Register service

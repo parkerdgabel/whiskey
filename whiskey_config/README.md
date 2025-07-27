@@ -30,11 +30,11 @@ pip install whiskey-config[all]    # All formats
 
 ```python
 from dataclasses import dataclass
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_config import config_extension, Setting
 
 # Create app with config extension
-app = Application()
+app = Whiskey()
 app.use(config_extension)
 
 # Define your configuration schema
@@ -194,7 +194,7 @@ export MYAPP_FEATURES='{"auth": true, "api_v2": false}'
 
 ```python
 @app.component
-class Application:
+class Whiskey:
     def __init__(self, config: Annotated[AppConfig, Inject()]):
         self.config = config
         self.debug = config.debug
@@ -551,7 +551,7 @@ config = {
 # ✅ Good - clear precedence
 sources = [
     "config/defaults.yaml",    # 1. Built-in defaults
-    "config/app.yaml",         # 2. Application config  
+    "config/app.yaml",         # 2. Whiskey config  
     "/etc/myapp/config.yaml",  # 3. System config
     "~/.myapp/config.yaml",    # 4. User config
     ".myapp.yaml",             # 5. Project config

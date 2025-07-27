@@ -19,9 +19,9 @@ This directory contains comprehensive examples demonstrating all of Whiskey's de
    - Service lifecycle management (`Initializable`, `Disposable`)
    - Resource cleanup and disposal patterns
 
-3. **[03_application_framework.py](03_application_framework.py)** - Rich Application Framework
+3. **[03_application_framework.py](03_application_framework.py)** - Rich Whiskey Framework
    - Component registration with metadata
-   - Application lifecycle phases and hooks
+   - Whiskey lifecycle phases and hooks
    - Event system with wildcard patterns
    - Background tasks and health checking
    - Error handling and monitoring
@@ -125,7 +125,7 @@ python examples/10_real_world_microservice.py
 - **Conditional Registration**: Environment-aware service selection
 - **Lazy Resolution**: On-demand dependency initialization
 
-### Application Architecture Patterns
+### Whiskey Architecture Patterns
 - **Hexagonal Architecture**: Clean separation of concerns
 - **Event-Driven Architecture**: Loose coupling through events
 - **Domain-Driven Design**: Business logic encapsulation
@@ -155,7 +155,7 @@ After exploring these examples:
 
 1. **Read the Documentation**: Check the main README.md for detailed API reference
 2. **Explore Extensions**: Look for Whiskey extensions (whiskey-asgi, whiskey-cli, etc.)
-3. **Build Your Application**: Apply these patterns to your own projects
+3. **Build Your Whiskey**: Apply these patterns to your own projects
 4. **Contribute**: Share your patterns and improvements with the community
 
 ## Need Help?

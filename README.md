@@ -209,7 +209,7 @@ print(inspector.can_resolve(UserService))     # Check before resolving
 print(inspector.resolution_report(Service))   # Detailed analysis
 ```
 
-### 5. Application Class (Whiskey)
+### 5. Whiskey Class (Whiskey)
 
 For full-featured applications with lifecycle management:
 
@@ -236,7 +236,7 @@ async def configure():
 
 @app.on_ready
 async def ready():
-    print("Application ready!")
+    print("Whiskey ready!")
 
 # Event-driven
 @app.on("user.created")
@@ -859,7 +859,7 @@ whiskey/
 │   │   ├── decorators.py   # @inject, @singleton, etc.
 │   │   ├── discovery.py    # Component discovery
 │   │   ├── scopes.py       # Scope management
-│   │   └── application.py  # Rich Application class
+│   │   └── application.py  # Rich Whiskey class
 │   └── __init__.py
 ├── whiskey_ai/         # AI/LLM extension
 ├── whiskey_asgi/       # Web framework extension

@@ -31,11 +31,11 @@ pip install whiskey-ai
 ## Quick Start
 
 ```python
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_ai import ai_extension
 
 # Create app with AI extension
-app = Application()
+app = Whiskey()
 app.use(ai_extension)
 
 # Configure your LLM
@@ -98,10 +98,10 @@ pip install whiskey[ai]
 ## Quick Start
 
 ```python
-from whiskey import Application
+from whiskey import Whiskey
 from whiskey_ai import AIContext, ChatCompletionModel, Message
 
-app = Application()
+app = Whiskey()
 
 @app.service
 class MyAIService:

@@ -2,7 +2,7 @@
 
 import asyncio
 from typing import Dict
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 
 
 # Mock services
@@ -48,7 +48,7 @@ class AuditLogger:
 
 
 # Create application
-app = Application()
+app = Whiskey()
 
 # Register services
 app.container.register(Database, scope="singleton")

@@ -1,6 +1,6 @@
 """Simple CLI example showing the basics."""
 
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_cli import cli_extension
 
 
@@ -16,7 +16,7 @@ class GreetingService:
 
 
 # Create app with CLI extension
-app = Application()
+app = Whiskey()
 app.use(cli_extension)
 
 # Register service

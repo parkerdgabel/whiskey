@@ -200,12 +200,10 @@ class WebSocket:
 
     async def accept(self, subprotocol: str | None = None) -> None:
         """Accept the WebSocket connection."""
-        await self._send(
-            {
-                "type": "websocket.accept",
-                "subprotocol": subprotocol or "",
-            }
-        )
+        message = {"type": "websocket.accept"}
+        if subprotocol:
+            message["subprotocol"] = subprotocol
+        await self._send(message)
         self._accepted = True
 
     async def send(self, data: str | bytes) -> None:
@@ -373,7 +371,7 @@ class ASGIHandler:
         request.route_params = params
 
         # Create request-scoped container
-        async with self.app.container.scope("request"):
+        async with self.app.scope("request"):
             # Register request in container
             self.app.container[Request] = request
 
@@ -388,7 +386,7 @@ class ASGIHandler:
                 # Execute handler with DI
                 if hasattr(handler, "__wrapped__") or asyncio.iscoroutinefunction(handler):
                     # Has @inject or is async
-                    result = await self.app.container.resolve(handler, **params)
+                    result = await self.app.container.call(handler, **params)
                 else:
                     # Sync function without @inject
                     result = handler(**params)
@@ -422,8 +420,8 @@ class ASGIHandler:
         websocket = WebSocket(scope, receive, send)
         websocket.route_params = params
 
-        # Create request-scoped container
-        async with self.app.container.scope("request"):
+        # Create request-scoped container for WebSocket
+        async with self.app.scope("request"):
             # Register WebSocket in container
             self.app.container[WebSocket] = websocket
 
@@ -432,7 +430,7 @@ class ASGIHandler:
                 if hasattr(handler.func, "__wrapped__") or asyncio.iscoroutinefunction(
                     handler.func
                 ):
-                    await self.app.container.resolve(handler.func, websocket=websocket, **params)
+                    await self.app.container.call(handler.func, websocket=websocket, **params)
                 else:
                     handler.func(websocket=websocket, **params)
             except Exception as exc:
@@ -456,11 +454,11 @@ class ASGIHandler:
             # Create call_next function
             async def call_next(request: Request):
                 # Execute the next handler
-                return await self.app.container.resolve(next_handler, **kwargs)
+                return await self.app.container.call(next_handler, **kwargs)
 
             # Execute middleware with DI
             if hasattr(middleware, "__wrapped__") or asyncio.iscoroutinefunction(middleware):
-                return await self.app.container.resolve(middleware, call_next=call_next, **kwargs)
+                return await self.app.container.call(middleware, call_next=call_next, **kwargs)
             else:
                 return middleware(call_next=call_next, **kwargs)
 
@@ -551,7 +549,7 @@ def asgi_extension(app: Whiskey) -> None:
     - ASGI 3.0 compliance
 
     Example:
-        app = Application()
+        app = Whiskey()
         app.use(asgi_extension)
 
         @app.get("/")
@@ -574,23 +572,8 @@ def asgi_extension(app: Whiskey) -> None:
     app.asgi_manager = manager
     app.asgi = manager.create_asgi_handler()
 
-    # Add request and session scopes to container
-    from whiskey.core.scopes import ContextVarScope
-
-    class RequestScope(ContextVarScope):
-        """Scope for HTTP requests - isolated per async context."""
-
-        def __init__(self):
-            super().__init__("request")
-
-    class SessionScope(ContextVarScope):
-        """Scope for HTTP sessions - isolated per async context."""
-
-        def __init__(self):
-            super().__init__("session")
-
-    app.add_scope("request", RequestScope)
-    app.add_scope("session", SessionScope)
+    # Request and session scopes are now properly managed using the container's scope() method
+    # Components registered as @scoped(scope_name="request") will share instances within each request
 
     # Create route decorators
     def create_route_decorator(methods: list[str]):

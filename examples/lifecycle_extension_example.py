@@ -2,7 +2,7 @@
 
 import asyncio
 import random
-from whiskey import Application, Initializable, Disposable
+from whiskey import Whiskey, Initializable, Disposable
 from whiskey.extensions import lifecycle_extension
 
 
@@ -121,7 +121,7 @@ class MetricsCollector:
 
 async def main():
     # Create app with lifecycle extension
-    app = Application()
+    app = Whiskey()
     app.use(lifecycle_extension)
     
     # Register components with metadata and retry policies

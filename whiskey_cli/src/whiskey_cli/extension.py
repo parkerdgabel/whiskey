@@ -203,7 +203,7 @@ def cli_extension(app: Whiskey) -> None:
     - app.run_cli() to run the CLI
 
     Example:
-        app = Application()
+        app = Whiskey()
         app.use(cli_extension)
 
         @app.command()

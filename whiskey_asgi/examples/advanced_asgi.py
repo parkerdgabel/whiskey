@@ -4,7 +4,7 @@ import json
 import time
 from typing import Optional
 
-from whiskey import Application, inject
+from whiskey import Whiskey, inject
 from whiskey_asgi import Request, asgi_extension
 
 
@@ -50,7 +50,7 @@ class UserService:
 
 
 # Create app
-app = Application()
+app = Whiskey()
 app.use(asgi_extension)
 
 # Register services

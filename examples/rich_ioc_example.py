@@ -1,7 +1,7 @@
 """Example demonstrating rich IoC features."""
 
 import asyncio
-from whiskey import Application, Initializable, Disposable
+from whiskey import Whiskey, Initializable, Disposable
 
 
 # Components with metadata and lifecycle
@@ -58,7 +58,7 @@ class EmailService:
 
 
 # Extension that adds monitoring
-def monitoring_extension(app: Application) -> None:
+def monitoring_extension(app: Whiskey) -> None:
     """Add monitoring capabilities to the application."""
     
     # Add custom lifecycle phase
@@ -101,7 +101,7 @@ def monitoring_extension(app: Application) -> None:
 
 async def main():
     # Create application with extension
-    app = Application()
+    app = Whiskey()
     app.extend(monitoring_extension)
     
     # Register components with metadata

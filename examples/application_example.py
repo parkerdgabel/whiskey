@@ -16,7 +16,7 @@ Run this example:
 import asyncio
 from typing import Annotated
 
-from whiskey import Application, Disposable, Initializable, Inject, inject
+from whiskey import Whiskey, Disposable, Initializable, Inject, inject
 
 # Step 1: Define services with lifecycle hooks
         if not self.connected:
