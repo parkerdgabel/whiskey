@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Type
 
-from whiskey import Component, Container, Scope
+from whiskey import component, Container
 from whiskey import Whiskey
 
 from whiskey_ml.core.dataset import Dataset, FileDataset
@@ -18,6 +18,8 @@ from whiskey_ml.core.metrics import (
 )
 from whiskey_ml.core.model import Model
 from whiskey_ml.core.pipeline import MLContext, MLPipeline
+# ML-specific scopes are managed using Whiskey's built-in scope system
+# No need for custom scope classes - use app.container.scope("scope_name")
 from whiskey_ml.core.trainer import Trainer
 from whiskey_ml.integrations.base import ExtensionIntegration
 
@@ -79,13 +81,13 @@ class MLExtension:
             app: Whiskey instance
         """
         # Register default implementations
-        app.container.register(Dataset, FileDataset, scope=Scope.TRANSIENT)
+        app.container.register(Dataset, FileDataset)
         
         # Register metrics
-        app.container.register("accuracy", Accuracy, scope=Scope.TRANSIENT)
-        app.container.register("f1", F1Score, scope=Scope.TRANSIENT)
-        app.container.register("loss", Loss, scope=Scope.TRANSIENT)
-        app.container.register("mse", MeanSquaredError, scope=Scope.TRANSIENT)
+        app.container.register("accuracy", Accuracy)
+        app.container.register("f1", F1Score)
+        app.container.register("loss", Loss)
+        app.container.register("mse", MeanSquaredError)
         
         # Register default trainer (framework-specific adapters will override)
         @app.component
@@ -117,7 +119,7 @@ class MLExtension:
                 # Same as training but without gradient updates
                 return await self.train_step(batch, step)
         
-        app.container.register("default", DefaultTrainer, scope=Scope.TRANSIENT)
+        app.container.register("default", DefaultTrainer)
     
     def _create_pipeline_decorator(self, app: Whiskey) -> Callable:
         """Create ML pipeline decorator.
@@ -136,7 +138,7 @@ class MLExtension:
                 
                 # Register pipeline
                 self._pipelines[name] = cls
-                app.container.register(name, cls, scope=Scope.TRANSIENT)
+                app.container.register(name, cls)
                 
                 # Register as component
                 return app.component(cls)
@@ -158,7 +160,7 @@ class MLExtension:
             def decorator(cls: Type[Dataset]) -> Type[Dataset]:
                 # Register dataset
                 self._datasets[name] = cls
-                app.container.register(name, cls, scope=Scope.TRANSIENT)
+                app.container.register(name, cls)
                 
                 return app.component(cls)
             
@@ -179,7 +181,7 @@ class MLExtension:
             def decorator(cls: Type[Model]) -> Type[Model]:
                 # Register model
                 self._models[name] = cls
-                app.container.register(name, cls, scope=Scope.TRANSIENT)
+                app.container.register(name, cls)
                 
                 return app.component(cls)
             
@@ -200,7 +202,7 @@ class MLExtension:
             def decorator(cls: Type[Trainer]) -> Type[Trainer]:
                 # Register trainer
                 self._trainers[name] = cls
-                app.container.register(name, cls, scope=Scope.TRANSIENT)
+                app.container.register(name, cls)
                 
                 return app.component(cls)
             
@@ -221,7 +223,7 @@ class MLExtension:
             def decorator(cls: Type[Metric]) -> Type[Metric]:
                 # Register metric
                 self._metrics[name] = cls
-                app.container.register(name, cls, scope=Scope.TRANSIENT)
+                app.container.register(name, cls)
                 
                 return app.component(cls)
             

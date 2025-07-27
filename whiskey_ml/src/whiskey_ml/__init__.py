@@ -4,9 +4,24 @@ from whiskey_ml.core.dataset import Dataset, DataLoader, DatasetConfig
 from whiskey_ml.core.metrics import Metric, MetricCollection, MetricResult
 from whiskey_ml.core.model import Model, ModelConfig, ModelOutput
 from whiskey_ml.core.pipeline import MLPipeline, PipelineConfig, PipelineState
+# ML scopes are managed using Whiskey's built-in scope system
+# Use app.container.scope("scope_name") context managers
 from whiskey_ml.core.trainer import Trainer, TrainerConfig, TrainingResult
 from whiskey_ml.extension import ml_extension
 from whiskey_ml.integrations.base import MLContext
+
+# Optional visualization imports
+try:
+    from whiskey_ml.visualization import (
+        MetricsTracker,
+        ConsoleMetricsHandler,
+        ProgressTracker,
+        RichProgressHandler,
+        TensorBoardHandler,
+    )
+    _has_visualization = True
+except ImportError:
+    _has_visualization = False
 
 __version__ = "0.1.0"
 
@@ -30,4 +45,16 @@ __all__ = [
     "Metric",
     "MetricCollection",
     "MetricResult",
+    # Note: ML scopes use Whiskey's built-in scope system
+    # Use app.container.scope("experiment"), app.container.scope("training"), etc.
 ]
+
+# Add visualization exports if available
+if _has_visualization:
+    __all__.extend([
+        "MetricsTracker",
+        "ConsoleMetricsHandler",
+        "ProgressTracker",
+        "RichProgressHandler",
+        "TensorBoardHandler",
+    ])

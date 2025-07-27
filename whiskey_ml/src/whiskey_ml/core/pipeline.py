@@ -40,11 +40,11 @@ class PipelineConfig:
     description: str = ""
     
     # Data configuration
-    dataset: str | Dataset
+    dataset: str | Dataset | None = None
     dataset_config: DatasetConfig = field(default_factory=DatasetConfig)
     
     # Model configuration
-    model: str | Model
+    model: str | Model | None = None
     model_config: ModelConfig = field(default_factory=ModelConfig)
     
     # Training configuration
@@ -135,70 +135,10 @@ class MLPipeline:
         try:
             await self.on_start()
             
-            # Emit pipeline started
-            if hasattr(self.context, "app"):
-                await self.context.app.emit("ml.pipeline.started", {
-                    "name": self.config.name,
-                    "state": self.state.value,
-                    "config": {
-                        "model": str(self.config.model),
-                        "dataset": str(self.config.dataset),
-                        "epochs": self.config.trainer_config.epochs,
-                        "batch_size": self.config.dataset_config.batch_size
-                    }
-                })
-            
-            # Load data
-            self.state = PipelineState.LOADING_DATA
-            await self._emit_state_change()
-            await self._load_data()
-            
-            # Preprocessing
-            if self.preprocessing:
-                self.state = PipelineState.PREPROCESSING
-                await self._emit_state_change()
-                await self._preprocess_data()
-            
-            # Initialize model
-            await self._initialize_model()
-            
-            # Initialize trainer
-            await self._initialize_trainer()
-            
-            # Training
-            self.state = PipelineState.TRAINING
-            await self._emit_state_change()
-            result = await self._train()
-            
-            # Evaluation
-            self.state = PipelineState.EVALUATING
-            await self._emit_state_change()
-            await self._evaluate(result)
-            
-            # Save model
-            self.state = PipelineState.SAVING
-            await self._emit_state_change()
-            await self._save_model()
-            
-            self.state = PipelineState.COMPLETED
-            await self._emit_state_change()
-            
-            # Emit pipeline completed
-            if hasattr(self.context, "app"):
-                await self.context.app.emit("ml.pipeline.completed", {
-                    "name": self.config.name,
-                    "result": {
-                        "epochs_trained": result.epochs_trained,
-                        "training_time": result.training_time,
-                        "final_metrics": result.training_history[-1] if result.training_history else {},
-                        "test_metrics": result.test_metrics
-                    }
-                })
-            
-            await self.on_complete(result)
-            
-            return result
-            
+            # Run entire pipeline within experiment scope using app.container.scope()
+            async with self.container.scope("experiment"):
+                return await self._run_with_scopes()
+                
         except Exception as e:
             self.state = PipelineState.FAILED
             await self._emit_state_change()
@@ -213,6 +153,139 @@ class MLPipeline:
             
             await self.on_error(e)
             raise
+    
+    async def _run_with_scopes(self) -> TrainingResult:
+        """Run pipeline with ML scopes for proper resource management."""
+        # Emit pipeline started
+        if hasattr(self.context, "app"):
+            await self.context.app.emit("ml.pipeline.started", {
+                "name": self.config.name,
+                "state": self.state.value,
+                "config": {
+                    "model": str(self.config.model),
+                    "dataset": str(self.config.dataset),
+                    "epochs": self.config.trainer_config.epochs,
+                    "batch_size": self.config.dataset_config.batch_size
+                }
+            })
+        
+        # Load data (within experiment scope)
+        self.state = PipelineState.LOADING_DATA
+        await self._emit_state_change()
+        await self._load_data()
+        
+        # Preprocessing  
+        if self.preprocessing:
+            self.state = PipelineState.PREPROCESSING
+            await self._emit_state_change()
+            await self._preprocess_data()
+        
+        # Initialize model and trainer within training scope
+        async with self.container.scope("training"):
+            # Initialize model
+            await self._initialize_model()
+            
+            # Initialize trainer
+            await self._initialize_trainer()
+            
+            # Training
+            self.state = PipelineState.TRAINING
+            await self._emit_state_change()
+            result = await self._train_with_scopes()
+        
+        # Evaluation within evaluation scope
+        self.state = PipelineState.EVALUATING
+        await self._emit_state_change()
+        async with self.container.scope("evaluation"):
+            await self._evaluate(result)
+        
+        # Save model
+        self.state = PipelineState.SAVING
+        await self._emit_state_change()
+        await self._save_model()
+        
+        self.state = PipelineState.COMPLETED
+        await self._emit_state_change()
+        
+        # Emit pipeline completed
+        if hasattr(self.context, "app"):
+            await self.context.app.emit("ml.pipeline.completed", {
+                "name": self.config.name,
+                "result": {
+                    "epochs_trained": result.epochs_trained,
+                    "training_time": result.training_time,
+                    "final_metrics": result.training_history[-1] if result.training_history else {},
+                    "test_metrics": result.test_metrics
+                }
+            })
+        
+        await self.on_complete(result)
+        return result
+    
+    async def _run_without_scopes(self) -> TrainingResult:
+        """Fallback method to run without scopes (for backward compatibility)."""
+        # Emit pipeline started
+        if hasattr(self.context, "app"):
+            await self.context.app.emit("ml.pipeline.started", {
+                "name": self.config.name,
+                "state": self.state.value,
+                "config": {
+                    "model": str(self.config.model),
+                    "dataset": str(self.config.dataset),
+                    "epochs": self.config.trainer_config.epochs,
+                    "batch_size": self.config.dataset_config.batch_size
+                }
+            })
+        
+        # Load data
+        self.state = PipelineState.LOADING_DATA
+        await self._emit_state_change()
+        await self._load_data()
+        
+        # Preprocessing
+        if self.preprocessing:
+            self.state = PipelineState.PREPROCESSING
+            await self._emit_state_change()
+            await self._preprocess_data()
+        
+        # Initialize model
+        await self._initialize_model()
+        
+        # Initialize trainer
+        await self._initialize_trainer()
+        
+        # Training
+        self.state = PipelineState.TRAINING
+        await self._emit_state_change()
+        result = await self._train()
+        
+        # Evaluation
+        self.state = PipelineState.EVALUATING
+        await self._emit_state_change()
+        await self._evaluate(result)
+        
+        # Save model
+        self.state = PipelineState.SAVING
+        await self._emit_state_change()
+        await self._save_model()
+        
+        self.state = PipelineState.COMPLETED
+        await self._emit_state_change()
+        
+        # Emit pipeline completed
+        if hasattr(self.context, "app"):
+            await self.context.app.emit("ml.pipeline.completed", {
+                "name": self.config.name,
+                "result": {
+                    "epochs_trained": result.epochs_trained,
+                    "training_time": result.training_time,
+                    "final_metrics": result.training_history[-1] if result.training_history else {},
+                    "test_metrics": result.test_metrics
+                }
+            })
+        
+        await self.on_complete(result)
+        return result
     
     async def _load_data(self) -> None:
         """Load dataset."""
@@ -304,6 +377,41 @@ class MLPipeline:
         
         # Replace trainer's callback
         self._trainer.on_epoch_end = emit_epoch_metrics
+        
+        # Train
+        result = await self._trainer.train(
+            train_loader,
+            val_loader,
+            test_loader,
+        )
+        
+        return result
+    
+    async def _train_with_scopes(self) -> TrainingResult:
+        """Train the model with epoch scopes for proper resource management."""
+        # Get data loaders
+        train_loader, val_loader, test_loader = self._dataset.get_splits()
+        
+        # Hook into trainer's epoch callbacks to emit events and manage epoch scopes
+        original_on_epoch_end = None
+        if hasattr(self._trainer, "on_epoch_end"):
+            original_on_epoch_end = self._trainer.on_epoch_end
+        
+        async def emit_epoch_metrics_with_scope(epoch: int, metrics: dict[str, float]):
+            # Run epoch end processing within epoch scope
+            async with self.container.scope("epoch"):
+                # Call original callback if exists
+                if original_on_epoch_end:
+                    await original_on_epoch_end(epoch, metrics)
+                
+                # Emit metrics event
+                await self._emit_metrics(epoch, metrics)
+                
+                # Call pipeline's epoch end hook
+                await self.on_epoch_end(epoch, metrics)
+        
+        # Replace trainer's callback
+        self._trainer.on_epoch_end = emit_epoch_metrics_with_scope
         
         # Train
         result = await self._trainer.train(
