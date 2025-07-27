@@ -55,6 +55,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import inspect
+from functools import wraps
 from typing import Any, Callable, TypeVar
 
 from .container import Container
@@ -898,6 +899,43 @@ class Whiskey:
             def inner(func: Callable) -> Callable:
                 self._hooks.setdefault(name, []).append(func)
                 return func
+            return inner
+        return decorator
+    
+    @property
+    def emits(self):
+        """Decorator that automatically emits an event with the function's return value.
+        
+        Usage:
+            @app.emits("user.created")
+            async def create_user(name: str) -> dict:
+                user = {"id": 1, "name": name}
+                return user  # Automatically emitted as "user.created" event
+        """
+        def decorator(event_name: str):
+            def inner(func: Callable) -> Callable:
+                if asyncio.iscoroutinefunction(func):
+                    @wraps(func)
+                    async def async_wrapper(*args, **kwargs):
+                        result = await func(*args, **kwargs)
+                        # Emit the event with the result
+                        await self.emit(event_name, result)
+                        return result
+                    return async_wrapper
+                else:
+                    @wraps(func)
+                    def sync_wrapper(*args, **kwargs):
+                        result = func(*args, **kwargs)
+                        # For sync functions, we need to handle emit differently
+                        # If we're in an event loop, create a task
+                        try:
+                            loop = asyncio.get_running_loop()
+                            loop.create_task(self.emit(event_name, result))
+                        except RuntimeError:
+                            # No event loop running, emit synchronously
+                            asyncio.run(self.emit(event_name, result))
+                        return result
+                    return sync_wrapper
             return inner
         return decorator
     

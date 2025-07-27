@@ -135,13 +135,28 @@ class MLPipeline:
         try:
             await self.on_start()
             
+            # Emit pipeline started
+            if hasattr(self.context, "app"):
+                await self.context.app.emit("ml.pipeline.started", {
+                    "name": self.config.name,
+                    "state": self.state.value,
+                    "config": {
+                        "model": str(self.config.model),
+                        "dataset": str(self.config.dataset),
+                        "epochs": self.config.trainer_config.epochs,
+                        "batch_size": self.config.dataset_config.batch_size
+                    }
+                })
+            
             # Load data
             self.state = PipelineState.LOADING_DATA
+            await self._emit_state_change()
             await self._load_data()
             
             # Preprocessing
             if self.preprocessing:
                 self.state = PipelineState.PREPROCESSING
+                await self._emit_state_change()
                 await self._preprocess_data()
             
             # Initialize model
@@ -152,23 +167,50 @@ class MLPipeline:
             
             # Training
             self.state = PipelineState.TRAINING
+            await self._emit_state_change()
             result = await self._train()
             
             # Evaluation
             self.state = PipelineState.EVALUATING
+            await self._emit_state_change()
             await self._evaluate(result)
             
             # Save model
             self.state = PipelineState.SAVING
+            await self._emit_state_change()
             await self._save_model()
             
             self.state = PipelineState.COMPLETED
+            await self._emit_state_change()
+            
+            # Emit pipeline completed
+            if hasattr(self.context, "app"):
+                await self.context.app.emit("ml.pipeline.completed", {
+                    "name": self.config.name,
+                    "result": {
+                        "epochs_trained": result.epochs_trained,
+                        "training_time": result.training_time,
+                        "final_metrics": result.training_history[-1] if result.training_history else {},
+                        "test_metrics": result.test_metrics
+                    }
+                })
+            
             await self.on_complete(result)
             
             return result
             
         except Exception as e:
             self.state = PipelineState.FAILED
+            await self._emit_state_change()
+            
+            # Emit pipeline failed
+            if hasattr(self.context, "app"):
+                await self.context.app.emit("ml.pipeline.failed", {
+                    "name": self.config.name,
+                    "error": str(e),
+                    "state": self.state.value
+                })
+            
             await self.on_error(e)
             raise
     
@@ -244,6 +286,25 @@ class MLPipeline:
         # Get data loaders
         train_loader, val_loader, test_loader = self._dataset.get_splits()
         
+        # Hook into trainer's epoch callbacks to emit events
+        original_on_epoch_end = None
+        if hasattr(self._trainer, "on_epoch_end"):
+            original_on_epoch_end = self._trainer.on_epoch_end
+        
+        async def emit_epoch_metrics(epoch: int, metrics: dict[str, float]):
+            # Call original callback if exists
+            if original_on_epoch_end:
+                await original_on_epoch_end(epoch, metrics)
+            
+            # Emit metrics event
+            await self._emit_metrics(epoch, metrics)
+            
+            # Call pipeline's epoch end hook
+            await self.on_epoch_end(epoch, metrics)
+        
+        # Replace trainer's callback
+        self._trainer.on_epoch_end = emit_epoch_metrics
+        
         # Train
         result = await self._trainer.train(
             train_loader,
@@ -308,6 +369,26 @@ class MLPipeline:
     async def on_epoch_end(self, epoch: int, metrics: dict[str, float]) -> None:
         """Called at end of each epoch."""
         pass
+    
+    async def _emit_state_change(self) -> None:
+        """Emit state change event."""
+        if hasattr(self.context, "app"):
+            await self.context.app.emit("ml.pipeline.state_changed", {
+                "name": self.config.name,
+                "state": self.state.value,
+                "previous_state": getattr(self, "_previous_state", None)
+            })
+            self._previous_state = self.state.value
+    
+    async def _emit_metrics(self, epoch: int, metrics: dict[str, float]) -> None:
+        """Emit training metrics event."""
+        if hasattr(self.context, "app"):
+            await self.context.app.emit("ml.training.metrics", {
+                "pipeline": self.config.name,
+                "epoch": epoch,
+                "metrics": metrics,
+                "timestamp": datetime.now().isoformat()
+            })
 
 
 @dataclass

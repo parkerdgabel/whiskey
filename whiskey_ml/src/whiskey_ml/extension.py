@@ -47,6 +47,10 @@ class MLExtension:
         self.integration = ExtensionIntegration(app.container)
         self.context = self.integration.create_context()
         
+        # Store app reference for event emission
+        self.app = app
+        self.context.app = app
+        
         # Register extension in container
         app.container[MLExtension] = self
         app.container[MLContext] = self.context
@@ -61,9 +65,12 @@ class MLExtension:
         app.ml_trainer = self._create_trainer_decorator(app)
         app.ml_metric = self._create_metric_decorator(app)
         
+        # Add ML-specific methods to app
+        app.ml = self
+        
         # Register lifecycle hooks
-        app.events.on("startup", self._on_startup)
-        app.events.on("shutdown", self._on_shutdown)
+        app.on("startup", self._on_startup)
+        app.on("shutdown", self._on_shutdown)
     
     def _register_core_components(self, app: Whiskey) -> None:
         """Register core ML components.
