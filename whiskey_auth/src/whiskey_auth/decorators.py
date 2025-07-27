@@ -32,54 +32,60 @@ def requires_auth(func: F) -> F:
         >>> async def protected_endpoint(user: CurrentUser):
         >>>     return f"Hello {user.username}"
     """
-
-    @functools.wraps(func)
-    async def async_wrapper(*args, **kwargs):
-        # Get auth context from kwargs or through DI
-        auth_context = kwargs.get("__auth_context__")
-
-        if not auth_context and args and hasattr(args[0], "__auth_context__"):
-            # Try to get from first positional arg (for methods)
-            auth_context = args[0].__auth_context__
-
-        if not auth_context or not isinstance(auth_context, AuthContext):
-            # Try to resolve through DI
-            # Try to get auth context through DI if possible
-            try:
-                # For now, we'll skip this since None doesn't exist
-                # This would normally be handled by middleware
-                auth_context = None
-            except Exception:
-                auth_context = None
-
-        if not auth_context or not auth_context.is_authenticated:
-            raise AuthenticationError("Authentication required")
-
-        # Remove auth context from kwargs if it was added
-        kwargs.pop("__auth_context__", None)
-
-        # Call original function
-        return await func(*args, **kwargs)
-
-    @functools.wraps(func)
-    def sync_wrapper(*args, **kwargs):
-        # For sync functions, we need to get auth context differently
-        auth_context = kwargs.get("__auth_context__")
-
-        if not auth_context and args and hasattr(args[0], "__auth_context__"):
-            auth_context = args[0].__auth_context__
-
-        if not auth_context or not auth_context.is_authenticated:
-            raise AuthenticationError("Authentication required")
-
-        kwargs.pop("__auth_context__", None)
-        return func(*args, **kwargs)
-
-    # Return appropriate wrapper based on function type
     if inspect.iscoroutinefunction(func):
-        # Also apply inject decorator to ensure DI works
+
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            # Get the current container and resolve auth context
+            from whiskey.core.container import get_current_container
+
+            container = get_current_container()
+            if container:
+                try:
+                    auth_context = await container.resolve(AuthContext)
+                except Exception:
+                    auth_context = None
+            else:
+                auth_context = kwargs.get("auth_context")
+
+            # Check authentication
+            if not auth_context or not auth_context.is_authenticated:
+                raise AuthenticationError("Authentication required")
+
+            # Remove auth_context from kwargs if it was there
+            kwargs.pop("auth_context", None)
+
+            # Call original function
+            return await func(*args, **kwargs)
+
+        # Apply inject to enable DI for the original function
         return inject(async_wrapper)
     else:
+
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            # Get the current container and resolve auth context
+            from whiskey.core.container import get_current_container
+
+            container = get_current_container()
+            if container:
+                try:
+                    auth_context = container.resolve_sync(AuthContext)
+                except Exception:
+                    auth_context = None
+            else:
+                auth_context = kwargs.get("auth_context")
+
+            # Check authentication
+            if not auth_context or not auth_context.is_authenticated:
+                raise AuthenticationError("Authentication required")
+
+            # Remove auth_context from kwargs if it was there
+            kwargs.pop("auth_context", None)
+
+            return func(*args, **kwargs)
+
+        # Apply inject to enable DI for the original function
         return inject(sync_wrapper)
 
 
@@ -104,58 +110,74 @@ def requires_permission(*permissions: str | Permission) -> Callable[[F], F]:
     """
 
     def decorator(func: F) -> F:
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            # First check authentication
-            auth_context = kwargs.get("__auth_context__")
-
-            if not auth_context and args and hasattr(args[0], "__auth_context__"):
-                auth_context = args[0].__auth_context__
-
-            if not auth_context or not isinstance(auth_context, AuthContext):
-                container = None
-                if container:
-                    auth_context = await container.resolve(AuthContext)
-
-            if not auth_context or not auth_context.is_authenticated:
-                raise AuthenticationError("Authentication required")
-
-            # Check permissions (user needs ANY of the specified permissions)
-            has_permission = any(auth_context.has_permission(perm) for perm in permissions)
-
-            if not has_permission:
-                perm_names = [str(p) for p in permissions]
-                raise AuthorizationError(
-                    f"User lacks required permissions: {', '.join(perm_names)}"
-                )
-
-            kwargs.pop("__auth_context__", None)
-            return await func(*args, **kwargs)
-
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            auth_context = kwargs.get("__auth_context__")
-
-            if not auth_context and args and hasattr(args[0], "__auth_context__"):
-                auth_context = args[0].__auth_context__
-
-            if not auth_context or not auth_context.is_authenticated:
-                raise AuthenticationError("Authentication required")
-
-            has_permission = any(auth_context.has_permission(perm) for perm in permissions)
-
-            if not has_permission:
-                perm_names = [str(p) for p in permissions]
-                raise AuthorizationError(
-                    f"User lacks required permissions: {', '.join(perm_names)}"
-                )
-
-            kwargs.pop("__auth_context__", None)
-            return func(*args, **kwargs)
-
         if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                # Get the current container and resolve auth context
+                from whiskey.core.container import get_current_container
+
+                container = get_current_container()
+                if container:
+                    try:
+                        auth_context = await container.resolve(AuthContext)
+                    except Exception:
+                        auth_context = None
+                else:
+                    auth_context = kwargs.get("auth_context")
+
+                # First check authentication
+                if not auth_context or not auth_context.is_authenticated:
+                    raise AuthenticationError("Authentication required")
+
+                # Check permissions (user needs ANY of the specified permissions)
+                has_permission = any(auth_context.has_permission(perm) for perm in permissions)
+
+                if not has_permission:
+                    perm_names = [str(p) for p in permissions]
+                    raise AuthorizationError(
+                        f"User lacks required permissions: {', '.join(perm_names)}"
+                    )
+
+                # Remove auth_context from kwargs if it was there
+                kwargs.pop("auth_context", None)
+
+                return await func(*args, **kwargs)
+
             return inject(async_wrapper)
         else:
+
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                # Get the current container and resolve auth context
+                from whiskey.core.container import get_current_container
+
+                container = get_current_container()
+                if container:
+                    try:
+                        auth_context = container.resolve_sync(AuthContext)
+                    except Exception:
+                        auth_context = None
+                else:
+                    auth_context = kwargs.get("auth_context")
+
+                # First check authentication
+                if not auth_context or not auth_context.is_authenticated:
+                    raise AuthenticationError("Authentication required")
+
+                has_permission = any(auth_context.has_permission(perm) for perm in permissions)
+
+                if not has_permission:
+                    perm_names = [str(p) for p in permissions]
+                    raise AuthorizationError(
+                        f"User lacks required permissions: {', '.join(perm_names)}"
+                    )
+
+                # Remove auth_context from kwargs if it was there
+                kwargs.pop("auth_context", None)
+
+                return func(*args, **kwargs)
+
             return inject(sync_wrapper)
 
     return decorator
@@ -182,53 +204,70 @@ def requires_role(*roles: str | Role) -> Callable[[F], F]:
     """
 
     def decorator(func: F) -> F:
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            auth_context = kwargs.get("__auth_context__")
-
-            if not auth_context and args and hasattr(args[0], "__auth_context__"):
-                auth_context = args[0].__auth_context__
-
-            if not auth_context or not isinstance(auth_context, AuthContext):
-                container = None
-                if container:
-                    auth_context = await container.resolve(AuthContext)
-
-            if not auth_context or not auth_context.is_authenticated:
-                raise AuthenticationError("Authentication required")
-
-            # Check roles (user needs ANY of the specified roles)
-            has_role = any(auth_context.has_role(role) for role in roles)
-
-            if not has_role:
-                role_names = [str(r) for r in roles]
-                raise AuthorizationError(f"User lacks required roles: {', '.join(role_names)}")
-
-            kwargs.pop("__auth_context__", None)
-            return await func(*args, **kwargs)
-
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            auth_context = kwargs.get("__auth_context__")
-
-            if not auth_context and args and hasattr(args[0], "__auth_context__"):
-                auth_context = args[0].__auth_context__
-
-            if not auth_context or not auth_context.is_authenticated:
-                raise AuthenticationError("Authentication required")
-
-            has_role = any(auth_context.has_role(role) for role in roles)
-
-            if not has_role:
-                role_names = [str(r) for r in roles]
-                raise AuthorizationError(f"User lacks required roles: {', '.join(role_names)}")
-
-            kwargs.pop("__auth_context__", None)
-            return func(*args, **kwargs)
-
         if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                # Get the current container and resolve auth context
+                from whiskey.core.container import get_current_container
+
+                container = get_current_container()
+                if container:
+                    try:
+                        auth_context = await container.resolve(AuthContext)
+                    except Exception:
+                        auth_context = None
+                else:
+                    auth_context = kwargs.get("auth_context")
+
+                # First check authentication
+                if not auth_context or not auth_context.is_authenticated:
+                    raise AuthenticationError("Authentication required")
+
+                # Check roles (user needs ANY of the specified roles)
+                has_role = any(auth_context.has_role(role) for role in roles)
+
+                if not has_role:
+                    role_names = [str(r) for r in roles]
+                    raise AuthorizationError(f"User lacks required roles: {', '.join(role_names)}")
+
+                # Remove auth_context from kwargs if it was there
+                kwargs.pop("auth_context", None)
+
+                return await func(*args, **kwargs)
+
             return inject(async_wrapper)
         else:
+
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                # Get the current container and resolve auth context
+                from whiskey.core.container import get_current_container
+
+                container = get_current_container()
+                if container:
+                    try:
+                        auth_context = container.resolve_sync(AuthContext)
+                    except Exception:
+                        auth_context = None
+                else:
+                    auth_context = kwargs.get("auth_context")
+
+                # First check authentication
+                if not auth_context or not auth_context.is_authenticated:
+                    raise AuthenticationError("Authentication required")
+
+                has_role = any(auth_context.has_role(role) for role in roles)
+
+                if not has_role:
+                    role_names = [str(r) for r in roles]
+                    raise AuthorizationError(f"User lacks required roles: {', '.join(role_names)}")
+
+                # Remove auth_context from kwargs if it was there
+                kwargs.pop("auth_context", None)
+
+                return func(*args, **kwargs)
+
             return inject(sync_wrapper)
 
     return decorator
@@ -254,59 +293,76 @@ def requires_all_permissions(*permissions: str | Permission) -> Callable[[F], F]
     """
 
     def decorator(func: F) -> F:
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            auth_context = kwargs.get("__auth_context__")
-
-            if not auth_context and args and hasattr(args[0], "__auth_context__"):
-                auth_context = args[0].__auth_context__
-
-            if not auth_context or not isinstance(auth_context, AuthContext):
-                container = None
-                if container:
-                    auth_context = await container.resolve(AuthContext)
-
-            if not auth_context or not auth_context.is_authenticated:
-                raise AuthenticationError("Authentication required")
-
-            # Check that user has ALL permissions
-            missing_perms = [
-                str(perm) for perm in permissions if not auth_context.has_permission(perm)
-            ]
-
-            if missing_perms:
-                raise AuthorizationError(
-                    f"User lacks required permissions: {', '.join(missing_perms)}"
-                )
-
-            kwargs.pop("__auth_context__", None)
-            return await func(*args, **kwargs)
-
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            auth_context = kwargs.get("__auth_context__")
-
-            if not auth_context and args and hasattr(args[0], "__auth_context__"):
-                auth_context = args[0].__auth_context__
-
-            if not auth_context or not auth_context.is_authenticated:
-                raise AuthenticationError("Authentication required")
-
-            missing_perms = [
-                str(perm) for perm in permissions if not auth_context.has_permission(perm)
-            ]
-
-            if missing_perms:
-                raise AuthorizationError(
-                    f"User lacks required permissions: {', '.join(missing_perms)}"
-                )
-
-            kwargs.pop("__auth_context__", None)
-            return func(*args, **kwargs)
-
         if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                # Get the current container and resolve auth context
+                from whiskey.core.container import get_current_container
+
+                container = get_current_container()
+                if container:
+                    try:
+                        auth_context = await container.resolve(AuthContext)
+                    except Exception:
+                        auth_context = None
+                else:
+                    auth_context = kwargs.get("auth_context")
+
+                # First check authentication
+                if not auth_context or not auth_context.is_authenticated:
+                    raise AuthenticationError("Authentication required")
+
+                # Check that user has ALL permissions
+                missing_perms = [
+                    str(perm) for perm in permissions if not auth_context.has_permission(perm)
+                ]
+
+                if missing_perms:
+                    raise AuthorizationError(
+                        f"User lacks required permissions: {', '.join(missing_perms)}"
+                    )
+
+                # Remove auth_context from kwargs if it was there
+                kwargs.pop("auth_context", None)
+
+                return await func(*args, **kwargs)
+
             return inject(async_wrapper)
         else:
+
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                # Get the current container and resolve auth context
+                from whiskey.core.container import get_current_container
+
+                container = get_current_container()
+                if container:
+                    try:
+                        auth_context = container.resolve_sync(AuthContext)
+                    except Exception:
+                        auth_context = None
+                else:
+                    auth_context = kwargs.get("auth_context")
+
+                # First check authentication
+                if not auth_context or not auth_context.is_authenticated:
+                    raise AuthenticationError("Authentication required")
+
+                missing_perms = [
+                    str(perm) for perm in permissions if not auth_context.has_permission(perm)
+                ]
+
+                if missing_perms:
+                    raise AuthorizationError(
+                        f"User lacks required permissions: {', '.join(missing_perms)}"
+                    )
+
+                # Remove auth_context from kwargs if it was there
+                kwargs.pop("auth_context", None)
+
+                return func(*args, **kwargs)
+
             return inject(sync_wrapper)
 
     return decorator

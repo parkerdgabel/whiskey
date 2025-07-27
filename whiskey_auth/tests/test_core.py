@@ -216,7 +216,10 @@ class TestWhiskeyIntegration:
             username: str
 
         # Check that user model is stored
-        assert app.container.get("__auth_user_model__") is User
+        assert "__auth_user_model__" in app.container
+        # Get the descriptor directly from registry to check the class
+        descriptor = app.container.registry.get("__auth_user_model__")
+        assert descriptor.provider is User
 
     def test_permission_registration(self):
         """Test permission registration."""
@@ -230,7 +233,8 @@ class TestWhiskeyIntegration:
             ADMIN = Permission("admin", "Admin access")
 
         # Check that permissions are stored
-        perms = app.container.get("__auth_permissions__")
+        assert "__auth_permissions__" in app.container
+        perms = app.container["__auth_permissions__"]
         assert len(perms) == 3
         assert "READ" in perms
         assert isinstance(perms["READ"], Permission)
@@ -251,7 +255,8 @@ class TestWhiskeyIntegration:
             description: ClassVar[str] = "Administrator"
 
         # Check that role is stored
-        roles = app.container.get("__auth_roles__")
+        assert "__auth_roles__" in app.container
+        roles = app.container["__auth_roles__"]
         assert "admin" in roles
         assert isinstance(roles["admin"], Role)
         assert roles["admin"].name == "admin"

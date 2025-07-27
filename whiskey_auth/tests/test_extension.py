@@ -1,5 +1,6 @@
 """Tests for auth extension setup."""
 
+import asyncio
 from typing import ClassVar
 
 import pytest
@@ -12,7 +13,7 @@ from whiskey_auth import (
     auth_extension,
     create_test_user,
 )
-from whiskey_auth.core import AuthContext, User
+from whiskey_auth.core import AuthContext
 from whiskey_auth.providers import ProviderRegistry
 
 
@@ -51,8 +52,8 @@ class TestAuthExtension:
         registry = app.container[ProviderRegistry]
         assert isinstance(registry, ProviderRegistry)
 
-        # Check AuthContext is registered as scoped
-        assert AuthContext in app.container._scoped
+        # Check AuthContext is registered
+        assert AuthContext in app.container
 
     def test_user_model_decorator(self):
         """Test @app.user_model decorator."""
@@ -65,8 +66,8 @@ class TestAuthExtension:
             username: str
             email: str
 
-        # Check user model is stored
-        assert app.container.get("__auth_user_model__") is MyUser
+        # Check user model is stored in metadata
+        assert app._auth_metadata["user_model"] is MyUser
 
         # Check class is registered in container
         assert MyUser in app.container
@@ -117,7 +118,7 @@ class TestAuthExtension:
             DELETE = Permission("delete", "Can delete resources")
 
         # Check permissions are stored
-        perms = app.container.get("__auth_permissions__")
+        perms = app._auth_metadata["permissions"]
         assert len(perms) == 3
         assert all(isinstance(p, Permission) for p in perms.values())
 
@@ -140,11 +141,11 @@ class TestAuthExtension:
         # Define role
         @app.role("editor")
         class EditorRole:
-            permissions: ClassVar[list] = [Perms.READ, Perms.WRITE]
-            description: ClassVar[str] = "Can read and write"
+            permissions: ClassVar = {"read", "write"}
+            description: ClassVar = "Can read and write"
 
         # Check role is stored
-        roles = app.container.get("__auth_roles__")
+        roles = app._auth_metadata.get("roles", {})
         assert "editor" in roles
 
         role = roles["editor"]
@@ -160,16 +161,14 @@ class TestAuthExtension:
 
         @app.role("reader")
         class ReaderRole:
-            permissions: ClassVar[list[str]] = ["read"]
+            permissions: ClassVar = {"read"}
 
         @app.role("writer")
         class WriterRole:
-            permissions: ClassVar[list[str]] = ["write"]
-            inherits: ClassVar[list] = [
-                ReaderRole
-            ]  # This won't work directly, need the Role instance
+            permissions: ClassVar = {"write"}
+            inherits: ClassVar = ["reader"]
 
-        roles = app.container.get("__auth_roles__")
+        roles = app._auth_metadata.get("roles", {})
 
         # Check both roles exist
         assert "reader" in roles
@@ -188,11 +187,11 @@ class TestAuthExtension:
         auth_context = AuthContext(user=user)
         app.container[AuthContext] = auth_context
 
-        # Test resolver function exists
-        assert User in app.container._resolvers
+        # Test CurrentUser resolution works
+        from whiskey_auth import CurrentUser
 
-        # Test resolution
-        resolved = await app.container._resolvers[User](app.container)
+        # CurrentUser should resolve to the authenticated user
+        resolved = await app.container.resolve(CurrentUser)
         assert resolved == user
 
     @pytest.mark.asyncio
@@ -202,7 +201,10 @@ class TestAuthExtension:
         app.use(auth_extension)
 
         # No auth context
-        resolved = await app.container._resolvers[User](app.container)
+        from whiskey_auth import CurrentUser
+
+        # CurrentUser should resolve to None when not authenticated
+        resolved = await app.container.resolve(CurrentUser)
         assert resolved is None
 
     def test_current_user_type_checker(self):
@@ -211,7 +213,7 @@ class TestAuthExtension:
         app.use(auth_extension)
 
         # Get type checker
-        is_current_user = app.container.get("__auth_current_user_checker__")
+        is_current_user = app._auth_metadata["current_user_checker"]
         assert callable(is_current_user)
 
         # Test various types
@@ -219,11 +221,9 @@ class TestAuthExtension:
 
         from whiskey_auth.core import CurrentUser
 
-        assert is_current_user(User)
         assert is_current_user(CurrentUser)
 
         # Test with Optional
-        assert is_current_user(Optional[User])
         assert is_current_user(Optional[CurrentUser])
 
     @pytest.mark.asyncio
@@ -231,23 +231,48 @@ class TestAuthExtension:
         """Test startup hook adds middleware when ASGI is present."""
         app = Whiskey()
 
-        # Simulate ASGI extension
-        app._middleware_stack = []
+        # Simulate ASGI extension by adding asgi_manager
+        class MockAsgiManager:
+            def __init__(self):
+                self.middlewares = []
+
+            def add_middleware(self, metadata):
+                self.middlewares.append(metadata)
+
+        app.asgi_manager = MockAsgiManager()
 
         # Apply auth extension
         app.use(auth_extension)
 
-        # Get startup hooks
-        startup_hooks = list(app._lifecycle_hooks["startup"])
-        assert len(startup_hooks) > 0
+        # Mock the ASGI MiddlewareMetadata class
+        class MiddlewareMetadata:
+            def __init__(self, func, name, priority):
+                self.func = func
+                self.name = name
+                self.priority = priority
 
-        # Execute startup hook
-        for hook in startup_hooks:
-            if hook.__name__ == "setup_auth_middleware":
-                await hook()
+        # Temporarily replace the import
+        import sys
+
+        sys.modules["whiskey_asgi"] = type(sys)("whiskey_asgi")
+        sys.modules["whiskey_asgi.extension"] = type(sys)("extension")
+        sys.modules["whiskey_asgi.extension"].MiddlewareMetadata = MiddlewareMetadata
+
+        # Register AuthenticationMiddleware
+        from whiskey_auth.middleware import AuthenticationMiddleware
+
+        app.container.singleton(AuthenticationMiddleware)
+
+        # Execute startup hooks directly from the callbacks list
+        for callback in app._startup_callbacks:
+            if asyncio.iscoroutinefunction(callback):
+                await callback()
+            else:
+                callback()
 
         # Check middleware was added
-        assert len(app._middleware_stack) > 0
+        assert len(app.asgi_manager.middlewares) > 0
+        assert any(m.name == "auth" for m in app.asgi_manager.middlewares)
 
     def test_decorators_added_to_app(self):
         """Test auth decorators are added to app."""

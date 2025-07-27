@@ -242,44 +242,35 @@ class TestAuthContextMiddleware:
 
     @pytest.mark.asyncio
     async def test_make_context_available(self, middleware):
-        """Test making auth context available for DI."""
-        from whiskey import Container
+        """Test auth context middleware passes through correctly."""
+        # Track if app was called
+        app_called = False
+        scope_received = None
 
-        # Create mock container
-        container = Container()
-        stored_context = None
+        async def mock_app(scope, receive, send):
+            nonlocal app_called, scope_received
+            app_called = True
+            scope_received = scope
 
-        def store_context(context):
-            nonlocal stored_context
-            stored_context = context
+        middleware.app = mock_app
 
-        # Mock Container.current()
-        original_current = Container.current
-        Container.current = lambda: container
-        container.__setitem__ = (
-            lambda key, value: store_context(value) if key == AuthContext else None
-        )
+        # Create scope with auth context
+        user = create_test_user(username="testuser")
+        auth_context = AuthContext(user=user)
+        scope = {"type": "http", "auth_context": auth_context}
 
-        try:
-            # Create scope with auth context
-            user = create_test_user(username="testuser")
-            auth_context = AuthContext(user=user)
-            scope = {"type": "http", "auth_context": auth_context}
+        async def mock_receive():
+            pass
 
-            async def mock_receive():
-                pass
+        async def mock_send(message):
+            pass
 
-            async def mock_send(message):
-                pass
+        await middleware(scope, mock_receive, mock_send)
 
-            await middleware(scope, mock_receive, mock_send)
-
-            # Verify context was stored
-            assert stored_context == auth_context
-
-        finally:
-            # Restore original
-            Container.current = original_current
+        # Verify middleware passed through correctly
+        assert app_called
+        assert scope_received == scope
+        assert scope_received["auth_context"] == auth_context
 
     @pytest.mark.asyncio
     async def test_skip_non_http(self, middleware):

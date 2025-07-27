@@ -154,6 +154,11 @@ class AuthContext:
     roles_cache: set[Role] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self):
+        """Set authenticated_at if user is provided but authenticated_at is not."""
+        if self.user and not self.authenticated_at:
+            self.authenticated_at = datetime.now()
+
     @property
     def is_authenticated(self) -> bool:
         """Check if user is authenticated."""

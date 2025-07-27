@@ -224,13 +224,25 @@ class TestJWTAuthProvider:
         refresh_token = provider.create_token(user, "refresh")
 
         # Decode and verify
-        payload = jwt.decode(refresh_token, "test-secret", algorithms=["HS256"])
+        payload = jwt.decode(
+            refresh_token,
+            "test-secret",
+            algorithms=["HS256"],
+            issuer="test-issuer",
+            audience="test-audience",
+        )
 
         assert payload["type"] == "refresh"
 
         # Refresh token should have longer expiration
         access_token = provider.create_token(user, "access")
-        access_payload = jwt.decode(access_token, "test-secret", algorithms=["HS256"])
+        access_payload = jwt.decode(
+            access_token,
+            "test-secret",
+            algorithms=["HS256"],
+            issuer="test-issuer",
+            audience="test-audience",
+        )
 
         assert payload["exp"] > access_payload["exp"]
 
@@ -242,7 +254,13 @@ class TestJWTAuthProvider:
             user, "access", additional_claims={"role": "admin", "org_id": "123"}
         )
 
-        payload = jwt.decode(token, "test-secret", algorithms=["HS256"])
+        payload = jwt.decode(
+            token,
+            "test-secret",
+            algorithms=["HS256"],
+            issuer="test-issuer",
+            audience="test-audience",
+        )
         assert payload["role"] == "admin"
         assert payload["org_id"] == "123"
 

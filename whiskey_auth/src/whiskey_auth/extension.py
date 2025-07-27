@@ -5,14 +5,13 @@ from __future__ import annotations
 import inspect
 from typing import Callable, TypeVar, get_args, get_origin
 
-from whiskey import Container, Whiskey
+from whiskey import Whiskey
 from whiskey_auth.core import (
     AuthContext,
     AuthProvider,
     CurrentUser,
     Permission,
     Role,
-    User,
 )
 from whiskey_auth.decorators import requires_auth, requires_permission, requires_role
 from whiskey_auth.middleware import AuthenticationMiddleware
@@ -54,19 +53,37 @@ def auth_extension(app: Whiskey) -> None:
     registry = ProviderRegistry()
     app.container[ProviderRegistry] = registry
 
-    # Register auth context as scoped
-    app.container.scoped(AuthContext)
+    # Create metadata storage for auth configuration
+    app._auth_metadata = {}
 
-    # Add extension methods
-    app.user_model = lambda cls: _register_user_model(app, cls)
-    app.auth_provider = lambda name=None: _create_auth_provider_decorator(app, registry, name)
-    app.permissions = lambda cls: _register_permissions(app, cls)
-    app.role = lambda name: _create_role_decorator(app, name)
+    # Register auth context as transient - it will be managed by middleware/tests
+    app.container.register(AuthContext, AuthContext)
+
+    # Add extension methods using add_decorator
+    app.add_decorator("user_model", lambda cls: _register_user_model(app, cls))
+
+    # Auth provider needs special handling for optional name parameter
+    def auth_provider_decorator(name_or_cls=None):
+        if name_or_cls is None or isinstance(name_or_cls, str):
+            # Called as @app.auth_provider or @app.auth_provider("name")
+            return _create_auth_provider_decorator(app, registry, name_or_cls)
+        else:
+            # Called as @app.auth_provider without parentheses
+            return _create_auth_provider_decorator(app, registry, None)(name_or_cls)
+
+    app.add_decorator("auth_provider", auth_provider_decorator)
+    app.add_decorator("permissions", lambda cls: _register_permissions(app, cls))
+
+    # Role decorator also needs the name parameter
+    def role_decorator(name):
+        return _create_role_decorator(app, name)
+
+    app.add_decorator("role", role_decorator)
 
     # Add auth decorators
-    app.requires_auth = requires_auth
-    app.requires_permission = requires_permission
-    app.requires_role = requires_role
+    app.add_decorator("requires_auth", requires_auth)
+    app.add_decorator("requires_permission", requires_permission)
+    app.add_decorator("requires_role", requires_role)
 
     # Add CurrentUser resolver
     _register_current_user_resolver(app)
@@ -75,10 +92,16 @@ def auth_extension(app: Whiskey) -> None:
     @app.on_startup
     async def setup_auth_middleware():
         """Setup authentication middleware."""
-        if hasattr(app, "_middleware_stack"):
+        if hasattr(app, "asgi_manager"):
             # Add auth middleware if ASGI extension is present
             auth_middleware = await app.container.resolve(AuthenticationMiddleware)
-            app._middleware_stack.append(auth_middleware)
+            # Register middleware with ASGI manager
+            from whiskey_asgi.extension import MiddlewareMetadata
+
+            metadata = MiddlewareMetadata(
+                func=auth_middleware.middleware, name="auth", priority=100
+            )
+            app.asgi_manager.add_middleware(metadata)
 
 
 def _register_user_model(app: Whiskey, cls: type[T]) -> type[T]:
@@ -92,7 +115,7 @@ def _register_user_model(app: Whiskey, cls: type[T]) -> type[T]:
         The registered class
     """
     # Store user model type for later use
-    app.container["__auth_user_model__"] = cls
+    app._auth_metadata["user_model"] = cls
 
     # Register factory if class has __init__
     if hasattr(cls, "__init__") and not inspect.isabstract(cls):
@@ -131,7 +154,26 @@ def _create_auth_provider_decorator(
             app.container.singleton(AuthProvider, cls)
 
         # Register in provider registry
-        provider_name = name or cls.__name__.lower().replace("auth", "").replace("provider", "")
+        if name:
+            provider_name = name
+        else:
+            # Generate name from class name
+            class_name = cls.__name__
+            # Remove common suffixes
+            if class_name.endswith("AuthProvider"):
+                provider_name = class_name[:-12]  # Remove "AuthProvider"
+            elif class_name.endswith("Provider"):
+                provider_name = class_name[:-8]  # Remove "Provider"
+            else:
+                provider_name = class_name
+
+            # If we're left with too short a name, keep more of the original
+            if len(provider_name) <= 2:
+                # For "MyAuthProvider", we want "myauth"
+                provider_name = class_name.lower()
+                provider_name = provider_name.replace("provider", "")
+
+            provider_name = provider_name.lower()
         registry.register(provider_name, cls)
 
         return cls
@@ -159,8 +201,10 @@ def _register_permissions(app: Whiskey, cls: type) -> type:
             elif isinstance(value, Permission):
                 permissions[name] = value
 
-    # Store permissions
-    app.container["__auth_permissions__"] = permissions
+    # Store permissions in metadata
+    existing_perms = app._auth_metadata.get("permissions", {})
+    existing_perms.update(permissions)
+    app._auth_metadata["permissions"] = existing_perms
 
     # Make permissions available on class
     for name, perm in permissions.items():
@@ -197,10 +241,10 @@ def _create_role_decorator(app: Whiskey, name: str) -> Callable[[type], type]:
         # Create Role instance
         role = Role(name=name, permissions=permissions, inherits=inherits, description=description)
 
-        # Store role
-        roles = app.container.get("__auth_roles__", {})
-        roles[name] = role
-        app.container["__auth_roles__"] = roles
+        # Store role in metadata
+        existing_roles = app._auth_metadata.get("roles", {})
+        existing_roles[name] = role
+        app._auth_metadata["roles"] = existing_roles
 
         return cls
 
@@ -213,31 +257,29 @@ def _register_current_user_resolver(app: Whiskey) -> None:
     This allows CurrentUser to be injected into functions and classes.
     """
 
-    async def resolve_current_user(container: Container) -> User | None:
-        """Resolve current user from auth context."""
+    # Register a factory for CurrentUser that pulls from AuthContext
+    async def current_user_factory():
+        """Factory for CurrentUser injection."""
         try:
-            auth_context = await container.resolve(AuthContext)
+            auth_context = await app.container.resolve(AuthContext)
             return auth_context.user if auth_context.is_authenticated else None
         except Exception:
             return None
 
-    # Register resolver for CurrentUser type and its variations
-    app.container._resolvers[CurrentUser] = resolve_current_user
-    app.container._resolvers[User] = resolve_current_user
+    app.factory(CurrentUser, current_user_factory)
 
-    # Also handle Optional[CurrentUser] and similar
+    # Store type checker for middleware to use
     def is_current_user_type(tp: type) -> bool:
         """Check if type is CurrentUser or related."""
-        if tp is CurrentUser or tp is User:
+        if tp is CurrentUser:
             return True
 
         origin = get_origin(tp)
         if origin is not None:
             args = get_args(tp)
-            if args and (CurrentUser in args or User in args):
+            if args and CurrentUser in args:
                 return True
 
         return False
 
-    # Store type checker for middleware to use
-    app.container["__auth_current_user_checker__"] = is_current_user_type
+    app._auth_metadata["current_user_checker"] = is_current_user_type
