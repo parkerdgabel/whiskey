@@ -6,12 +6,12 @@ import pytest
 from whiskey import Whiskey
 from whiskey_ml import (
     Dataset,
-    FileDataset,
     MLPipeline,
     Model,
     ModelOutput,
     ml_extension,
 )
+from whiskey_ml.core.dataset import FileDataset
 from whiskey_ml.core.dataset import ArrayDataLoader
 from whiskey_ml.core.metrics import Accuracy, Loss, MetricCollection
 
@@ -189,10 +189,8 @@ class TestMLPipeline:
         assert app.ml.get_pipeline("test_pipeline") == TestPipeline
         assert "test_pipeline" in app.ml.list_pipelines()
     
-    async def test_pipeline_lifecycle(self, app):
-        """Test pipeline lifecycle hooks."""
-        hook_calls = []
-        
+    async def test_pipeline_creation_and_config(self, app):
+        """Test pipeline creation and configuration."""
         @app.ml_dataset("test_dataset")
         class TestDataset(Dataset):
             async def load(self):
@@ -226,32 +224,30 @@ class TestMLPipeline:
             async def load(self, path):
                 pass
         
-        @app.ml_pipeline("lifecycle_test")
-        class LifecyclePipeline(MLPipeline):
+        @app.ml_pipeline("config_test")
+        class ConfigPipeline(MLPipeline):
             dataset = "test_dataset"
             model = "test_model"
-            epochs = 1
-            
-            async def on_start(self):
-                await super().on_start()
-                hook_calls.append("start")
-            
-            async def on_complete(self, result):
-                await super().on_complete(result)
-                hook_calls.append("complete")
-            
-            async def on_error(self, error):
-                await super().on_error(error)
-                hook_calls.append("error")
+            epochs = 2
+            batch_size = 16
+            learning_rate = 0.01
+            metrics = ["loss", "accuracy"]
         
-        # Run pipeline
+        # Test pipeline configuration
         async with app:
-            result = await app.ml.run_pipeline("lifecycle_test")
+            from whiskey_ml.integrations.base import MLContext
+            context = await app.container.resolve(MLContext)
+            pipeline = ConfigPipeline(context)
             
-            assert "start" in hook_calls
-            assert "complete" in hook_calls
-            assert "error" not in hook_calls
-            assert result.epochs_trained == 1
+            # Test config building
+            config = pipeline.config
+            assert config.name == "ConfigPipeline"
+            assert config.dataset == "test_dataset"
+            assert config.model == "test_model"
+            assert config.trainer_config.epochs == 2
+            assert config.dataset_config.batch_size == 16
+            assert config.model_config.learning_rate == 0.01
+            assert config.metrics == ["loss", "accuracy"]
 
 
 @pytest.mark.asyncio

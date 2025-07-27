@@ -14,7 +14,8 @@ http = ["whiskey-http"]
 config = ["whiskey-config"]
 jobs = ["whiskey-jobs"]
 etl = ["whiskey-etl"]
-all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli", "whiskey-http", "whiskey-config", "whiskey-jobs", "whiskey-etl"]
+ml = ["whiskey-ml"]
+all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli", "whiskey-http", "whiskey-config", "whiskey-jobs", "whiskey-etl", "whiskey-ml"]
 
 [tool.uv]
 dev-dependencies = [
@@ -23,6 +24,7 @@ dev-dependencies = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "mypy>=1.7.0",
+    "numpy>=2.1.3",
 ]
 
 [build-system]
@@ -36,6 +38,7 @@ where = ["src"]
 members = ["whiskey_*"]
 
 [tool.uv.sources]
+whiskey = { workspace = true }
 whiskey-asgi = { workspace = true }
 whiskey-cli = { workspace = true }
 whiskey-ai = { workspace = true }
@@ -43,6 +46,8 @@ whiskey-http = { workspace = true }
 whiskey-config = { workspace = true }
 whiskey-jobs = { workspace = true }
 whiskey-etl = { workspace = true }
+whiskey-sql = { workspace = true }
+whiskey-ml = { workspace = true }
 
 [tool.ruff]
 line-length = 100

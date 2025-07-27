@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from whiskey import Component, Whiskey
+from whiskey import component, Whiskey
 
 
 @dataclass
@@ -103,7 +103,7 @@ class ConsoleMetricsHandler(MetricsHandler):
                     print(f"   {phase}: {metrics_str}")
 
 
-@Component
+@component
 class MetricsTracker:
     """Central metrics tracking component that aggregates and distributes metrics."""
     

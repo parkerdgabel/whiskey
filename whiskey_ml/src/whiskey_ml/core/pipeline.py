@@ -110,6 +110,12 @@ class MLPipeline:
     
     def _build_config(self) -> PipelineConfig:
         """Build configuration from class attributes."""
+        # Ensure dataset and model are specified
+        if self.dataset is None:
+            raise ValueError(f"Pipeline {self.__class__.__name__} must specify a dataset")
+        if self.model is None:
+            raise ValueError(f"Pipeline {self.__class__.__name__} must specify a model")
+            
         return PipelineConfig(
             name=self.__class__.__name__,
             dataset=self.dataset,

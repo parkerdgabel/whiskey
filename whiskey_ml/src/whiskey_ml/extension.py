@@ -18,291 +18,230 @@ from whiskey_ml.core.metrics import (
 )
 from whiskey_ml.core.model import Model
 from whiskey_ml.core.pipeline import MLContext, MLPipeline
-# ML-specific scopes are managed using Whiskey's built-in scope system
-# No need for custom scope classes - use app.container.scope("scope_name")
 from whiskey_ml.core.trainer import Trainer
 from whiskey_ml.integrations.base import ExtensionIntegration
 
 
-class MLExtension:
-    """Machine Learning extension for Whiskey."""
+def ml_extension(app: Whiskey) -> None:
+    """ML extension that adds machine learning capabilities to Whiskey.
     
-    def __init__(self):
-        """Initialize ML extension."""
-        self.integration: ExtensionIntegration | None = None
-        self.context: MLContext | None = None
-        
-        # Registries
-        self._datasets = {}
-        self._models = {}
-        self._trainers = {}
-        self._pipelines = {}
-        self._metrics = {}
+    This extension provides:
+    - ML component decorators: @app.ml_model(), @app.ml_dataset(), etc.
+    - ML pipeline support with scope management
+    - Event-driven metrics tracking
+    - Framework adapter integration (PyTorch, TensorFlow, JAX)
     
-    def __call__(self, app: Whiskey) -> None:
-        """Register ML extension with Whiskey application.
+    Example:
+        app = Whiskey()
+        app.use(ml_extension)
         
-        Args:
-            app: Whiskey application instance
-        """
-        # Set up extension integration
-        self.integration = ExtensionIntegration(app.container)
-        self.context = self.integration.create_context()
+        @app.ml_model("my_model")
+        class MyModel(Model):
+            async def forward(self, inputs):
+                return ModelOutput(predictions=predictions)
         
-        # Store app reference for event emission
-        self.app = app
-        self.context.app = app
-        
-        # Register extension in container
-        app.container[MLExtension] = self
-        app.container[MLContext] = self.context
-        
-        # Register core components
-        self._register_core_components(app)
-        
-        # Add decorators
-        app.ml_pipeline = self._create_pipeline_decorator(app)
-        app.ml_dataset = self._create_dataset_decorator(app)
-        app.ml_model = self._create_model_decorator(app)
-        app.ml_trainer = self._create_trainer_decorator(app)
-        app.ml_metric = self._create_metric_decorator(app)
-        
-        # Add ML-specific methods to app
-        app.ml = self
-        
-        # Register lifecycle hooks
-        app.on("startup", self._on_startup)
-        app.on("shutdown", self._on_shutdown)
+        @app.ml_pipeline("training")
+        class TrainingPipeline(MLPipeline):
+            dataset = "my_dataset"
+            model = "my_model"
+            epochs = 10
     
-    def _register_core_components(self, app: Whiskey) -> None:
-        """Register core ML components.
-        
-        Args:
-            app: Whiskey instance
-        """
-        # Register default implementations
-        app.container.register(Dataset, FileDataset)
-        
-        # Register metrics
-        app.container.register("accuracy", Accuracy)
-        app.container.register("f1", F1Score)
-        app.container.register("loss", Loss)
-        app.container.register("mse", MeanSquaredError)
-        
-        # Register default trainer (framework-specific adapters will override)
-        @app.component
-        class DefaultTrainer(Trainer):
-            """Default trainer implementation."""
-            
-            async def train_step(self, batch: dict[str, Any], step: int) -> dict[str, float]:
-                """Default training step."""
-                # Forward pass
-                output = await self.model.forward(batch)
-                
-                # Update metrics
-                metrics = {}
-                if output.loss is not None:
-                    metrics["loss"] = output.loss
-                
-                if "labels" in batch:
-                    metric_results = self.metrics.update(
-                        output.predictions,
-                        batch["labels"],
-                        output.loss,
-                    )
-                    metrics.update(metric_results)
-                
-                return metrics
-            
-            async def validation_step(self, batch: dict[str, Any], step: int) -> dict[str, float]:
-                """Default validation step."""
-                # Same as training but without gradient updates
-                return await self.train_step(batch, step)
-        
-        app.container.register("default", DefaultTrainer)
+    Args:
+        app: Whiskey application instance
+    """
+    # Set up extension integration
+    integration = ExtensionIntegration(app.container)
+    context = integration.create_context()
+    context.app = app
     
-    def _create_pipeline_decorator(self, app: Whiskey) -> Callable:
-        """Create ML pipeline decorator.
-        
-        Args:
-            app: Whiskey instance
-            
-        Returns:
-            Decorator function
-        """
-        def ml_pipeline(name: str, **kwargs):
-            def decorator(cls: Type[MLPipeline]) -> Type[MLPipeline]:
-                # Store metadata
-                cls._pipeline_name = name
-                cls._pipeline_metadata = kwargs
-                
-                # Register pipeline
-                self._pipelines[name] = cls
-                app.container.register(name, cls)
-                
-                # Register as component
-                return app.component(cls)
-            
-            return decorator
-        
-        return ml_pipeline
+    # Register ML context using dict-like syntax (proper Whiskey pattern)
+    app.container[MLContext] = context
     
-    def _create_dataset_decorator(self, app: Whiskey) -> Callable:
-        """Create dataset decorator.
-        
-        Args:
-            app: Whiskey instance
-            
-        Returns:
-            Decorator function
-        """
-        def ml_dataset(name: str, **kwargs):
-            def decorator(cls: Type[Dataset]) -> Type[Dataset]:
-                # Register dataset
-                self._datasets[name] = cls
-                app.container.register(name, cls)
-                
-                return app.component(cls)
-            
-            return decorator
-        
-        return ml_dataset
+    # Registries for ML components
+    datasets = {}
+    models = {}
+    trainers = {}
+    pipelines = {}
+    metrics = {}
     
-    def _create_model_decorator(self, app: Whiskey) -> Callable:
-        """Create model decorator.
-        
-        Args:
-            app: Whiskey instance
-            
-        Returns:
-            Decorator function
-        """
-        def ml_model(name: str, **kwargs):
-            def decorator(cls: Type[Model]) -> Type[Model]:
-                # Register model
-                self._models[name] = cls
-                app.container.register(name, cls)
-                
-                return app.component(cls)
-            
-            return decorator
-        
-        return ml_model
+    # Register core components
+    _register_core_components(app)
     
-    def _create_trainer_decorator(self, app: Whiskey) -> Callable:
-        """Create trainer decorator.
-        
-        Args:
-            app: Whiskey instance
-            
-        Returns:
-            Decorator function
-        """
-        def ml_trainer(name: str, **kwargs):
-            def decorator(cls: Type[Trainer]) -> Type[Trainer]:
-                # Register trainer
-                self._trainers[name] = cls
-                app.container.register(name, cls)
-                
-                return app.component(cls)
-            
-            return decorator
-        
-        return ml_trainer
+    # Add decorators
+    app.add_decorator("ml_pipeline", _create_pipeline_decorator(app, pipelines))
+    app.add_decorator("ml_dataset", _create_dataset_decorator(app, datasets))
+    app.add_decorator("ml_model", _create_model_decorator(app, models))
+    app.add_decorator("ml_trainer", _create_trainer_decorator(app, trainers))
+    app.add_decorator("ml_metric", _create_metric_decorator(app, metrics))
     
-    def _create_metric_decorator(self, app: Whiskey) -> Callable:
-        """Create metric decorator.
+    # Add ML-specific methods to app
+    class MLNamespace:
+        """ML namespace for the app."""
         
-        Args:
-            app: Whiskey instance
-            
-        Returns:
-            Decorator function
-        """
-        def ml_metric(name: str, **kwargs):
-            def decorator(cls: Type[Metric]) -> Type[Metric]:
-                # Register metric
-                self._metrics[name] = cls
-                app.container.register(name, cls)
-                
-                return app.component(cls)
-            
-            return decorator
+        def __init__(self):
+            self._datasets = datasets
+            self._models = models
+            self._trainers = trainers
+            self._pipelines = pipelines
+            self._metrics = metrics
         
-        return ml_metric
+        def get_pipeline(self, name: str) -> Type[MLPipeline] | None:
+            """Get registered pipeline by name."""
+            return self._pipelines.get(name)
+        
+        def list_pipelines(self) -> dict[str, Type[MLPipeline]]:
+            """List all registered pipelines."""
+            return self._pipelines.copy()
+        
+        async def run_pipeline(self, name: str, **kwargs) -> Any:
+            """Run a registered pipeline."""
+            pipeline_class = self.get_pipeline(name)
+            if not pipeline_class:
+                raise ValueError(f"Pipeline '{name}' not found")
+            
+            # Create pipeline instance
+            pipeline = pipeline_class(context)
+            
+            # Run pipeline
+            return await pipeline.run(**kwargs)
     
-    async def _on_startup(self) -> None:
-        """Called on application startup."""
-        # Initialize framework adapters if available
-        await self._initialize_framework_adapters()
+    app.ml = MLNamespace()
     
-    async def _on_shutdown(self) -> None:
-        """Called on application shutdown."""
-        # Cleanup resources
+    # Register lifecycle hooks
+    app.on("startup", _on_startup)
+    app.on("shutdown", _on_shutdown)
+def _register_core_components(app: Whiskey) -> None:
+    """Register core ML components.
+    
+    Args:
+        app: Whiskey instance
+    """
+    # Register metrics (these have safe default constructors)
+    app.container["accuracy"] = Accuracy
+    app.container["f1"] = F1Score
+    app.container["loss"] = Loss
+    app.container["mse"] = MeanSquaredError
+    
+    # Other ML components are registered via decorators only
+
+
+def _create_pipeline_decorator(app: Whiskey, pipelines: dict) -> Callable:
+    """Create ML pipeline decorator."""
+    def ml_pipeline(name: str, **kwargs):
+        def decorator(cls: Type[MLPipeline]) -> Type[MLPipeline]:
+            # Store metadata
+            cls._pipeline_name = name
+            cls._pipeline_metadata = kwargs
+            
+            # Register pipeline
+            pipelines[name] = cls
+            app.container[name] = cls
+            
+            # Register as component
+            app.component(cls)
+            return cls
+        
+        return decorator
+    
+    return ml_pipeline
+
+
+def _create_dataset_decorator(app: Whiskey, datasets: dict) -> Callable:
+    """Create dataset decorator."""
+    def ml_dataset(name: str, **kwargs):
+        def decorator(cls: Type[Dataset]) -> Type[Dataset]:
+            # Register dataset
+            datasets[name] = cls
+            app.container[name] = cls
+            
+            app.component(cls)
+            return cls
+        
+        return decorator
+    
+    return ml_dataset
+
+
+def _create_model_decorator(app: Whiskey, models: dict) -> Callable:
+    """Create model decorator."""
+    def ml_model(name: str, **kwargs):
+        def decorator(cls: Type[Model]) -> Type[Model]:
+            # Register model
+            models[name] = cls
+            app.container[name] = cls
+            
+            app.component(cls)
+            return cls
+        
+        return decorator
+    
+    return ml_model
+
+
+def _create_trainer_decorator(app: Whiskey, trainers: dict) -> Callable:
+    """Create trainer decorator."""
+    def ml_trainer(name: str, **kwargs):
+        def decorator(cls: Type[Trainer]) -> Type[Trainer]:
+            # Register trainer
+            trainers[name] = cls
+            app.container[name] = cls
+            
+            app.component(cls)
+            return cls
+        
+        return decorator
+    
+    return ml_trainer
+
+
+def _create_metric_decorator(app: Whiskey, metrics: dict) -> Callable:
+    """Create metric decorator."""
+    def ml_metric(name: str, **kwargs):
+        def decorator(cls: Type[Metric]) -> Type[Metric]:
+            # Register metric
+            metrics[name] = cls
+            app.container[name] = cls
+            
+            app.component(cls)
+            return cls
+        
+        return decorator
+    
+    return ml_metric
+
+
+async def _on_startup() -> None:
+    """Called on application startup."""
+    # Initialize framework adapters if available
+    await _initialize_framework_adapters()
+
+
+async def _on_shutdown() -> None:
+    """Called on application shutdown."""
+    # Cleanup resources
+    pass
+
+
+async def _initialize_framework_adapters() -> None:
+    """Initialize ML framework adapters."""
+    # Try to import and register PyTorch adapter
+    try:
+        from whiskey_ml.frameworks.pytorch import register_pytorch_adapter
+        # Note: Will need to pass app/context when implementing
+        # register_pytorch_adapter(app)
+    except ImportError:
         pass
     
-    async def _initialize_framework_adapters(self) -> None:
-        """Initialize ML framework adapters."""
-        # Try to import and register PyTorch adapter
-        try:
-            from whiskey_ml.frameworks.pytorch import register_pytorch_adapter
-            register_pytorch_adapter(self)
-        except ImportError:
-            pass
-        
-        # Try to import and register TensorFlow adapter
-        try:
-            from whiskey_ml.frameworks.tensorflow import register_tensorflow_adapter
-            register_tensorflow_adapter(self)
-        except ImportError:
-            pass
-        
-        # Try to import and register JAX adapter
-        try:
-            from whiskey_ml.frameworks.jax import register_jax_adapter
-            register_jax_adapter(self)
-        except ImportError:
-            pass
+    # Try to import and register TensorFlow adapter
+    try:
+        from whiskey_ml.frameworks.tensorflow import register_tensorflow_adapter
+        # register_tensorflow_adapter(app)
+    except ImportError:
+        pass
     
-    def get_pipeline(self, name: str) -> Type[MLPipeline] | None:
-        """Get registered pipeline by name.
-        
-        Args:
-            name: Pipeline name
-            
-        Returns:
-            Pipeline class or None
-        """
-        return self._pipelines.get(name)
-    
-    def list_pipelines(self) -> dict[str, Type[MLPipeline]]:
-        """List all registered pipelines.
-        
-        Returns:
-            Dictionary of pipeline name to class
-        """
-        return self._pipelines.copy()
-    
-    async def run_pipeline(self, name: str, **kwargs) -> Any:
-        """Run a registered pipeline.
-        
-        Args:
-            name: Pipeline name
-            **kwargs: Pipeline arguments
-            
-        Returns:
-            Pipeline result
-        """
-        pipeline_class = self.get_pipeline(name)
-        if not pipeline_class:
-            raise ValueError(f"Pipeline '{name}' not found")
-        
-        # Create pipeline instance
-        pipeline = pipeline_class(self.context)
-        
-        # Run pipeline
-        return await pipeline.run(**kwargs)
-
-
-# Extension instance
-ml_extension = MLExtension()
+    # Try to import and register JAX adapter
+    try:
+        from whiskey_ml.frameworks.jax import register_jax_adapter
+        # register_jax_adapter(app)
+    except ImportError:
+        pass
