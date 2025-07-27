@@ -10,14 +10,11 @@ dependencies = []
 ai = ["whiskey-ai"]
 web = ["whiskey-asgi"]
 cli = ["whiskey-cli"]
-<<<<<<< HEAD
+http = ["whiskey-http"]
 config = ["whiskey-config"]
 jobs = ["whiskey-jobs"]
 etl = ["whiskey-etl"]
-all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli", "whiskey-config", "whiskey-jobs", "whiskey-etl"]
-=======
-all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli"]
->>>>>>> origin/main
+all = ["whiskey-ai", "whiskey-asgi", "whiskey-cli", "whiskey-http", "whiskey-config", "whiskey-jobs", "whiskey-etl"]
 
 [tool.uv]
 dev-dependencies = [
@@ -42,6 +39,7 @@ members = ["whiskey_*"]
 whiskey-asgi = { workspace = true }
 whiskey-cli = { workspace = true }
 whiskey-ai = { workspace = true }
+whiskey-http = { workspace = true }
 whiskey-config = { workspace = true }
 whiskey-jobs = { workspace = true }
 whiskey-etl = { workspace = true }
