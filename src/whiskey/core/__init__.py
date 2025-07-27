@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Core components of the Whiskey dependency injection framework.
 
 This module provides the fundamental building blocks for Whiskey's Pythonic
@@ -6,16 +5,16 @@ dependency injection system. It exports all the essential classes, decorators,
 and utilities needed to build applications with automatic dependency resolution.
 
 Key Components:
-    Container: Dict-like service registry with automatic dependency resolution
+    Container: Dict-like component registry with automatic dependency resolution
     Whiskey: Application class with lifecycle management and rich IoC features
-    Decorators: @component, @singleton, @inject for service registration
+    Decorators: @component, @singleton, @inject for component registration
     TypeAnalyzer: Smart type analysis for automatic injection decisions
     Scopes: Lifecycle management (singleton, transient, scoped)
     
 Usage Example:
     >>> from whiskey.core import Container, component, inject, singleton
     >>> 
-    >>> # Register services
+    >>> # Register components
     >>> @singleton
     ... class Database:
     ...     def query(self, sql: str): ...
@@ -27,15 +26,14 @@ Usage Example:
     >>> 
     >>> # Use injection in functions
     >>> @inject
-    ... async def process_user(user_id: int, service: UserService):
-    ...     return await service.get_user(user_id)
+    ... async def process_user(user_id: int, user_service: UserService):
+    ...     return await user_service.get_user(user_id)
 
 For more detailed examples, see the individual module documentation.
 """
 
 from whiskey.core.analyzer import InjectDecision, TypeAnalyzer
 from whiskey.core.application import Whiskey
-# Builder pattern removed - use Whiskey() directly
 from whiskey.core.container import Container, get_current_container, set_current_container
 from whiskey.core.decorators import (
     component,
@@ -46,6 +44,7 @@ from whiskey.core.decorators import (
     on_error,
     on_shutdown,
     on_startup,
+    provide,
     resolve,
     resolve_async,
     scoped,
@@ -65,96 +64,60 @@ from whiskey.core.errors import (
     WhiskeyError,
 )
 from whiskey.core.performance import PerformanceMetrics, PerformanceMonitor
-from whiskey.core.registry import Scope, ServiceDescriptor, ServiceRegistry
+from whiskey.core.registry import ComponentDescriptor, ComponentRegistry, Scope
 from whiskey.core.scopes import ContextVarScope, ScopeType
-=======
-"""Core Whiskey dependency injection framework."""
-
-from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
-from whiskey.core.container import Container
-from whiskey.core.decorators import (
-    factory,
-    get_default_container,
-    inject,
-    provide,
-    scoped,
-    set_default_container,
-    singleton,
-)
-from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
 from whiskey.core.types import Disposable, Initializable
->>>>>>> origin/main
 
 __all__ = [
+    "CircularDependencyError",
+    "ConfigurationError",
     # Container
     "Container",
-<<<<<<< HEAD
-    "get_current_container",
-    "set_current_container",
+    # Scopes
+    "ContextVarScope",
+    "Disposable",
+    # Types
+    "Initializable",
+    "InjectDecision",
+    "InjectionError",
+    "PerformanceMetrics",
+    # Performance
+    "PerformanceMonitor",
+    "RegistrationError",
+    "ResolutionError",
+    "Scope",
+    "ScopeError",
+    "ScopeType",
+    "ComponentDescriptor",
+    # Registry  
+    "ComponentRegistry",
+    "TypeAnalysisError",
+    # Analysis
+    "TypeAnalyzer",
     # Application
     "Whiskey",
-    # Builder classes removed - use direct instantiation
+    # Errors
+    "WhiskeyError",
     # Global decorators
     "component",
-    "singleton",
-    "scoped",
+    "configure_app",
     "factory",
+    "get_app",
+    "get_current_container",
     "inject",
+    "on_error",
+    "on_shutdown",
     # Lifecycle decorators
     "on_startup",
-    "on_shutdown",
-    "on_error",
-    # Conditional decorators
-    "when_env",
-    "when_debug",
-    "when_production",
+    "provide",
     # Global functions
     "resolve",
     "resolve_async",
-    "get_app",
-    "configure_app",
-    # Registry
-    "ServiceRegistry",
-    "ServiceDescriptor",
-    "Scope",
-    # Performance
-    "PerformanceMonitor",
-    "PerformanceMetrics",
-    # Analysis
-    "TypeAnalyzer",
-    "InjectDecision",
-    # Scopes
-    "ContextVarScope",
-    "ScopeType",
-    # Errors
-    "WhiskeyError",
-    "ResolutionError",
-    "CircularDependencyError",
-    "RegistrationError",
-    "InjectionError",
-    "ScopeError",
-    "ConfigurationError",
-    "TypeAnalysisError",
-]
-=======
-    "get_default_container",
-    "set_default_container",
-    # Decorators
-    "provide",
-    "singleton",
-    "factory",
-    "inject",
     "scoped",
-    # Application
-    "Application",
-    "ApplicationConfig",
-    "ComponentMetadata",
-    # Scopes
-    "Scope",
-    "ContextVarScope",
-    "ScopeType",
-    # Types
-    "Initializable",
-    "Disposable",
+    "set_current_container",
+    "singleton",
+    "when_debug",
+    # Conditional decorators
+    "when_env",
+    "when_production",
 ]
->>>>>>> origin/main

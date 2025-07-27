@@ -31,9 +31,9 @@ Functions:
     is_protocol: Check if type is a Protocol
 
 Example:
-    >>> from whiskey.core import TypeAnalyzer, ServiceRegistry
+    >>> from whiskey.core import TypeAnalyzer, ComponentRegistry
     >>> 
-    >>> registry = ServiceRegistry()
+    >>> registry = ComponentRegistry()
     >>> registry.register(Database, PostgresDB)
     >>> 
     >>> analyzer = TypeAnalyzer(registry)
@@ -44,25 +44,25 @@ Example:
     >>> 
     >>> results = analyzer.analyze_callable(process)
     >>> # results['name'] = InjectResult(NO, str, "built-in type")
-    >>> # results['db'] = InjectResult(YES, Database, "registered service")
+    >>> # results['db'] = InjectResult(YES, Database, "registered component")
     >>> # results['cache'] = InjectResult(OPTIONAL, Cache, "optional type")
 
 See Also:
     - whiskey.core.container: Uses analyzer for injection decisions
-    - whiskey.core.registry: Service registration state
+    - whiskey.core.registry: Component registration state
 """
 
 from __future__ import annotations
 
 import inspect
 from enum import Enum
-from typing import Any, Union, get_args, get_origin
+from typing import Any, Callable, ClassVar, Union, get_args, get_origin
 
 from .errors import TypeAnalysisError
 
 # Handle Python version differences
 try:
-    from typing import Literal, get_type_hints
+    from typing import Literal
 except ImportError:
     from typing_extensions import Literal
 
@@ -93,7 +93,7 @@ class InjectResult:
         type_hint: Any = None,
         reason: str = "",
         inner_type: Any = None,
-        candidates: list[Any] = None,
+        candidates: list[Any] | None = None,
     ):
         self.decision = decision
         self.type_hint = type_hint
@@ -140,7 +140,7 @@ class TypeAnalyzer:
     """
 
     # Built-in types that should never be injected
-    BUILTIN_TYPES = {
+    BUILTIN_TYPES: ClassVar[set[type]] = {
         str,
         int,
         float,
@@ -171,7 +171,7 @@ class TypeAnalyzer:
     }
 
     # Standard library modules to avoid injecting from
-    STDLIB_MODULES = {
+    STDLIB_MODULES: ClassVar[set[str]] = {
         "builtins",
         "sys",
         "os",
@@ -236,7 +236,7 @@ class TypeAnalyzer:
         """Initialize the type analyzer.
 
         Args:
-            registry: Optional ServiceRegistry for checking registrations
+            registry: Optional ComponentRegistry for checking registrations
         """
         self.registry = registry
         self._analysis_cache: dict[Any, InjectResult] = {}
@@ -354,7 +354,7 @@ class TypeAnalyzer:
             )
 
         # Handle Callable types
-        if origin in (type(Callable), type(Callable[..., Any])):
+        if origin is Callable or (hasattr(origin, '__name__') and origin.__name__ == 'Callable'):
             return self._analyze_callable_type(type_hint, args)
 
         # Handle typing constructs
@@ -364,7 +364,7 @@ class TypeAnalyzer:
 
         # Handle generic types (e.g., Service[T])
         if self._is_generic_type(origin):
-            return self._analyze_generic_service_type(type_hint, origin, args)
+            return self._analyze_generic_component_type(type_hint, origin, args)
 
         # Handle other generic types - analyze the origin
         return self._analyze_type_hint(origin)
@@ -541,8 +541,8 @@ class TypeAnalyzer:
             # Find types that might implement this protocol
             candidates = []
             for descriptor in self.registry.list_all():
-                if self._implements_protocol(descriptor.service_type, type_hint):
-                    candidates.append(descriptor.service_type)
+                if self._implements_protocol(descriptor.component_type, type_hint):
+                    candidates.append(descriptor.component_type)
 
             if len(candidates) == 1:
                 return InjectResult(
@@ -630,27 +630,27 @@ class TypeAnalyzer:
         root_module = module_name.split(".")[0]
         return root_module in self.STDLIB_MODULES
 
-    def _analyze_generic_service_type(
+    def _analyze_generic_component_type(
         self, type_hint: Any, origin: Any, args: tuple
     ) -> InjectResult:
-        """Analyze generic service types like Service[T].
+        """Analyze generic component types like Component[T].
 
         Args:
             type_hint: The full generic type
-            origin: The origin type (e.g., Service)
+            origin: The origin type (e.g., Component)
             args: Type arguments (e.g., (T,))
 
         Returns:
             InjectResult with decision
         """
-        # For generic service types, we try to resolve the origin type
+        # For generic component types, we try to resolve the origin type
         # The container might have a factory that handles the generic parameters
 
         if self.registry and self.registry.has(origin):
             return InjectResult(
                 InjectDecision.YES,
                 type_hint,
-                f"Generic service type registered: {origin} with args {args}",
+                f"Generic component type registered: {origin} with args {args}",
                 inner_type=origin,
             )
 
@@ -674,7 +674,7 @@ class TypeAnalyzer:
         try:
             sig = inspect.signature(func)
         except (TypeError, ValueError) as e:
-            raise TypeAnalysisError(f"Cannot analyze non-callable object: {e}")
+            raise TypeAnalysisError(f"Cannot analyze non-callable object: {e}") from e
         
         results = {}
 
@@ -732,7 +732,7 @@ class TypeAnalyzer:
         return True
 
     def detect_circular_dependency(
-        self, start_type: type, visited: set[type] = None, path: list[type] = None
+        self, start_type: type, visited: set[type] | None = None, path: list[type] | None = None
     ) -> list[type] | None:
         """Detect circular dependencies in type hierarchy.
 
@@ -752,7 +752,7 @@ class TypeAnalyzer:
         if start_type in visited:
             # Found cycle - return the circular path
             cycle_start = path.index(start_type) if start_type in path else 0
-            return path[cycle_start:] + [start_type]
+            return [*path[cycle_start:], start_type]
 
         if not inspect.isclass(start_type):
             return None
@@ -928,9 +928,7 @@ def is_union(type_hint: Any) -> bool:
     if origin is Union:
         # Check if it's Optional (Union with None)
         args = get_args(type_hint)
-        if len(args) == 2 and type(None) in args:
-            return False  # It's Optional, not a general Union
-        return True
+        return not (len(args) == 2 and type(None) in args)
     return False
 
 

@@ -2,9 +2,9 @@
 
 import asyncio
 import random
+
 from whiskey import Whiskey, inject
 from whiskey_http import http_extension
-
 
 app = Whiskey()
 app.use(http_extension)
@@ -78,7 +78,7 @@ class ResilientService:
                 response = await self.protected.get("/status/500")
                 print(f"  Request {i + 1}: ✅ {response.status_code}")
             except Exception as e:
-                print(f"  Request {i + 1}: ❌ {type(e).__name__}: {str(e)}")
+                print(f"  Request {i + 1}: ❌ {type(e).__name__}: {e!s}")
 
             await asyncio.sleep(0.5)
 

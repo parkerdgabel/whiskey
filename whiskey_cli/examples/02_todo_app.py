@@ -16,7 +16,8 @@ Usage:
     python 02_todo_app.py db:backup
 """
 
-from typing import List, Optional
+from typing import Optional
+
 from whiskey import Whiskey, inject, singleton
 from whiskey_cli import cli_extension
 
@@ -24,9 +25,9 @@ from whiskey_cli import cli_extension
 # Domain model
 class Task:
     """A task in our todo app."""
-    
-    def __init__(self, id: int, title: str, completed: bool = False):
-        self.id = id
+
+    def __init__(self, task_id: int, title: str, completed: bool = False):
+        self.id = task_id
         self.title = title
         self.completed = completed
 
@@ -35,30 +36,30 @@ class Task:
 @singleton
 class TaskService:
     """Service for managing tasks."""
-    
+
     def __init__(self):
-        self._tasks: List[Task] = []
+        self._tasks: list[Task] = []
         self._next_id = 1
         # Add some sample tasks
         self.add("Learn Whiskey framework")
         self.add("Build a CLI app")
         self.add("Master dependency injection")
-    
+
     def add(self, title: str) -> Task:
         """Add a new task."""
         task = Task(self._next_id, title)
         self._tasks.append(task)
         self._next_id += 1
         return task
-    
-    def list_all(self) -> List[Task]:
+
+    def list_all(self) -> list[Task]:
         """List all tasks."""
         return self._tasks.copy()
-    
+
     def get(self, task_id: int) -> Optional[Task]:
         """Get a task by ID."""
         return next((t for t in self._tasks if t.id == task_id), None)
-    
+
     def complete(self, task_id: int) -> bool:
         """Mark a task as completed."""
         task = self.get(task_id)
@@ -66,7 +67,7 @@ class TaskService:
             task.completed = True
             return True
         return False
-    
+
     def delete(self, task_id: int) -> bool:
         """Delete a task."""
         self._tasks = [t for t in self._tasks if t.id != task_id]
@@ -93,27 +94,27 @@ def add(title: str, tasks: TaskService):
 def list_tasks(tasks: TaskService):
     """List all tasks."""
     all_tasks = tasks.list_all()
-    
+
     if not all_tasks:
         print("No tasks found. Use 'add' to create one!")
         return
-    
+
     print("\n📋 Your Tasks:\n")
-    
+
     # Separate pending and completed
     pending = [t for t in all_tasks if not t.completed]
     completed = [t for t in all_tasks if t.completed]
-    
+
     if pending:
         print("⏳ Pending:")
         for task in pending:
             print(f"  [{task.id}] {task.title}")
-    
+
     if completed:
         print("\n✅ Completed:")
         for task in completed:
             print(f"  [{task.id}] {task.title} ✓")
-    
+
     print(f"\nTotal: {len(pending)} pending, {len(completed)} completed")
 
 
@@ -149,11 +150,12 @@ async def backup(tasks: TaskService):
     """Backup all tasks (async example)."""
     all_tasks = tasks.list_all()
     print(f"📦 Backing up {len(all_tasks)} tasks...")
-    
+
     # Simulate async operation
     import asyncio
+
     await asyncio.sleep(1)
-    
+
     print("✅ Backup complete!")
     print(f"   Saved to: backup_{len(all_tasks)}_tasks.json")
 
@@ -162,11 +164,12 @@ async def backup(tasks: TaskService):
 async def restore():
     """Restore tasks from backup."""
     print("📥 Restoring from backup...")
-    
+
     # Simulate async operation
     import asyncio
+
     await asyncio.sleep(1)
-    
+
     print("✅ Restore complete!")
 
 

@@ -1,10 +1,11 @@
 """Example demonstrating authentication patterns."""
 
 import os
-from whiskey import Whiskey, inject
-from whiskey_http import http_extension
+
 import httpx
 
+from whiskey import Whiskey, inject
+from whiskey_http import http_extension
 
 app = Whiskey()
 app.use(http_extension)
@@ -117,10 +118,10 @@ class AuthDemoService:
 
         # Make authenticated request
         try:
-            response = await self.oauth.get("/protected-resource")
-            print(f"✅ Accessed protected resource")
+            await self.oauth.get("/protected-resource")
+            print("✅ Accessed protected resource")
         except Exception as e:
-            print(f"ℹ️ Mock request (no real endpoint): {type(e).__name__}")
+            print(f"Info: Mock request (no real endpoint): {type(e).__name__}")
 
     async def demo_api_key(self):
         """Demo API key authentication."""
@@ -128,10 +129,10 @@ class AuthDemoService:
 
         try:
             # The API key is automatically included in query params
-            response = await self.api_key.get("/data")
+            await self.api_key.get("/data")
             print("✅ Request includes API key in params")
         except Exception as e:
-            print(f"ℹ️ Mock request (no real endpoint): {type(e).__name__}")
+            print(f"Info: Mock request (no real endpoint): {type(e).__name__}")
 
 
 @inject

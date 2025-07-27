@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Whiskey - Simple, Pythonic dependency injection for modern Python applications.
 
 Whiskey is a lightweight, type-safe dependency injection framework designed
@@ -47,16 +46,11 @@ Quick Start:
 For more information, see the documentation at:
 https://github.com/yourusername/whiskey
 """
-=======
-"""Whiskey - Simple, Pythonic dependency injection for AI applications."""
->>>>>>> origin/main
 
 __version__ = "0.1.0"
 
 # Core exports
-<<<<<<< HEAD
 from whiskey.core.application import Whiskey
-# Builder pattern removed - use Whiskey() directly
 from whiskey.core.container import Container
 from whiskey.core.decorators import (
     call,
@@ -85,21 +79,13 @@ from whiskey.core.registry import Scope
 from whiskey.core.scopes import ContextVarScope, ScopeType
 from whiskey.core.types import Disposable, Initializable, Inject
 
-# Legacy aliases for backward compatibility
+# Legacy alias for backward compatibility
 Application = Whiskey
-=======
-from whiskey.core.application import Application, ApplicationConfig, ComponentMetadata
-from whiskey.core.container import Container
-from whiskey.core.decorators import factory, inject, provide, scoped, singleton
-from whiskey.core.scopes import ContextVarScope, Scope, ScopeType
-from whiskey.core.types import Disposable, Initializable
->>>>>>> origin/main
 
 __all__ = [
     # Core DI
     "Container",
     "inject",
-<<<<<<< HEAD
     "singleton",
     "factory",
     "scoped",
@@ -108,18 +94,10 @@ __all__ = [
     # Application Framework
     "Whiskey",
     "Application",  # Legacy alias
-    # "create_app",  # Removed - use Whiskey() directly
-=======
-    "provide",
-    "singleton",
-    "factory",
-    "scoped",
->>>>>>> origin/main
     # Scopes
     "Scope",
     "ContextVarScope",
     "ScopeType",
-<<<<<<< HEAD
     # Lazy
     "Lazy",
     "lazy_inject",
@@ -145,13 +123,3 @@ __all__ = [
     "get_app",
     "configure_app",
 ]
-=======
-    # Application
-    "Application",
-    "ApplicationConfig",
-    "ComponentMetadata",
-    # Types
-    "Initializable",
-    "Disposable",
-]
->>>>>>> origin/main

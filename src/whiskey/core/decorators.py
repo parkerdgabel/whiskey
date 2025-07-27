@@ -1,4 +1,4 @@
-"""Global decorators for service registration and dependency injection.
+"""Global decorators for component registration and dependency injection.
 
 This module provides Flask-style global decorators that work with a default
 application instance, making it easy to build simple applications without
@@ -6,10 +6,10 @@ explicit application management. All decorators support both sync and async
 functions and handle automatic dependency injection based on type hints.
 
 Decorators:
-    @component: Register a transient service (new instance per resolution)
-    @singleton: Register a singleton service (one instance per app)
-    @factory: Register a factory function for service creation
-    @scoped: Register a scoped service (one instance per scope)
+    @component: Register a transient component (new instance per resolution)
+    @singleton: Register a singleton component (one instance per app)
+    @factory: Register a factory function for component creation
+    @scoped: Register a scoped component (one instance per scope)
     @inject: Enable automatic dependency injection for functions
     
     @on_startup: Register startup callbacks
@@ -21,8 +21,8 @@ Decorators:
     @when_production: Register only in production
 
 Functions:
-    resolve: Synchronously resolve a service
-    resolve_async: Asynchronously resolve a service
+    resolve: Synchronously resolve a component
+    resolve_async: Asynchronously resolve a component
     call: Call a function with dependency injection
     call_sync: Synchronously call with injection
     invoke: Invoke a function with full injection
@@ -45,7 +45,7 @@ Example:
     >>> 
     >>> @inject
     ... async def get_user(user_id: int, service: UserService):
-    ...     # user_id must be provided, service is auto-injected
+    ...     # user_id must be provided, component is auto-injected
     ...     return await service.fetch_user(user_id)
     
 Note:
@@ -56,10 +56,9 @@ Note:
 from __future__ import annotations
 
 import asyncio
-<<<<<<< HEAD
 import inspect
 from functools import wraps
-from typing import Any, Callable, Type, TypeVar, Union
+from typing import Any, Callable, TypeVar
 
 from .application import Whiskey, create_default_app
 from .registry import Scope
@@ -78,29 +77,29 @@ def _get_default_app() -> Whiskey:
     return _default_app
 
 
-# Global service registration decorators
+# Global component registration decorators
 
 
 def component(
-    cls: Type[T] = None,
+    cls: type[T] | None = None,
     *,
-    key: str | type = None,
-    name: str = None,
+    key: str | type | None = None,
+    name: str | None = None,
     scope: Scope = Scope.TRANSIENT,
-    tags: set[str] = None,
-    condition: Callable[[], bool] = None,
+    tags: set[str] | None = None,
+    condition: Callable[[], bool] | None = None,
     lazy: bool = False,
     app: Whiskey = None,
-) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
-    """Global decorator to register a class as a service.
+) -> type[T] | Callable[[type[T]], type[T]]:
+    """Global decorator to register a class as a component.
 
     Uses the default application instance unless 'app' is specified.
 
     Args:
         cls: The class to register (when used without parentheses)
-        key: Optional service key (defaults to class)
-        name: Optional name for named services
-        scope: Service scope (default: transient)
+        key: Optional component key (defaults to class)
+        name: Optional name for named components
+        scope: Component scope (default: transient)
         tags: Set of tags for categorization
         condition: Optional registration condition
         lazy: Whether to use lazy resolution
@@ -118,7 +117,7 @@ def component(
         >>> class CacheService:
         ...     pass
     """
-    def decorator(cls: Type[T]) -> Type[T]:
+    def decorator(cls: type[T]) -> type[T]:
         # Validate that target is a class
         if not inspect.isclass(cls):
             raise TypeError("@component decorator can only be applied to classes")
@@ -134,16 +133,16 @@ def component(
 
 
 def singleton(
-    cls: Type[T] = None,
+    cls: type[T] | None = None,
     *,
-    key: str | type = None,
-    name: str = None,
-    tags: set[str] = None,
-    condition: Callable[[], bool] = None,
+    key: str | type | None = None,
+    name: str | None = None,
+    tags: set[str] | None = None,
+    condition: Callable[[], bool] | None = None,
     lazy: bool = False,
     app: Whiskey = None,
-) -> Union[Type[T], Callable[[Type[T]], Type[T]]]:
-    """Global decorator to register a class as a singleton service."""
+) -> type[T] | Callable[[type[T]], type[T]]:
+    """Global decorator to register a class as a singleton component."""
     target_app = app or _get_default_app()
     return target_app.singleton(cls, key=key, name=name, tags=tags, condition=condition, lazy=lazy)
 
@@ -151,17 +150,17 @@ def singleton(
 def scoped(
     scope_name: str = "default",
     *,
-    key: str | type = None,
-    name: str = None,
-    tags: set[str] = None,
-    condition: Callable[[], bool] = None,
+    key: str | type | None = None,
+    name: str | None = None,
+    tags: set[str] | None = None,
+    condition: Callable[[], bool] | None = None,
     lazy: bool = False,
     app: Whiskey = None,
-) -> Callable[[Type[T]], Type[T]]:
-    """Global decorator to register a class as a scoped service."""
+) -> Callable[[type[T]], type[T]]:
+    """Global decorator to register a class as a scoped component."""
     target_app = app or _get_default_app()
     
-    def decorator(cls: Type[T]) -> Type[T]:
+    def decorator(cls: type[T]) -> type[T]:
         return target_app.scoped(
             cls, scope_name=scope_name, key=key, name=name, tags=tags, condition=condition, lazy=lazy
         )
@@ -172,21 +171,21 @@ def scoped(
 def factory(
     key_or_func=None,
     *,
-    key: str | type = None,
-    name: str = None,
+    key: str | type | None = None,
+    name: str | None = None,
     scope: Scope = Scope.TRANSIENT,
-    tags: set[str] = None,
-    condition: Callable[[], bool] = None,
+    tags: set[str] | None = None,
+    condition: Callable[[], bool] | None = None,
     lazy: bool = False,
     app: Whiskey = None,
-) -> Union[Callable, Callable[[Callable], Callable]]:
+) -> Callable | Callable[[Callable], Callable]:
     """Global decorator to register a function as a factory.
 
     Args:
-        key_or_func: Either the service key or the factory function
-        key: Service key (if not provided as first arg)
-        name: Optional name for named services
-        scope: Service scope (default: transient)
+        key_or_func: Either the component key or the factory function
+        key: Component key (if not provided as first arg)
+        name: Optional name for named components
+        scope: Component scope (default: transient)
         tags: Set of tags for categorization
         condition: Optional registration condition
         lazy: Whether to use lazy resolution
@@ -247,8 +246,8 @@ provide = component
 
 
 def inject(
-    func: Callable = None, *, app: Whiskey = None
-) -> Union[Callable, Callable[[Callable], Callable]]:
+    func: Callable | None = None, *, app: Whiskey = None
+) -> Callable | Callable[[Callable], Callable]:
     """Global decorator to enable dependency injection for a function.
 
     This decorator modifies a function to automatically resolve its
@@ -301,7 +300,7 @@ def inject(
 # Conditional decorators
 
 
-def when_env(var_name: str, expected_value: str = None, app: Whiskey = None):
+def when_env(var_name: str, expected_value: str | None = None, app: Whiskey = None):
     """Global decorator factory for environment-based conditional registration."""
     target_app = app or _get_default_app()
     return target_app.when_env(var_name, expected_value)
@@ -338,7 +337,7 @@ def when_production(cls_or_app=None, *, app: Whiskey = None):
 # Whiskey lifecycle decorators
 
 
-def on_startup(func: Callable = None, *, app: Whiskey = None):
+def on_startup(func: Callable | None = None, *, app: Whiskey = None):
     """Global decorator to register a startup callback.
 
     Args:
@@ -347,7 +346,7 @@ def on_startup(func: Callable = None, *, app: Whiskey = None):
 
     Examples:
         >>> @on_startup
-        >>> def initialize_services():
+        >>> def initialize_components():
         ...     print("Whiskey starting up...")
 
         >>> @on_startup
@@ -366,7 +365,7 @@ def on_startup(func: Callable = None, *, app: Whiskey = None):
         return decorator(func)
 
 
-def on_shutdown(func: Callable = None, *, app: Whiskey = None):
+def on_shutdown(func: Callable | None = None, *, app: Whiskey = None):
     """Global decorator to register a shutdown callback."""
 
     def decorator(func: Callable) -> Callable:
@@ -380,7 +379,7 @@ def on_shutdown(func: Callable = None, *, app: Whiskey = None):
         return decorator(func)
 
 
-def on_error(func: Callable = None, *, app: Whiskey = None):
+def on_error(func: Callable | None = None, *, app: Whiskey = None):
     """Global decorator to register an error handler.
 
     Args:
@@ -469,31 +468,31 @@ def wrap_function(func: Callable, *, app: Whiskey = None) -> Callable:
     return target_app.wrap_function(func)
 
 
-# Service resolution utilities
+# Component resolution utilities
 
 
 def resolve(key: str | type, *, app: Whiskey = None) -> Any:
-    """Global function to resolve a service.
+    """Global function to resolve a component.
 
     Args:
-        key: Service key (string or type)
+        key: Component key (string or type)
         app: Optional Whiskey instance (uses default if None)
 
     Returns:
-        The resolved service instance
+        The resolved component instance
 
     Examples:
         >>> database = resolve('database')
         >>> email_service = resolve(EmailService)
     """
     if key is None:
-        raise ValueError("Service key cannot be None")
+        raise ValueError("Component key cannot be None")
     target_app = app or _get_default_app()
     return target_app.resolve(key)
 
 
 async def resolve_async(key: str | type, *, app: Whiskey = None) -> Any:
-    """Global async function to resolve a service."""
+    """Global async function to resolve a component."""
     target_app = app or _get_default_app()
     return await target_app.resolve_async(key)
 
@@ -510,10 +509,10 @@ def configure_app(config_func: Callable[[Whiskey], None]) -> None:
         config_func: Function that configures the application
 
     Examples:
-        >>> def setup_services(app: Whiskey):
+        >>> def setup_components(app: Whiskey):
         ...     app.container.add_singleton('config', load_config())
         >>>
-        >>> configure_app(setup_services)
+        >>> configure_app(setup_components)
     """
     app = _get_default_app()
     config_func(app)

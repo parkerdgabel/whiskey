@@ -6,9 +6,9 @@ clear error messages and contextual information to aid debugging.
 
 Exception Hierarchy:
     WhiskeyError: Base exception for all Whiskey errors
-    ├── ResolutionError: Service resolution failures
+    ├── ResolutionError: Component resolution failures
     │   └── CircularDependencyError: Circular dependency detected
-    ├── RegistrationError: Service registration failures
+    ├── RegistrationError: Component registration failures
     ├── InjectionError: Dependency injection failures
     ├── ScopeError: Scope-related failures
     ├── ConfigurationError: Configuration failures
@@ -23,14 +23,14 @@ Usage Patterns:
 
 Example:
     >>> try:
-    ...     service = await container.resolve(UnregisteredService)
+    ...     component = await container.resolve(UnregisteredComponent)
     ... except ResolutionError as e:
     ...     print(f"Failed to resolve: {e.service_key}")
     ...     if e.cause:
     ...         print(f"Underlying cause: {e.cause}")
     >>> 
     >>> try:
-    ...     container.register(Service, invalid_provider)
+    ...     container.register(Component, invalid_provider)
     ... except RegistrationError as e:
     ...     print(f"Registration failed: {e}")
 
@@ -51,15 +51,15 @@ class WhiskeyError(Exception):
 
 
 class ResolutionError(WhiskeyError):
-    """Raised when a service cannot be resolved.
+    """Raised when a component cannot be resolved.
 
     This is the most common error, occurring when:
-    - A required service is not registered
-    - A service's dependencies cannot be satisfied
-    - A condition for service registration is not met
+    - A required component is not registered
+    - A component's dependencies cannot be satisfied
+    - A condition for component registration is not met
     """
 
-    def __init__(self, message: str, service_key: str = None, cause: Exception = None):
+    def __init__(self, message: str, service_key: str | None = None, cause: Exception | None = None):
         super().__init__(message)
         self.service_key = service_key
         self.cause = cause
@@ -75,7 +75,7 @@ class CircularDependencyError(ResolutionError):
     def __init__(self, cycle: list[type]):
         self.cycle = cycle
         cycle_names = [cls.__name__ for cls in cycle]
-        cycle_str = " → ".join(cycle_names + [cycle_names[0]])
+        cycle_str = " → ".join([*cycle_names, cycle_names[0]])
 
         super().__init__(
             f"Circular dependency detected: {cycle_str}",
@@ -84,11 +84,11 @@ class CircularDependencyError(ResolutionError):
 
 
 class RegistrationError(WhiskeyError):
-    """Raised when service registration fails.
+    """Raised when component registration fails.
 
     This occurs when:
     - Invalid registration parameters are provided
-    - A service is registered multiple times with conflicting metadata
+    - A component is registered multiple times with conflicting metadata
     - Registration conditions are invalid
     """
 
@@ -104,7 +104,7 @@ class InjectionError(WhiskeyError):
     - Ambiguous type hints (e.g., Union with multiple registered types)
     """
 
-    def __init__(self, message: str, parameter_name: str = None, type_hint=None):
+    def __init__(self, message: str, parameter_name: str | None = None, type_hint=None):
         super().__init__(message)
         self.parameter_name = parameter_name
         self.type_hint = type_hint
@@ -114,7 +114,7 @@ class ScopeError(WhiskeyError):
     """Raised when scope-related operations fail.
 
     This occurs when:
-    - Attempting to resolve a scoped service outside its scope
+    - Attempting to resolve a scoped component outside its scope
     - Invalid scope configuration
     - Scope lifecycle violations
     """

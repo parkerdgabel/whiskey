@@ -3,29 +3,27 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Callable, Type
+from typing import Any, Callable
 from urllib.parse import urlparse
 
-from whiskey import Whiskey, singleton
-from whiskey.core.decorators import component
-
-from whiskey_sql.core import Database, SQL
+from whiskey import Whiskey
 from whiskey_sql.backends import create_database_pool
+from whiskey_sql.core import SQL, Database
 from whiskey_sql.exceptions import ConfigurationError
 
 
 def sql_extension(app: Whiskey) -> None:
     """Configure Whiskey application with SQL support.
-    
+
     This extension adds:
     - Database configuration methods
     - SQL query registration decorator
     - Automatic Database injection
     - Migration support
-    
+
     Args:
         app: Whiskey application instance
-        
+
     Examples:
         >>> app = Whiskey()
         >>> app.use(sql_extension)
@@ -33,10 +31,10 @@ def sql_extension(app: Whiskey) -> None:
     """
     # Add configuration method
     app.configure_database = lambda **kwargs: _configure_database(app, **kwargs)
-    
+
     # Add SQL registration decorator
     app.sql = lambda name: _create_sql_decorator(app, name)
-    
+
     # Register default database if DATABASE_URL is set
     if database_url := os.getenv("DATABASE_URL"):
         _configure_database(app, url=database_url)
@@ -52,10 +50,10 @@ def _configure_database(
     echo_queries: bool = False,
     ssl_context: Any = None,
     server_settings: dict[str, str] | None = None,
-    **kwargs
+    **kwargs,
 ) -> None:
     """Configure a database connection.
-    
+
     Args:
         app: Whiskey application instance
         url: Database URL (e.g., postgresql://user:pass@host/db)
@@ -71,11 +69,11 @@ def _configure_database(
         url = os.getenv("DATABASE_URL")
         if not url:
             raise ConfigurationError("Database URL not provided")
-    
+
     # Parse database URL to determine backend
     parsed = urlparse(url)
     dialect = parsed.scheme.split("+")[0]  # Handle postgresql+asyncpg
-    
+
     # Create configuration
     config = {
         "url": url,
@@ -85,14 +83,14 @@ def _configure_database(
         "echo_queries": echo_queries,
         "ssl_context": ssl_context,
         "server_settings": server_settings or {},
-        **kwargs
+        **kwargs,
     }
-    
+
     # Create database factory
     async def database_factory() -> Database:
         """Factory function to create database instance."""
         return await create_database_pool(**config)
-    
+
     # Register as singleton
     if name:
         # Named database registration
@@ -100,7 +98,7 @@ def _configure_database(
     else:
         # Default database registration
         app.container.singleton(Database, database_factory)
-    
+
     # Add startup hook to initialize pool
     @app.on_startup
     async def initialize_database():
@@ -109,12 +107,12 @@ def _configure_database(
             db = await app.container.resolve(Database, name=name)
         else:
             db = await app.container.resolve(Database)
-        
+
         # Verify connection
-        health = await db.health_check()
+        await db.health_check()
         if echo_queries:
             print(f"🗄️  Database connected: {dialect} (pool_size={pool_size})")
-    
+
     # Add shutdown hook to close pool
     @app.on_shutdown
     async def close_database():
@@ -123,7 +121,7 @@ def _configure_database(
             db = await app.container.resolve(Database, name=name)
         else:
             db = await app.container.resolve(Database)
-        
+
         if hasattr(db.pool, "close"):
             await db.pool.close()
             if echo_queries:
@@ -132,66 +130,64 @@ def _configure_database(
 
 def _create_sql_decorator(app: Whiskey, name: str, path: str | None = None) -> Callable:
     """Create SQL query registration decorator.
-    
+
     Args:
         app: Whiskey application instance
         name: Name for the query group
         path: Optional path to SQL files directory
-        
+
     Returns:
         Decorator function for registering SQL queries
     """
-    def decorator(cls: Type) -> Type:
+
+    def decorator(cls: type) -> type:
         """Register a class containing SQL queries.
-        
+
         The class can contain:
         - SQL instances as class attributes
         - Methods that return SQL instances
         - References to .sql files (when path is provided)
-        
+
         Args:
             cls: Class containing SQL queries
-            
+
         Returns:
             The registered class
         """
         # Process class attributes
         if path:
             _load_sql_files(cls, path)
-        
+
         # Register as singleton component
         app.container.singleton(cls, cls)
-        
+
         # Store metadata for introspection
         if not hasattr(cls, "_sql_metadata"):
-            cls._sql_metadata = {
-                "name": name,
-                "path": path
-            }
-        
+            cls._sql_metadata = {"name": name, "path": path}
+
         return cls
-    
+
     return decorator
 
 
-def _load_sql_files(cls: Type, base_path: str) -> None:
+def _load_sql_files(cls: type, base_path: str) -> None:
     """Load SQL files referenced by class attributes.
-    
+
     Args:
         cls: Class to populate with SQL queries
         base_path: Base directory for SQL files
     """
     from pathlib import Path
-    
+
     base = Path(base_path)
     if not base.exists():
         raise ConfigurationError(f"SQL directory not found: {base_path}")
-    
+
     # Look for None attributes that should be loaded from files
     for attr_name in dir(cls):
         if attr_name.startswith("_"):
             continue
-            
+
         attr_value = getattr(cls, attr_name, None)
         if attr_value is None:
             # Try to load from file

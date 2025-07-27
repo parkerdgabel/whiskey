@@ -1,7 +1,7 @@
 """Tests for configuration schema utilities."""
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 import pytest
 
@@ -41,7 +41,7 @@ class ComplexConfig:
     version: str
     debug: bool
     server: NestedConfig
-    tags: List[str] = None
+    tags: list[str] = None
 
     def __post_init__(self):
         if self.tags is None:
@@ -100,19 +100,19 @@ class TestTypeConversion:
     def test_convert_list(self):
         """Test converting to list types."""
         # From comma-separated string
-        result = convert_value("a,b,c", List[str])
+        result = convert_value("a,b,c", list[str])
         assert result == ["a", "b", "c"]
 
         # From list
-        result = convert_value([1, 2, 3], List[int])
+        result = convert_value([1, 2, 3], list[int])
         assert result == [1, 2, 3]
 
         # Type conversion within list
-        result = convert_value(["1", "2", "3"], List[int])
+        result = convert_value(["1", "2", "3"], list[int])
         assert result == [1, 2, 3]
 
         # Single value to list
-        result = convert_value("single", List[str])
+        result = convert_value("single", list[str])
         assert result == ["single"]
 
     def test_convert_optional(self):

@@ -1,10 +1,11 @@
 """Tests for type definitions and protocols."""
 
 import asyncio
+import warnings
 
 import pytest
 
-from whiskey.core.types import Disposable, Initializable
+from whiskey.core.types import Disposable, Initializable, Inject
 
 
 class TestInitializableProtocol:
@@ -140,3 +141,26 @@ class TestCombinedProtocols:
         await service.dispose()
         assert service.initialized
         assert service.disposed
+
+
+class TestInject:
+    """Test the deprecated Inject class."""
+
+    def test_inject_deprecation_warning(self):
+        """Test that Inject raises deprecation warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            inject = Inject()
+            
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "Inject() is deprecated" in str(w[0].message)
+
+    def test_inject_with_parameters(self):
+        """Test Inject with name and optional parameters."""
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            inject = Inject(name="test", optional=True)
+            
+            assert inject.name == "test"
+            assert inject.optional is True

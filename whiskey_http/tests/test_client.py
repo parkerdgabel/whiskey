@@ -1,11 +1,12 @@
 """Tests for HTTP client functionality."""
 
-import pytest
+from unittest.mock import Mock, patch
+
 import httpx
-from unittest.mock import AsyncMock, Mock, patch
+import pytest
+
 from whiskey import Whiskey
 from whiskey_http import http_extension
-from whiskey_http.types import RetryConfig, CircuitBreakerConfig
 
 
 @pytest.fixture

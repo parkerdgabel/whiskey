@@ -6,7 +6,17 @@ dependency injection decisions for parameters.
 
 import asyncio
 import inspect
-from typing import Any, ForwardRef, Optional, Protocol, Union, Literal, Callable, List, Dict, TypeVar
+from typing import (
+    Any,
+    Dict,
+    ForwardRef,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+)
 from unittest.mock import Mock
 
 import pytest
@@ -22,7 +32,7 @@ from whiskey.core.analyzer import (
     is_union,
 )
 from whiskey.core.errors import TypeAnalysisError
-from whiskey.core.registry import ServiceRegistry
+from whiskey.core.registry import ComponentRegistry
 
 
 # Helper functions
@@ -104,7 +114,7 @@ class TestTypeAnalyzer:
     @pytest.fixture
     def registry(self):
         """Create a service registry for testing."""
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
         registry.register(SimpleService, SimpleService)
         registry.register(DatabaseService, DatabaseService)
         registry.register(ComplexService, ComplexService)
@@ -400,7 +410,7 @@ class TestEdgeCases:
 
     @pytest.fixture
     def analyzer(self):
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
         return TypeAnalyzer(registry)
 
     def test_analyze_lambda_function(self, analyzer):
@@ -560,7 +570,7 @@ class TestAsyncIntegration:
 
     @pytest.fixture
     def analyzer(self):
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
         registry.register(SimpleService, SimpleService)
         return TypeAnalyzer(registry)
 
@@ -603,7 +613,7 @@ class TestProtocolAnalysis:
         assert result.decision == InjectDecision.NO
         
         # With registry but not registered
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
         analyzer_with_registry = TypeAnalyzer(registry)
         result = analyzer_with_registry._analyze_type_hint(ServiceProtocol)
         assert result.decision == InjectDecision.NO
@@ -616,7 +626,6 @@ class TestProtocolAnalysis:
         # ServiceProtocol inherits from Protocol
         # But _is_protocol checks internal implementation details
         # Let's test with actual typing.Protocol
-        from typing import Protocol as TypingProtocol
         
         # Test with typing constructs
         assert not analyzer._is_protocol(SimpleService)
@@ -674,7 +683,7 @@ class TestGenericAnalysis:
         analyzer = TypeAnalyzer()
         
         # Test the base generic service
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
         analyzer = TypeAnalyzer(registry)
         
         result = analyzer._analyze_type_hint(GenericService)

@@ -1,16 +1,16 @@
 """Simple ASGI example showing the new API."""
 
 from whiskey import Application, inject
-from whiskey_asgi import asgi_extension, Request
+from whiskey_asgi import Request, asgi_extension
 
 
 # Service
 class GreetingService:
     """Service that creates greetings."""
-    
+
     def __init__(self):
         self._counter = 0
-    
+
     def greet(self, name: str) -> str:
         self._counter += 1
         return f"Hello, {name}! (Request #{self._counter})"
@@ -35,7 +35,7 @@ async def index():
             {"path": "/hello/{name}", "description": "Greet someone"},
             {"path": "/api/data", "description": "JSON API"},
             {"path": "/inject", "description": "Dependency injection example"},
-        ]
+        ],
     }
 
 
@@ -88,6 +88,7 @@ async def logging_middleware(request: Request, call_next):
 async def timing_middleware(request: Request, call_next):
     """Add timing header."""
     import time
+
     start = time.time()
     response = await call_next(request)
     # In a real implementation, we'd modify response headers

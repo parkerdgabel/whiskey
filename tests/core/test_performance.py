@@ -364,7 +364,7 @@ class TestPerformanceMetrics:
         assert "Total Resolutions: 10" in report
         assert "Cache Hit Rate: 70.0%" in report
         assert "Average Depth: 1.8" in report
-        assert "Most Used Services:" in report
+        assert "Most Used Components:" in report
         assert "service_a: 4 (40.0%)" in report
         assert "Slowest Resolutions:" in report
         assert "slow_service: 0.0100s" in report

@@ -1,6 +1,6 @@
 """Basic ASGI application example using Whiskey."""
 
-from whiskey import inject
+from whiskey import Application, inject
 from whiskey_asgi import Request, asgi_extension
 
 
@@ -91,9 +91,9 @@ if __name__ == "__main__":
     # To run this example:
     # pip install uvicorn
     # python basic_app.py
-    
+
     # New way: Use app.run() which automatically uses the ASGI runner
     app.run()
-    
+
     # Or explicitly use run_asgi for more control over host/port:
     # app.run_asgi(host="127.0.0.1", port=8000)

@@ -298,7 +298,7 @@ class TestContainerInspector:
         container = Container()
         inspector = ContainerInspector(container)
 
-        services = inspector.list_services()
+        services = inspector.list_components()
         assert services == {}
 
     def test_list_services_with_services(self):
@@ -316,7 +316,7 @@ class TestContainerInspector:
         container.register("custom", Service1())
 
         inspector = ContainerInspector(container)
-        services = inspector.list_services()
+        services = inspector.list_components()
 
         assert len(services) >= 3
         # Should have service entries
@@ -340,7 +340,7 @@ class TestContainerInspector:
         inspector = ContainerInspector(container)
 
         # Filter by interface - implementation may vary
-        services = inspector.list_services(interface=BaseService)
+        services = inspector.list_components(interface=BaseService)
         # Should return services that implement BaseService
 
     def test_list_services_by_tags(self):
@@ -359,10 +359,10 @@ class TestContainerInspector:
         inspector = ContainerInspector(container)
 
         # Filter by tags
-        services = inspector.list_services(tags={"core"})
+        services = inspector.list_components(tags={"core"})
         # Should include Service1
 
-        services = inspector.list_services(tags={"experimental"})
+        services = inspector.list_components(tags={"experimental"})
         # Should include Service2
 
     def test_get_dependencies(self):

@@ -6,7 +6,7 @@ identifies bottlenecks, detects resolution patterns, and provides actionable
 insights for optimization.
 
 Classes:
-    ResolutionMetrics: Metrics for individual service resolutions
+    ResolutionMetrics: Metrics for individual component resolutions
     PerformanceMetrics: Aggregated performance statistics
     PerformanceMonitor: Context manager for performance monitoring
     WeakValueCache: Memory-efficient cache using weak references
@@ -34,13 +34,13 @@ Example:
     >>> from whiskey import Container
     >>> 
     >>> container = Container()
-    >>> # ... register services ...
+    >>> # ... register components ...
     >>> 
     >>> # Monitor performance
     >>> with PerformanceMonitor() as monitor:
     ...     for _ in range(100):
-    ...         service = await container.resolve(UserService)
-    ...         await service.process()
+    ...         component = await container.resolve(UserService)
+    ...         await component.process()
     >>> 
     >>> # Analyze results
     >>> print(monitor.generate_report())
@@ -52,8 +52,8 @@ Example:
     >>> print(f"Slowest resolution: {metrics.slowest_resolution}")
 
 Performance Tips:
-    - Use singleton scope for expensive services
-    - Enable caching for frequently resolved services
+    - Use singleton scope for expensive components
+    - Enable caching for frequently resolved components
     - Use lazy injection to defer expensive resolutions
     - Monitor production workloads to identify bottlenecks
 """
@@ -65,7 +65,7 @@ import weakref
 from collections import Counter, defaultdict
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 # Performance monitoring context
 _performance_enabled: ContextVar[bool] = ContextVar("performance_enabled", default=False)
@@ -74,7 +74,7 @@ _current_metrics: ContextVar[PerformanceMetrics] = ContextVar("current_metrics",
 
 @dataclass
 class ResolutionMetrics:
-    """Metrics for a single service resolution."""
+    """Metrics for a single component resolution."""
 
     service_key: str
     resolution_time: float
@@ -95,24 +95,24 @@ class PerformanceMetrics:
     cache_hits: int = 0
     cache_misses: int = 0
 
-    # Service usage patterns
+    # Component usage patterns
     service_usage: Counter = field(default_factory=Counter)
-    resolution_depths: List[int] = field(default_factory=list)
+    resolution_depths: list[int] = field(default_factory=list)
 
     # Error tracking
     resolution_errors: int = 0
     circular_dependencies_detected: int = 0
 
     # Performance bottlenecks
-    slowest_resolutions: List[ResolutionMetrics] = field(default_factory=list)
+    slowest_resolutions: list[ResolutionMetrics] = field(default_factory=list)
     type_analysis_time: float = 0.0
 
     # Memory usage patterns
-    active_instances: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
-    weak_references: Set[weakref.ref] = field(default_factory=set)
+    active_instances: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    weak_references: set[weakref.ref] = field(default_factory=set)
 
     def record_resolution(self, metrics: ResolutionMetrics):
-        """Record metrics for a service resolution."""
+        """Record metrics for a component resolution."""
         self.resolution_count += 1
         self.total_resolution_time += metrics.resolution_time
         self.service_usage[metrics.service_key] += 1
@@ -157,8 +157,8 @@ class PerformanceMetrics:
             return 0.0
         return sum(self.resolution_depths) / len(self.resolution_depths)
 
-    def get_hot_services(self, top_n: int = 5) -> List[tuple[str, int]]:
-        """Get the most frequently resolved services."""
+    def get_hot_services(self, top_n: int = 5) -> list[tuple[str, int]]:
+        """Get the most frequently resolved components."""
         return self.service_usage.most_common(top_n)
 
     def generate_report(self) -> str:
@@ -176,10 +176,10 @@ class PerformanceMetrics:
         report.append(f"Circular Dependencies: {self.circular_dependencies_detected}")
         report.append("")
 
-        # Hot services
+        # Hot components
         hot_services = self.get_hot_services()
         if hot_services:
-            report.append("Most Used Services:")
+            report.append("Most Used Components:")
             for service, count in hot_services:
                 pct = (count / self.resolution_count) * 100
                 report.append(f"  {service}: {count} ({pct:.1f}%)")
@@ -200,7 +200,7 @@ class PerformanceMetrics:
 
         return "\n".join(report)
 
-    def _generate_recommendations(self) -> List[str]:
+    def _generate_recommendations(self) -> list[str]:
         """Generate performance recommendations based on metrics."""
         recommendations = ["Performance Recommendations:"]
 
@@ -208,7 +208,7 @@ class PerformanceMetrics:
         if self.cache_hit_rate < 50:
             recommendations.append("• Low cache hit rate - consider using more singletons")
 
-        # Hot service recommendations
+        # Hot component recommendations
         hot_services = self.get_hot_services(3)
         for service, count in hot_services:
             if count > self.resolution_count * 0.3:  # Used in >30% of resolutions
@@ -223,7 +223,7 @@ class PerformanceMetrics:
         # Error rate recommendations
         if self.resolution_errors > 0:
             error_rate = (self.resolution_errors / self.resolution_count) * 100
-            recommendations.append(f"• {error_rate:.1f}% error rate - review service registrations")
+            recommendations.append(f"• {error_rate:.1f}% error rate - review component registrations")
 
         if len(recommendations) == 1:  # Only the header
             recommendations.append("• Performance looks good!")
@@ -308,7 +308,7 @@ def is_performance_monitoring_enabled() -> bool:
     return _performance_enabled.get()
 
 
-def get_current_metrics() -> Optional[PerformanceMetrics]:
+def get_current_metrics() -> PerformanceMetrics | None:
     """Get the current performance metrics if monitoring is enabled."""
     return _current_metrics.get()
 
@@ -333,7 +333,7 @@ def monitor_resolution(func):
         # Check if it's a cache hit
         cache_hit = hasattr(self, "_singleton_cache") and str(key) in self._singleton_cache
 
-        with ResolutionTimer(str(key), cache_hit) as timer:
+        with ResolutionTimer(str(key), cache_hit):
             try:
                 result = func(self, key, *args, **kwargs)
                 return result
@@ -370,7 +370,7 @@ class WeakValueCache:
     """Cache that uses weak references to avoid memory leaks."""
 
     def __init__(self):
-        self._cache: Dict[str, weakref.ref] = {}
+        self._cache: dict[str, weakref.ref] = {}
 
     def get(self, key: str) -> Any:
         """Get a value from the cache."""

@@ -1,7 +1,7 @@
 """Automatic component discovery and registration from Python modules.
 
 This module implements component discovery mechanisms that automatically find
-and register services from Python modules and packages. It reduces boilerplate
+and register components from Python modules and packages. It reduces boilerplate
 by eliminating manual registration while providing fine-grained control over
 what gets discovered and how it's registered.
 
@@ -18,7 +18,7 @@ Functions:
 
 Discovery Methods:
     1. Decorator-based: Find classes marked with @component, @singleton
-    2. Naming convention: Classes ending with Service, Repository, etc.
+    2. Naming convention: Classes ending with Component, Repository, etc.
     3. Base class: Classes inheriting from specific interfaces
     4. Custom predicates: Any callable returning bool
 
@@ -38,7 +38,7 @@ Example:
     >>> 
     >>> # Discover by decorator
     >>> components = discover_components(
-    ...     'myapp.services',
+    ...     'myapp.components',
     ...     predicate=lambda obj: hasattr(obj, '_whiskey_component'),
     ...     recursive=True
     ... )
@@ -95,15 +95,15 @@ class ComponentDiscoverer:
         Basic discovery:
 
         >>> discoverer = ComponentDiscoverer(container)
-        >>> components = discoverer.discover_module("myapp.services")
+        >>> components = discoverer.discover_module("myapp.components")
         >>> print(f"Found {len(components)} components")
 
         With auto-registration:
 
-        >>> # Register all classes ending with 'Service'
+        >>> # Register all classes ending with 'Component'
         >>> discoverer.discover_package(
         ...     "myapp",
-        ...     predicate=lambda cls: cls.__name__.endswith("Service"),
+        ...     predicate=lambda cls: cls.__name__.endswith("Component"),
         ...     auto_register=True
         ... )
 
@@ -142,7 +142,7 @@ class ComponentDiscoverer:
         Only classes defined in the module (not imported) are considered.
 
         Args:
-            module_name: Fully qualified module name (e.g., "myapp.services") or module object
+            module_name: Fully qualified module name (e.g., "myapp.components") or module object
             predicate: Optional function to filter classes.
                       Should return True for classes to include.
             decorator_name: Optional attribute name to check for.
@@ -156,9 +156,9 @@ class ComponentDiscoverer:
             >>> all_classes = discoverer.discover_module("myapp.models")
 
             >>> # Find classes matching a pattern
-            >>> services = discoverer.discover_module(
-            ...     "myapp.services",
-            ...     predicate=lambda cls: cls.__name__.endswith("Service")
+            >>> components = discoverer.discover_module(
+            ...     "myapp.components",
+            ...     predicate=lambda cls: cls.__name__.endswith("Component")
             ... )
 
             >>> # Find decorated classes
@@ -308,13 +308,13 @@ class ContainerInspector:
 
         >>> inspector = container.inspect()
         >>>
-        >>> # List all services
-        >>> services = inspector.list_services()
-        >>> print(f"Registered: {[s.__name__ for s in services]}")
+        >>> # List all components
+        >>> components = inspector.list_components()
+        >>> print(f"Registered: {[s.__name__ for s in components]}")
         >>>
-        >>> # Check if a service can be resolved
+        >>> # Check if a component can be resolved
         >>> if inspector.can_resolve(MyService):
-        ...     service = await container.resolve(MyService)
+        ...     component = await container.resolve(MyService)
 
         Debugging resolution:
 
@@ -338,77 +338,76 @@ class ContainerInspector:
         """
         self.container = container
 
-    def list_services(
+    def list_components(
         self,
         *,
         interface: type | None = None,
         scope: str | None = None,
         tags: set[str] | None = None,
     ) -> dict[str, Any]:
-        """List registered services with optional filters.
+        """List registered components with optional filters.
 
         Args:
-            interface: Only include services that inherit from this type
-            scope: Only include services with this scope ("singleton", "transient", etc.)
-            tags: Only include services with these tags (requires metadata)
+            interface: Only include components that inherit from this type
+            scope: Only include components with this scope ("singleton", "transient", etc.)
+            tags: Only include components with these tags (requires metadata)
 
         Returns:
-            Dict of service information
+            Dict of component information
 
         Examples:
             >>> # All singletons
-            >>> singletons = inspector.list_services(scope="singleton")
+            >>> singletons = inspector.list_components(scope="singleton")
             >>>
             >>> # All implementations of Repository
-            >>> repos = inspector.list_services(interface=Repository)
+            >>> repos = inspector.list_components(interface=Repository)
             >>>
             >>> # Combine filters
-            >>> singleton_repos = inspector.list_services(
+            >>> singleton_repos = inspector.list_components(
             ...     interface=Repository,
             ...     scope="singleton"
             ... )
         """
-        services = {}
+        components = {}
 
         for descriptor in self.container.registry.list_all():
-            service_type = descriptor.service_type
+            component_type = descriptor.component_type
             
             # Filter by interface
-            if interface and inspect.isclass(service_type) and not issubclass(service_type, interface):
+            if interface and inspect.isclass(component_type) and not issubclass(component_type, interface):
                 continue
 
             # Filter by scope
-            if scope:
-                if (scope == "singleton" and descriptor.scope.value != "singleton") or (scope == "transient" and descriptor.scope.value != "transient") or (scope == "scoped" and descriptor.scope.value != "scoped"):
-                    continue
+            if scope and descriptor.scope.value != scope:
+                continue
 
             # Filter by tags
             if tags and not descriptor.has_any_tag(tags):
                 continue
 
-            services[descriptor.key] = {
-                "type": service_type,
+            components[descriptor.key] = {
+                "type": component_type,
                 "scope": descriptor.scope.value,
                 "tags": list(descriptor.tags),
                 "registered": True
             }
 
-        return services
+        return components
 
-    def get_dependencies(self, service_type: type) -> dict[str, type]:
-        """Get dependencies of a service.
+    def get_dependencies(self, component_type: type) -> dict[str, type]:
+        """Get dependencies of a component.
 
         Args:
-            service_type: Service type to inspect
+            component_type: Component type to inspect
 
         Returns:
             Dict mapping parameter names to types
         """
-        if not inspect.isclass(service_type):
+        if not inspect.isclass(component_type):
             return {}
 
         try:
-            sig = inspect.signature(service_type)
+            sig = inspect.signature(component_type)
         except (ValueError, TypeError):
             # Can't get signature for some types
             return {}
@@ -421,46 +420,46 @@ class ContainerInspector:
 
         return dependencies
 
-    def can_resolve(self, service_type: type) -> bool:
-        """Check if a service can be resolved.
+    def can_resolve(self, component_type: type) -> bool:
+        """Check if a component can be resolved.
 
         Args:
-            service_type: Service type to check
+            component_type: Component type to check
 
         Returns:
-            True if service is explicitly registered
+            True if component is explicitly registered
         """
-        # Only return True for explicitly registered services
-        return service_type in self.container
+        # Only return True for explicitly registered components
+        return component_type in self.container
 
-    def resolution_report(self, service_type: type) -> dict[str, Any]:
+    def resolution_report(self, component_type: type) -> dict[str, Any]:
         """Generate a detailed resolution report.
 
         Args:
-            service_type: Service type to analyze
+            component_type: Component type to analyze
 
         Returns:
             Dict with resolution details
         """
-        # Try to get service descriptor to determine scope
+        # Try to get component descriptor to determine scope
         scope = "transient"  # default
         try:
-            descriptor = self.container.registry.get(service_type)
+            descriptor = self.container.registry.get(component_type)
             scope = descriptor.scope.value
         except KeyError:
             pass
             
         report = {
-            "type": service_type,
-            "registered": service_type in self.container,
-            "can_resolve": self.can_resolve(service_type),
+            "type": component_type,
+            "registered": component_type in self.container,
+            "can_resolve": self.can_resolve(component_type),
             "dependencies": {},
             "missing_dependencies": [],
             "resolution_path": [],
             "scope": scope,
         }
 
-        deps = self.get_dependencies(service_type)
+        deps = self.get_dependencies(component_type)
         for param_name, dep_type in deps.items():
             # Handle Annotated types
             actual_type = dep_type
@@ -495,17 +494,17 @@ class ContainerInspector:
         return report
 
     def dependency_graph(self) -> dict[type, set[type]]:
-        """Build a dependency graph of all services.
+        """Build a dependency graph of all components.
 
         Returns:
-            Dict mapping service types to their dependencies
+            Dict mapping component types to their dependencies
         """
         graph = {}
 
         for descriptor in self.container.registry.list_all():
-            service_type = descriptor.service_type
-            deps = self.get_dependencies(service_type)
-            graph[service_type] = {
+            component_type = descriptor.component_type
+            deps = self.get_dependencies(component_type)
+            graph[component_type] = {
                 dep_type for dep_type in deps.values() if isinstance(dep_type, type)
             }
 

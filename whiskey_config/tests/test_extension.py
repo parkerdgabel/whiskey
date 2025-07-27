@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from whiskey import inject
+from whiskey import Application, inject
 from whiskey_config import Setting, config_extension
 
 

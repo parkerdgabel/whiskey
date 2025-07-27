@@ -1,7 +1,7 @@
 """Conditional registration support for Whiskey.
 
-This module provides functionality for conditional service registration,
-allowing services to be registered based on runtime conditions.
+This module provides functionality for conditional component registration,
+allowing components to be registered based on runtime conditions.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ Condition = Callable[[], bool]
 
 
 def evaluate_condition(condition: Condition | bool | None) -> bool:
-    """Evaluate a condition for service registration.
+    """Evaluate a condition for component registration.
 
     Args:
         condition: A callable that returns bool, a bool value, or None
@@ -50,7 +50,7 @@ def evaluate_condition(condition: Condition | bool | None) -> bool:
 
 
 class ConditionalRegistry:
-    """Registry that tracks conditions for services.
+    """Registry that tracks conditions for components.
 
     This allows re-evaluation of conditions if needed, though
     by default conditions are evaluated at registration time.
@@ -59,21 +59,21 @@ class ConditionalRegistry:
     def __init__(self):
         self._conditions: dict[tuple[type, str | None], Condition] = {}
 
-    def set_condition(self, service_type: type, name: str | None, condition: Condition) -> None:
-        """Store a condition for a service."""
-        self._conditions[(service_type, name)] = condition
+    def set_condition(self, component_type: type, name: str | None, condition: Condition) -> None:
+        """Store a condition for a component."""
+        self._conditions[(component_type, name)] = condition
 
-    def get_condition(self, service_type: type, name: str | None) -> Condition | None:
-        """Get the condition for a service."""
-        return self._conditions.get((service_type, name))
+    def get_condition(self, component_type: type, name: str | None) -> Condition | None:
+        """Get the condition for a component."""
+        return self._conditions.get((component_type, name))
 
-    def has_condition(self, service_type: type, name: str | None) -> bool:
-        """Check if a service has a condition."""
-        return (service_type, name) in self._conditions
+    def has_condition(self, component_type: type, name: str | None) -> bool:
+        """Check if a component has a condition."""
+        return (component_type, name) in self._conditions
 
-    def evaluate(self, service_type: type, name: str | None) -> bool:
-        """Evaluate the condition for a service."""
-        condition = self.get_condition(service_type, name)
+    def evaluate(self, component_type: type, name: str | None) -> bool:
+        """Evaluate the condition for a component."""
+        condition = self.get_condition(component_type, name)
         return evaluate_condition(condition)
 
     def clear(self) -> None:

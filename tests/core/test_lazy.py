@@ -20,7 +20,7 @@ class TestLazy:
             pass
 
         lazy = Lazy(MyService)
-        assert lazy._service_type is MyService
+        assert lazy._component_type is MyService
         assert lazy._name is None
         assert not lazy._resolved
         assert not lazy.is_resolved
@@ -264,7 +264,7 @@ class TestLazyInject:
 
         lazy = lazy_inject(MyService)
         assert isinstance(lazy, Lazy)
-        assert lazy._service_type is MyService
+        assert lazy._component_type is MyService
         assert lazy._name is None
 
     def test_lazy_inject_with_name(self):
@@ -359,7 +359,7 @@ class TestLazyDescriptor:
         # Access creates Lazy instance
         lazy = service.database
         assert isinstance(lazy, Lazy)
-        assert lazy._service_type is Database
+        assert lazy._component_type is Database
 
         # Access value through lazy
         result = service.database.value.query("SELECT * FROM users")
@@ -413,7 +413,7 @@ class TestLazyDescriptor:
         # Accessing on class returns descriptor itself
         descriptor = MyService.db
         assert isinstance(descriptor, LazyDescriptor)
-        assert descriptor._service_type is Database
+        assert descriptor._component_type is Database
 
     def test_lazy_descriptor_no_container(self):
         """Test LazyDescriptor with current container."""
