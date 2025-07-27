@@ -372,33 +372,35 @@ class ASGIHandler:
         route, params = route_info
         request.route_params = params
 
-        # Register request in container (temporary solution until scope support is added)
-        self.app.container[Request] = request
+        # Create request-scoped container
+        async with self.app.scope("request"):
+            # Register request in container
+            self.app.container[Request] = request
 
-        try:
-            # Build middleware chain
-            handler = route.func
+            try:
+                # Build middleware chain
+                handler = route.func
 
-            # Apply middleware in reverse order (first registered = outermost)
-            for middleware in reversed(self.manager.middleware):
-                handler = self.wrap_middleware(middleware.func, handler)
+                # Apply middleware in reverse order (first registered = outermost)
+                for middleware in reversed(self.manager.middleware):
+                    handler = self.wrap_middleware(middleware.func, handler)
 
-            # Execute handler with DI
-            if hasattr(handler, "__wrapped__") or asyncio.iscoroutinefunction(handler):
-                # Has @inject or is async
-                result = await self.app.container.resolve(handler, **params)
-            else:
-                # Sync function without @inject
-                result = handler(**params)
+                # Execute handler with DI
+                if hasattr(handler, "__wrapped__") or asyncio.iscoroutinefunction(handler):
+                    # Has @inject or is async
+                    result = await self.app.container.call(handler, **params)
+                else:
+                    # Sync function without @inject
+                    result = handler(**params)
 
-            # Send response
-            await self.send_response(send, result)
+                # Send response
+                await self.send_response(send, result)
 
-        except Exception as exc:
-            # Error handling
-            status = getattr(exc, "status_code", 500)
-            message = str(exc)
-            await self.send_error(send, status, message)
+            except Exception as exc:
+                # Error handling
+                status = getattr(exc, "status_code", 500)
+                message = str(exc)
+                await self.send_error(send, status, message)
 
     async def handle_websocket(self, scope: Scope, receive: ASGIReceive, send: ASGISend) -> None:
         """Handle WebSocket connections."""
@@ -420,29 +422,31 @@ class ASGIHandler:
         websocket = WebSocket(scope, receive, send)
         websocket.route_params = params
 
-        # Register WebSocket in container (temporary solution until scope support is added)
-        self.app.container[WebSocket] = websocket
+        # Create request-scoped container for WebSocket
+        async with self.app.scope("request"):
+            # Register WebSocket in container
+            self.app.container[WebSocket] = websocket
 
-        try:
-            # Execute handler with DI
-            if hasattr(handler.func, "__wrapped__") or asyncio.iscoroutinefunction(
-                handler.func
-            ):
-                await self.app.container.resolve(handler.func, websocket=websocket, **params)
-            else:
-                handler.func(websocket=websocket, **params)
-        except Exception as exc:
-            # Ensure connection is closed on error
-            if websocket._accepted:
-                await websocket.close(1011, str(exc))
-            else:
-                await send(
-                    {
-                        "type": "websocket.close",
-                        "code": 1011,
-                        "reason": str(exc),
-                    }
-                )
+            try:
+                # Execute handler with DI
+                if hasattr(handler.func, "__wrapped__") or asyncio.iscoroutinefunction(
+                    handler.func
+                ):
+                    await self.app.container.call(handler.func, websocket=websocket, **params)
+                else:
+                    handler.func(websocket=websocket, **params)
+            except Exception as exc:
+                # Ensure connection is closed on error
+                if websocket._accepted:
+                    await websocket.close(1011, str(exc))
+                else:
+                    await send(
+                        {
+                            "type": "websocket.close",
+                            "code": 1011,
+                            "reason": str(exc),
+                        }
+                    )
 
     def wrap_middleware(self, middleware: Callable, next_handler: Callable) -> Callable:
         """Wrap a handler with middleware."""
@@ -452,11 +456,11 @@ class ASGIHandler:
             # Create call_next function
             async def call_next(request: Request):
                 # Execute the next handler
-                return await self.app.container.resolve(next_handler, **kwargs)
+                return await self.app.container.call(next_handler, **kwargs)
 
             # Execute middleware with DI
             if hasattr(middleware, "__wrapped__") or asyncio.iscoroutinefunction(middleware):
-                return await self.app.container.resolve(middleware, call_next=call_next, **kwargs)
+                return await self.app.container.call(middleware, call_next=call_next, **kwargs)
             else:
                 return middleware(call_next=call_next, **kwargs)
 
@@ -570,8 +574,8 @@ def asgi_extension(app: Whiskey) -> None:
     app.asgi_manager = manager
     app.asgi = manager.create_asgi_handler()
 
-    # Request and session scopes are managed by the container's scoped context manager
-    # No need to explicitly register them - they're created on-demand when used
+    # Request and session scopes are now properly managed using the container's scope() method
+    # Components registered as @scoped(scope_name="request") will share instances within each request
 
     # Create route decorators
     def create_route_decorator(methods: list[str]):

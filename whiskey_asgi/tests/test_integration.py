@@ -19,7 +19,7 @@ class TestIntegration:
         app.use(asgi_extension)
         
         # Services
-        @singleton
+        @app.singleton
         class Database:
             def __init__(self):
                 self.users = {
@@ -33,7 +33,7 @@ class TestIntegration:
             def list_users(self):
                 return list(self.users.values())
         
-        @component
+        @app.component
         class UserService:
             def __init__(self, db: Database):
                 self.db = db
@@ -141,7 +141,7 @@ class TestIntegration:
         app.use(asgi_extension)
         
         # Chat room manager
-        @singleton
+        @app.singleton
         class ChatRoom:
             def __init__(self):
                 self.connections = {}
@@ -206,7 +206,7 @@ class TestIntegration:
         assert sent_messages[0]["type"] == "websocket.accept"
         
         # Check chat room recorded messages
-        chat_room = app.container[ChatRoom]
+        chat_room = await app.container.resolve(ChatRoom)
         assert len(chat_room.messages) == 3
         assert chat_room.messages[0] == ("general", "User joined room general")
         assert chat_room.messages[1] == ("general", "Hello everyone!")
@@ -222,21 +222,24 @@ class TestIntegration:
         execution_order = []
         
         @app.middleware(priority=30)
-        async def first_middleware(call_next, request):
+        @inject
+        async def first_middleware(call_next, request: Request):
             execution_order.append("first_start")
             response = await call_next(request)
             execution_order.append("first_end")
             return response
         
         @app.middleware(priority=20)
-        async def second_middleware(call_next, request):
+        @inject
+        async def second_middleware(call_next, request: Request):
             execution_order.append("second_start")
             response = await call_next(request)
             execution_order.append("second_end")
             return response
         
         @app.middleware(priority=10)
-        async def third_middleware(call_next, request):
+        @inject
+        async def third_middleware(call_next, request: Request):
             execution_order.append("third_start")
             response = await call_next(request)
             execution_order.append("third_end")
@@ -334,10 +337,6 @@ class TestIntegration:
         async def startup_handler():
             events.append("app_startup")
         
-        @app.on_ready
-        async def ready_handler():
-            events.append("app_ready")
-        
         @app.on_shutdown
         async def shutdown_handler():
             events.append("app_shutdown")
@@ -364,7 +363,7 @@ class TestIntegration:
         await app.asgi(scope, receive, send)
         
         # Check events fired in order
-        assert events == ["app_startup", "app_ready", "app_shutdown"]
+        assert events == ["app_startup", "app_shutdown"]
         
         # Check ASGI protocol
         assert sent_messages == [

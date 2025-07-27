@@ -954,6 +954,90 @@ class Container:
         """Async context manager exit."""
         self.__exit__(*args)
 
+    # Scope management
+
+    def scope(self, scope_name: str) -> ScopeManager:
+        """Create a context manager for a named scope.
+
+        This method creates a scope boundary within which all scoped components
+        will share the same instance. When the scope exits, all instances are
+        properly disposed.
+
+        Args:
+            scope_name: The name of the scope (e.g., "request", "session")
+
+        Returns:
+            A context manager that activates/deactivates the scope
+
+        Examples:
+            >>> async with container.scope("request"):
+            ...     # All request-scoped services share instances here
+            ...     service1 = await container.resolve(RequestService)
+            ...     service2 = await container.resolve(RequestService)
+            ...     assert service1 is service2
+            ... # Instances are disposed when scope exits
+        """
+        from .scopes import ScopeManager
+        return ScopeManager(self, scope_name)
+
+    def enter_scope(self, scope_name: str) -> None:
+        """Enter a named scope, activating it for component resolution.
+
+        This is a low-level method used by ScopeManager. Most users should
+        use the scope() context manager instead.
+
+        Args:
+            scope_name: The name of the scope to activate
+        """
+        # Get current active scopes
+        active_scopes = _active_scopes.get()
+        if active_scopes is None:
+            active_scopes = {}
+        else:
+            # Copy to avoid modifying shared state
+            active_scopes = active_scopes.copy()
+        
+        # Mark scope as active
+        active_scopes[scope_name] = {}
+        _active_scopes.set(active_scopes)
+
+    def exit_scope(self, scope_name: str) -> None:
+        """Exit a named scope, deactivating it and cleaning up instances.
+
+        This is a low-level method used by ScopeManager. Most users should
+        use the scope() context manager instead.
+
+        Args:
+            scope_name: The name of the scope to deactivate
+        """
+        # Clean up scoped instances
+        if scope_name in self._scoped_caches:
+            # Dispose of all instances in this scope
+            scope_cache = self._scoped_caches[scope_name]
+            for instance in scope_cache.values():
+                if hasattr(instance, "dispose"):
+                    import asyncio
+                    if asyncio.iscoroutinefunction(instance.dispose):
+                        # Run async disposal synchronously
+                        try:
+                            loop = asyncio.get_running_loop()
+                            loop.create_task(instance.dispose())
+                        except RuntimeError:
+                            # No running loop, create one
+                            asyncio.run(instance.dispose())
+                    else:
+                        instance.dispose()
+            
+            # Clear the cache
+            del self._scoped_caches[scope_name]
+        
+        # Remove from active scopes
+        active_scopes = _active_scopes.get()
+        if active_scopes and scope_name in active_scopes:
+            active_scopes = active_scopes.copy()
+            del active_scopes[scope_name]
+            _active_scopes.set(active_scopes if active_scopes else None)
+
     # Function injection and calling methods
 
     async def call(self, func: Callable, *args, **kwargs) -> Any:
