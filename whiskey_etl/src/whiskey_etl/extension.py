@@ -104,6 +104,20 @@ def etl_extension(
         # whiskey_sql not available - database features disabled
         pass
 
+    # Register object store sources and sinks
+    from .object_store_sink import AzureBlobSink, GCSSink, S3Sink
+    from .object_store_source import AzureBlobSource, GCSSource, S3Source
+
+    # Register object store sources
+    source_registry.register("s3", S3Source)
+    source_registry.register("azure_blob", AzureBlobSource)
+    source_registry.register("gcs", GCSSource)
+
+    # Register object store sinks
+    sink_registry.register("s3", S3Sink)
+    sink_registry.register("azure_blob", AzureBlobSink)
+    sink_registry.register("gcs", GCSSink)
+
     # Create pipeline manager
     manager = PipelineManager(
         container=app.container,

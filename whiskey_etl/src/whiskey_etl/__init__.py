@@ -3,6 +3,16 @@
 from whiskey_etl.db_sink import BulkUpdateSink, DatabaseSink, SQLExecuteSink, TableSink, UpsertSink
 from whiskey_etl.db_source import DatabaseSource, QuerySource, SQLFileSource, TableSource
 from whiskey_etl.extension import etl_extension
+from whiskey_etl.object_store_sink import AzureBlobSink, GCSSink, ObjectStoreSink, S3Sink
+from whiskey_etl.object_store_source import (
+    AzureBlobSource,
+    GCSSource,
+    ObjectStoreSource,
+    S3Source,
+    csv_processor,
+    json_processor,
+    jsonl_processor,
+)
 from whiskey_etl.pipeline import Pipeline, PipelineResult, PipelineState
 from whiskey_etl.sinks import DataSink
 from whiskey_etl.sources import DataSource
@@ -40,6 +50,19 @@ __all__ = [
     "UpsertSink",
     "BulkUpdateSink",
     "SQLExecuteSink",
+    # Object store sources
+    "ObjectStoreSource",
+    "S3Source",
+    "AzureBlobSource",
+    "GCSSource",
+    "json_processor",
+    "jsonl_processor",
+    "csv_processor",
+    # Object store sinks
+    "ObjectStoreSink",
+    "S3Sink",
+    "AzureBlobSink",
+    "GCSSink",
     # SQL transforms
     "SQLTransform",
     "LookupTransform",
