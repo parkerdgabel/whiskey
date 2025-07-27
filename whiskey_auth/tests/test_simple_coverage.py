@@ -5,6 +5,7 @@ from typing import ClassVar
 import pytest
 
 from whiskey import Whiskey
+from whiskey.core.errors import ResolutionError
 from whiskey_auth import (
     AuthProvider,
     Permission,
@@ -29,6 +30,7 @@ class TestExtensionFunctions:
     def test_register_user_model(self):
         """Test user model registration."""
         app = Whiskey()
+        app._auth_metadata = {}  # Initialize metadata
 
         class User:
             id: int
@@ -37,7 +39,7 @@ class TestExtensionFunctions:
         result = _register_user_model(app, User)
 
         assert result is User
-        assert app.container.get("__auth_user_model__") is User
+        assert app._auth_metadata["user_model"] is User
 
     def test_create_auth_provider_decorator(self):
         """Test auth provider decorator creation."""
@@ -58,6 +60,7 @@ class TestExtensionFunctions:
     def test_register_permissions(self):
         """Test permission registration."""
         app = Whiskey()
+        app._auth_metadata = {}  # Initialize metadata
 
         class Perms:
             READ = "read"
@@ -66,7 +69,7 @@ class TestExtensionFunctions:
         result = _register_permissions(app, Perms)
 
         assert result is Perms
-        perms = app.container.get("__auth_permissions__")
+        perms = app._auth_metadata["permissions"]
         assert len(perms) == 2
         assert isinstance(Perms.READ, Permission)
         assert Perms.WRITE.description == "Can write"
@@ -74,6 +77,7 @@ class TestExtensionFunctions:
     def test_create_role_decorator(self):
         """Test role decorator creation."""
         app = Whiskey()
+        app._auth_metadata = {}  # Initialize metadata
 
         decorator = _create_role_decorator(app, "admin")
 
@@ -84,7 +88,7 @@ class TestExtensionFunctions:
         result = decorator(AdminRole)
 
         assert result is AdminRole
-        roles = app.container.get("__auth_roles__")
+        roles = app._auth_metadata["roles"]
         assert "admin" in roles
         assert roles["admin"].name == "admin"
 
@@ -92,16 +96,15 @@ class TestExtensionFunctions:
     async def test_register_current_user_resolver(self):
         """Test current user resolver registration."""
         app = Whiskey()
+        app._auth_metadata = {}  # Initialize metadata
         _register_current_user_resolver(app)
 
-        # Check resolver is registered
-        from whiskey_auth.core import User
-
-        assert User in app.container._resolvers
+        # Check CurrentUser is registered as a factory
+        from whiskey_auth.core import CurrentUser
+        assert CurrentUser in app.container
 
         # Test resolver with no auth
-        resolver = app.container._resolvers[User]
-        result = await resolver(app.container)
+        result = await app.container.resolve(CurrentUser)
         assert result is None
 
         # Test resolver with auth
@@ -109,7 +112,7 @@ class TestExtensionFunctions:
         auth_context = AuthContext(user=user)
         app.container[AuthContext] = auth_context
 
-        result = await resolver(app.container)
+        result = await app.container.resolve(CurrentUser)
         assert result == user
 
 
@@ -218,7 +221,12 @@ class TestProviderImplementations:
 
     def test_jwt_provider_token_operations(self):
         """Test JWT provider token operations."""
-        provider = JWTAuthProvider(
+        
+        class TestJWTProvider(JWTAuthProvider):
+            async def get_user_by_id(self, user_id):
+                return None
+        
+        provider = TestJWTProvider(
             secret="secret", algorithm="HS256", issuer="test", audience="test-app"
         )
 
@@ -241,7 +249,12 @@ class TestProviderImplementations:
 
     def test_jwt_provider_refresh_token(self):
         """Test JWT refresh token flow."""
-        provider = JWTAuthProvider(secret="secret")
+        
+        class TestJWTProvider(JWTAuthProvider):
+            async def get_user_by_id(self, user_id):
+                return None
+        
+        provider = TestJWTProvider(secret="secret")
 
         # Create refresh token
         refresh = provider.create_token(type("User", (), {"id": 1})(), "refresh")
@@ -261,20 +274,29 @@ class TestAuthDecoratorsSimple:
     async def test_requires_auth_with_context(self):
         """Test requires_auth with direct context."""
         from whiskey_auth.decorators import requires_auth
+        
+        # Test the decorator without DI by mocking get_current_container to return None
+        import whiskey.core.container
+        original_get_current_container = whiskey.core.container.get_current_container
+        whiskey.core.container.get_current_container = lambda: None
 
-        @requires_auth
-        async def protected(message: str) -> str:
-            return f"Protected: {message}"
+        try:
+            @requires_auth
+            async def protected(message: str) -> str:
+                return f"Protected: {message}"
 
-        # Without auth
-        with pytest.raises(AuthenticationError):
-            await protected("test", __auth_context__=AuthContext())
+            # Without auth
+            with pytest.raises(AuthenticationError):
+                await protected("test", auth_context=AuthContext())
 
-        # With auth
-        user = create_test_user()
-        ctx = AuthContext(user=user)
-        result = await protected("test", __auth_context__=ctx)
-        assert result == "Protected: test"
+            # With auth
+            user = create_test_user()
+            ctx = AuthContext(user=user)
+            result = await protected("test", auth_context=ctx)
+            assert result == "Protected: test"
+        finally:
+            # Restore original function
+            whiskey.core.container.get_current_container = original_get_current_container
 
     @pytest.mark.asyncio
     async def test_requires_permission_with_context(self):

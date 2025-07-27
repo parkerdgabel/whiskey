@@ -131,7 +131,7 @@ class TestFullIntegration:
             return {"admin": user.username, "access": "granted"}
 
         # Test the flow
-        async with app.lifespan():
+        async with app:
             # Get services
             user_service = await app.container.resolve(UserService)
             auth_provider = await app.container.resolve(InMemoryAuthProvider)
@@ -206,7 +206,7 @@ class TestFullIntegration:
                     return users[2]
                 return None
 
-        async with app.lifespan():
+        async with app:
             # Get providers
             db_auth = await app.container.resolve((AuthProvider, "database"))
             api_auth = await app.container.resolve((AuthProvider, "api_key"))
@@ -241,7 +241,7 @@ class TestFullIntegration:
                     "data": f"Data for org {user.org_id}",
                 }
 
-        async with app.lifespan():
+        async with app:
             # Create auth context
             from whiskey_auth.core import AuthContext
 

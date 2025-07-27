@@ -250,6 +250,66 @@ class AuthenticationMiddleware:
                     params[name] = value
         return params
     
+    async def _extract_auth_from_scope(self, scope: dict) -> AuthContext:
+        """Extract authentication context from ASGI scope.
+        
+        Args:
+            scope: ASGI scope dictionary
+            
+        Returns:
+            AuthContext with user if authenticated, empty context otherwise
+        """
+        # Try header-based auth first
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(self.header_name.lower().encode())
+
+        if auth_header:
+            auth_str = auth_header.decode("utf-8")
+            if auth_str.startswith(f"{self.header_prefix} "):
+                token = auth_str[len(self.header_prefix) + 1 :]
+
+                # Try JWT provider
+                jwt_provider = await self.registry.get_instance("jwt")
+                if jwt_provider:
+                    user = await jwt_provider.authenticate(token=token)
+                    if user:
+                        return await create_auth_context(
+                            provider=jwt_provider, user=user, provider_name="jwt"
+                        )
+
+        # Try cookie-based auth
+        if self.cookie_name:
+            cookies = self._parse_cookies(headers.get(b"cookie", b""))
+            session_id = cookies.get(self.cookie_name)
+
+            if session_id:
+                # Try session provider
+                session_provider = await self.registry.get_instance("session")
+                if session_provider:
+                    user = await session_provider.authenticate(session_id=session_id)
+                    if user:
+                        return await create_auth_context(
+                            provider=session_provider, user=user, provider_name="session"
+                        )
+
+        # Try query parameter auth
+        if self.query_param:
+            query_params = self._parse_query_string(scope.get("query_string", b""))
+            token = query_params.get(self.query_param)
+
+            if token:
+                # Try JWT provider for query param auth too
+                jwt_provider = await self.registry.get_instance("jwt")
+                if jwt_provider:
+                    user = await jwt_provider.authenticate(token=token)
+                    if user:
+                        return await create_auth_context(
+                            provider=jwt_provider, user=user, provider_name="jwt"
+                        )
+
+        # Return empty auth context if no authentication found
+        return AuthContext()
+    
     async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
         """Make middleware callable for ASGI compatibility.
         
@@ -264,8 +324,11 @@ class AuthenticationMiddleware:
                 await self.app(scope, receive, send)
             return
         
-        # For HTTP, delegate to the configured handler
-        # This is a simplified version - full ASGI support would need more work
+        # For HTTP, perform authentication and add auth_context to scope
+        auth_context = await self._extract_auth_from_scope(scope)
+        scope["auth_context"] = auth_context
+        
+        # Call the next app with updated scope
         if hasattr(self, "app"):
             await self.app(scope, receive, send)
 
