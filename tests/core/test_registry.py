@@ -1,4 +1,4 @@
-"""Tests for the ServiceRegistry and ServiceDescriptor classes.
+"""Tests for the ComponentRegistry and ComponentDescriptor classes.
 
 This module tests the service registration and metadata management system.
 """
@@ -8,7 +8,7 @@ import os
 import pytest
 
 from whiskey.core.errors import RegistrationError
-from whiskey.core.registry import Scope, ServiceDescriptor, ServiceRegistry
+from whiskey.core.registry import Scope, ComponentDescriptor, ComponentRegistry
 
 
 # Test classes
@@ -37,14 +37,14 @@ async def async_test_factory() -> TestService:
     return TestService()
 
 
-class TestServiceDescriptor:
-    """Test the ServiceDescriptor class."""
+class TestComponentDescriptor:
+    """Test the ComponentDescriptor class."""
 
     def test_descriptor_creation(self):
-        """Test creating a ServiceDescriptor."""
-        descriptor = ServiceDescriptor(
+        """Test creating a ComponentDescriptor."""
+        descriptor = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             scope=Scope.SINGLETON,
             name="primary",
@@ -55,7 +55,7 @@ class TestServiceDescriptor:
         )
 
         assert descriptor.key == "test_service"
-        assert descriptor.service_type == TestService
+        assert descriptor.component_type == TestService
         assert descriptor.provider == TestService
         assert descriptor.scope == Scope.SINGLETON
         assert descriptor.name == "primary"
@@ -65,9 +65,9 @@ class TestServiceDescriptor:
         assert descriptor.metadata == {"version": "1.0"}
 
     def test_descriptor_defaults(self):
-        """Test ServiceDescriptor with default values."""
-        descriptor = ServiceDescriptor(
-            key="test_service", service_type=TestService, provider=TestService
+        """Test ComponentDescriptor with default values."""
+        descriptor = ComponentDescriptor(
+            key="test_service", component_type=TestService, provider=TestService
         )
 
         assert descriptor.scope == Scope.TRANSIENT
@@ -80,45 +80,45 @@ class TestServiceDescriptor:
     def test_is_factory_detection(self):
         """Test detection of factory vs class providers."""
         # Class provider
-        class_descriptor = ServiceDescriptor(
-            key="test_service", service_type=TestService, provider=TestService
+        class_descriptor = ComponentDescriptor(
+            key="test_service", component_type=TestService, provider=TestService
         )
         assert not class_descriptor.is_factory
 
         # Function provider
-        function_descriptor = ServiceDescriptor(
-            key="test_service", service_type=TestService, provider=test_factory
+        function_descriptor = ComponentDescriptor(
+            key="test_service", component_type=TestService, provider=test_factory
         )
         assert function_descriptor.is_factory
 
         # Instance provider
-        instance_descriptor = ServiceDescriptor(
-            key="test_service", service_type=TestService, provider=TestService()
+        instance_descriptor = ComponentDescriptor(
+            key="test_service", component_type=TestService, provider=TestService()
         )
         assert not instance_descriptor.is_factory
 
     def test_matches_condition_no_condition(self):
         """Test condition matching when no condition is set."""
-        descriptor = ServiceDescriptor(
-            key="test_service", service_type=TestService, provider=TestService
+        descriptor = ComponentDescriptor(
+            key="test_service", component_type=TestService, provider=TestService
         )
         assert descriptor.matches_condition() is True
 
     def test_matches_condition_with_condition(self):
         """Test condition matching with various conditions."""
         # True condition
-        true_descriptor = ServiceDescriptor(
+        true_descriptor = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             condition=lambda: True,
         )
         assert true_descriptor.matches_condition() is True
 
         # False condition
-        false_descriptor = ServiceDescriptor(
+        false_descriptor = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             condition=lambda: False,
         )
@@ -130,9 +130,9 @@ class TestServiceDescriptor:
         def failing_condition():
             raise ValueError("Test error")
 
-        descriptor = ServiceDescriptor(
+        descriptor = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             condition=failing_condition,
         )
@@ -142,9 +142,9 @@ class TestServiceDescriptor:
 
     def test_has_tag(self):
         """Test tag checking functionality."""
-        descriptor = ServiceDescriptor(
+        descriptor = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             tags={"core", "database", "important"},
         )
@@ -157,9 +157,9 @@ class TestServiceDescriptor:
 
     def test_has_any_tag(self):
         """Test checking for any of multiple tags."""
-        descriptor = ServiceDescriptor(
+        descriptor = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             tags={"core", "database"},
         )
@@ -173,9 +173,9 @@ class TestServiceDescriptor:
 
     def test_has_all_tags(self):
         """Test checking for all of multiple tags."""
-        descriptor = ServiceDescriptor(
+        descriptor = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             tags={"core", "database", "important"},
         )
@@ -188,10 +188,10 @@ class TestServiceDescriptor:
         assert descriptor.has_all_tags(set())  # Empty set returns True
 
     def test_string_representation(self):
-        """Test string representation of ServiceDescriptor."""
-        descriptor = ServiceDescriptor(
+        """Test string representation of ComponentDescriptor."""
+        descriptor = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             scope=Scope.SINGLETON,
             name="primary",
@@ -203,24 +203,24 @@ class TestServiceDescriptor:
         assert "SINGLETON" in str_repr
 
     def test_equality(self):
-        """Test ServiceDescriptor equality comparison."""
-        descriptor1 = ServiceDescriptor(
+        """Test ComponentDescriptor equality comparison."""
+        descriptor1 = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             scope=Scope.SINGLETON,
         )
 
-        descriptor2 = ServiceDescriptor(
+        descriptor2 = ComponentDescriptor(
             key="test_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             scope=Scope.SINGLETON,
         )
 
-        descriptor3 = ServiceDescriptor(
+        descriptor3 = ComponentDescriptor(
             key="other_service",
-            service_type=TestService,
+            component_type=TestService,
             provider=TestService,
             scope=Scope.SINGLETON,
         )
@@ -229,18 +229,18 @@ class TestServiceDescriptor:
         assert descriptor1 != descriptor3
 
 
-class TestServiceRegistry:
-    """Test the ServiceRegistry class."""
+class TestComponentRegistry:
+    """Test the ComponentRegistry class."""
 
     @pytest.fixture
     def registry(self):
         """Create a fresh registry for testing."""
-        return ServiceRegistry()
+        return ComponentRegistry()
 
     def test_registry_initialization(self, registry):
         """Test registry initialization."""
         assert len(registry) == 0
-        assert registry._services == {}
+        assert registry._components == {}
         assert registry._type_index == {}
         assert registry._tag_index == {}
 
@@ -249,7 +249,7 @@ class TestServiceRegistry:
         descriptor = registry.register(key=TestService, provider=TestService, scope=Scope.SINGLETON)
 
         assert descriptor.key == "TestService"
-        assert descriptor.service_type == TestService
+        assert descriptor.component_type == TestService
         assert descriptor.provider == TestService
         assert descriptor.scope == Scope.SINGLETON
         assert len(registry) == 1
@@ -261,7 +261,7 @@ class TestServiceRegistry:
         )
 
         assert descriptor.key == "database"
-        assert descriptor.service_type == DatabaseService
+        assert descriptor.component_type == DatabaseService
         assert len(registry) == 1
 
     def test_register_with_name(self, registry):
@@ -284,7 +284,7 @@ class TestServiceRegistry:
         assert descriptor.is_factory
         assert descriptor.provider == test_factory
         # Service type should be inferred from return type
-        assert descriptor.service_type == TestService
+        assert descriptor.component_type == TestService
 
     def test_register_async_factory(self, registry):
         """Test registering async factory functions."""
@@ -304,7 +304,7 @@ class TestServiceRegistry:
 
         assert descriptor.provider is instance
         assert not descriptor.is_factory
-        assert descriptor.service_type == TestService
+        assert descriptor.component_type == TestService
 
     def test_register_with_tags(self, registry):
         """Test service registration with tags."""
@@ -349,7 +349,7 @@ class TestServiceRegistry:
         registry.register(key=TestService, provider=TestService)
 
         descriptor = registry.get(TestService)
-        assert descriptor.service_type == TestService
+        assert descriptor.component_type == TestService
 
         # Test with string key
         descriptor2 = registry.get("TestService")
@@ -423,16 +423,16 @@ class TestServiceRegistry:
         assert "TestService" not in registry._tag_index.get("test", set())
         assert "TestService" not in registry._tag_index.get("core", set())
 
-    def test_list_all_services(self, registry):
+    def test_list_all_components(self, registry):
         """Test listing all registered services."""
         registry.register(key=TestService, provider=TestService)
         registry.register(key=DatabaseService, provider=DatabaseService)
         registry.register(key="cache", provider=CacheService)
 
-        all_services = registry.list_all()
-        assert len(all_services) == 3
+        all_components = registry.list_all()
+        assert len(all_components) == 3
 
-        keys = {desc.key for desc in all_services}
+        keys = {desc.key for desc in all_components}
         assert keys == {"TestService", "DatabaseService", "cache"}
 
     def test_find_by_type(self, registry):
@@ -441,14 +441,14 @@ class TestServiceRegistry:
         registry.register(key="test2", provider=TestService)
         registry.register(key="db", provider=DatabaseService)
 
-        test_services = registry.find_by_type(TestService)
-        assert len(test_services) == 2
+        test_components = registry.find_by_type(TestService)
+        assert len(test_components) == 2
 
-        db_services = registry.find_by_type(DatabaseService)
-        assert len(db_services) == 1
+        db_components = registry.find_by_type(DatabaseService)
+        assert len(db_components) == 1
 
-        cache_services = registry.find_by_type(CacheService)
-        assert len(cache_services) == 0
+        cache_components = registry.find_by_type(CacheService)
+        assert len(cache_components) == 0
 
     def test_find_by_tag(self, registry):
         """Test finding services by tag."""
@@ -456,32 +456,32 @@ class TestServiceRegistry:
         registry.register(key="test2", provider=TestService, tags={"core", "experimental"})
         registry.register(key="db", provider=DatabaseService, tags={"database", "infrastructure"})
 
-        core_services = registry.find_by_tag("core")
-        assert len(core_services) == 2
+        core_components = registry.find_by_tag("core")
+        assert len(core_components) == 2
 
-        db_services = registry.find_by_tag("database")
-        assert len(db_services) == 1
+        db_components = registry.find_by_tag("database")
+        assert len(db_components) == 1
 
-        missing_services = registry.find_by_tag("nonexistent")
-        assert len(missing_services) == 0
+        missing_components = registry.find_by_tag("nonexistent")
+        assert len(missing_components) == 0
 
-    def test_find_multiple_services_by_tag(self, registry):
+    def test_find_multiple_components_by_tag(self, registry):
         """Test finding multiple services that share tags."""
         registry.register(key="test1", provider=TestService, tags={"core", "test", "stable"})
         registry.register(key="test2", provider=TestService, tags={"core", "experimental"})
         registry.register(key="db", provider=DatabaseService, tags={"database", "core", "stable"})
 
         # Find services with "core" tag
-        core_services = registry.find_by_tag("core")
-        assert len(core_services) == 3  # All have core tag
+        core_components = registry.find_by_tag("core")
+        assert len(core_components) == 3  # All have core tag
 
         # Find services with "stable" tag
-        stable_services = registry.find_by_tag("stable")
-        assert len(stable_services) == 2  # test1 and db
+        stable_components = registry.find_by_tag("stable")
+        assert len(stable_components) == 2  # test1 and db
 
         # Find services with unique tag
-        db_services = registry.find_by_tag("database")
-        assert len(db_services) == 1  # Only db
+        db_components = registry.find_by_tag("database")
+        assert len(db_components) == 1  # Only db
 
     def test_clear_registry(self, registry):
         """Test clearing the entire registry."""
@@ -493,7 +493,7 @@ class TestServiceRegistry:
         registry.clear()
 
         assert len(registry) == 0
-        assert registry._services == {}
+        assert registry._components == {}
         assert registry._type_index == {}
         assert registry._tag_index == {}
 
@@ -526,14 +526,14 @@ class TestServiceRegistry:
         assert registry.has("TestService")  # Key is normalized to lowercase
 
         # Check internal storage uses normalized string
-        assert "TestService" in registry._services
+        assert "TestService" in registry._components
 
     def test_key_normalization_with_name(self, registry):
         """Test key normalization with names."""
         registry.register(key=TestService, provider=TestService, name="primary")
 
         normalized_key = registry._normalize_key(TestService, "primary")
-        assert normalized_key in registry._services
+        assert normalized_key in registry._components
 
         # Should be able to retrieve with both type and name
         descriptor = registry.get(TestService, name="primary")
@@ -599,7 +599,7 @@ class TestErrorHandling:
 
     def test_invalid_key_types(self):
         """Test registration with invalid key types."""
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
 
         # Should handle various key types gracefully
         valid_keys = [
@@ -614,7 +614,7 @@ class TestErrorHandling:
 
     def test_none_provider_allowed(self):
         """Test registration with None provider is allowed."""
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
 
         # None provider should be allowed for optional dependencies
         descriptor = registry.register(key="test", provider=None)
@@ -622,7 +622,7 @@ class TestErrorHandling:
 
     def test_empty_tags_handling(self):
         """Test registration with empty tags."""
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
 
         # Should handle empty tags gracefully
         descriptor = registry.register(key="test", provider=TestService, tags=set())
@@ -634,18 +634,18 @@ class TestErrorHandling:
 
     def test_large_registry_performance(self):
         """Test registry performance with many services."""
-        registry = ServiceRegistry()
+        registry = ComponentRegistry()
 
         # Register many services
-        num_services = 100
-        for i in range(num_services):
+        num_components = 100
+        for i in range(num_components):
             registry.register(
                 key=f"service_{i}", provider=TestService, tags={f"tag_{i % 10}", "common"}
             )
 
-        assert len(registry) == num_services
+        assert len(registry) == num_components
 
         # Test lookups are still fast
         assert registry.has("service_50")
-        assert len(registry.find_by_tag("common")) == num_services
+        assert len(registry.find_by_tag("common")) == num_components
         assert len(registry.find_by_tag("tag_5")) == 10  # Every 10th service

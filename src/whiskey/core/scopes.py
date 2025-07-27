@@ -98,25 +98,25 @@ class Scope:
         self.name = name
         self._instances: dict[type, Any] = {}
 
-    def get(self, service_type: type[T]) -> T | None:
+    def get(self, component_type: type[T]) -> T | None:
         """Get a scoped instance if it exists.
 
         Args:
-            service_type: The type to look up
+            component_type: The type to look up
 
         Returns:
             The cached instance or None if not found
         """
-        return self._instances.get(service_type)
+        return self._instances.get(component_type)
 
-    def set(self, service_type: type[T], instance: T) -> None:
+    def set(self, component_type: type[T], instance: T) -> None:
         """Store a scoped instance.
 
         Args:
-            service_type: The type to cache the instance under
+            component_type: The type to cache the instance under
             instance: The instance to cache
         """
-        self._instances[service_type] = instance
+        self._instances[component_type] = instance
 
     def clear(self) -> None:
         """Clear all instances and run disposal.
@@ -172,18 +172,18 @@ class ContextVarScope(Scope):
         super().__init__(name)
         self._context_var: ContextVar[dict[type, Any] | None] = ContextVar(f"scope_{name}", default=None)
 
-    def get(self, service_type: type[T]) -> T | None:
+    def get(self, component_type: type[T]) -> T | None:
         """Get from context."""
         instances = self._context_var.get()
         if instances is None:
             return None
-        return instances.get(service_type)
+        return instances.get(component_type)
 
-    def set(self, service_type: type[T], instance: T) -> None:
+    def set(self, component_type: type[T], instance: T) -> None:
         """Set in context."""
         instances = self._context_var.get()
         instances = {} if instances is None else instances.copy()
-        instances[service_type] = instance
+        instances[component_type] = instance
         self._context_var.set(instances)
 
     def clear(self) -> None:

@@ -91,7 +91,7 @@ class Lazy(Generic[T]):
     - Optional dependencies that may not be used
 
     Attributes:
-        _service_type: The type to resolve
+        _component_type: The type to resolve
         _name: Optional name for named dependencies
         _container_ref: Weak reference to the container
         _instance: Cached instance after resolution
@@ -126,16 +126,16 @@ class Lazy(Generic[T]):
     """
 
     def __init__(
-        self, service_type: type[T], name: str | None = None, container: Container | None = None
+        self, component_type: type[T], name: str | None = None, container: Container | None = None
     ):
         """Initialize a lazy wrapper.
 
         Args:
-            service_type: The type to lazily resolve
+            component_type: The type to lazily resolve
             name: Optional name for named dependencies
             container: Container to use (defaults to current container)
         """
-        self._service_type = service_type
+        self._component_type = component_type
         self._name = name
         self._container_ref = weakref(container) if container is not None else None
         self._instance: T | None = None
@@ -168,7 +168,7 @@ class Lazy(Generic[T]):
     def _resolve(self) -> None:
         """Resolve the dependency from the container."""
         if self._resolving:
-            raise RuntimeError(f"Circular lazy resolution detected for {self._service_type}")
+            raise RuntimeError(f"Circular lazy resolution detected for {self._component_type}")
 
         self._resolving = True
         try:
@@ -197,7 +197,7 @@ class Lazy(Generic[T]):
                     # Re-raise if it's a different RuntimeError
                     raise
                 # No event loop, safe to use sync resolution
-                self._instance = container.resolve_sync(self._service_type, name=self._name)
+                self._instance = container.resolve_sync(self._component_type, name=self._name)
 
             self._resolved = True
         finally:
@@ -217,10 +217,10 @@ class Lazy(Generic[T]):
     def __repr__(self) -> str:
         """String representation of the lazy wrapper."""
         if self._resolved:
-            return f"Lazy[{self._service_type.__name__}](resolved={self._instance!r})"
+            return f"Lazy[{self._component_type.__name__}](resolved={self._instance!r})"
         else:
             name_str = f", name='{self._name}'" if self._name else ""
-            return f"Lazy[{self._service_type.__name__}](unresolved{name_str})"
+            return f"Lazy[{self._component_type.__name__}](unresolved{name_str})"
 
     def __bool__(self) -> bool:
         """Check if the lazy wrapper has a resolved value.
@@ -248,14 +248,14 @@ class LazyDescriptor(Generic[T]):
         ...         return self.database.value.query("SELECT * FROM users")
     """
 
-    def __init__(self, service_type: type[T], name: str | None = None):
+    def __init__(self, component_type: type[T], name: str | None = None):
         """Initialize the lazy descriptor.
 
         Args:
-            service_type: The type to lazily resolve
+            component_type: The type to lazily resolve
             name: Optional name for named dependencies
         """
-        self._service_type = service_type
+        self._component_type = component_type
         self._name = name
         self._attr_name: str | None = None
 
@@ -297,13 +297,13 @@ class LazyDescriptor(Generic[T]):
                 container = get_current_container()
 
             # Create new Lazy instance
-            lazy_instance = Lazy(self._service_type, self._name, container)
+            lazy_instance = Lazy(self._component_type, self._name, container)
             setattr(instance, self._attr_name, lazy_instance)
 
         return lazy_instance
 
 
-def lazy_inject(service_type: type[T], name: str | None = None) -> Lazy[T]:
+def lazy_inject(component_type: type[T], name: str | None = None) -> Lazy[T]:
     """Create a lazy dependency for injection.
 
     This is a convenience function for creating lazy dependencies,
@@ -322,10 +322,10 @@ def lazy_inject(service_type: type[T], name: str | None = None) -> Lazy[T]:
         ...         return self.cache.value.get(key)
 
     Args:
-        service_type: The type to lazily resolve
+        component_type: The type to lazily resolve
         name: Optional name for named dependencies
 
     Returns:
         A Lazy instance that will resolve when accessed
     """
-    return Lazy(service_type, name)
+    return Lazy(component_type, name)

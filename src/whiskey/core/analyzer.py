@@ -31,9 +31,9 @@ Functions:
     is_protocol: Check if type is a Protocol
 
 Example:
-    >>> from whiskey.core import TypeAnalyzer, ServiceRegistry
+    >>> from whiskey.core import TypeAnalyzer, ComponentRegistry
     >>> 
-    >>> registry = ServiceRegistry()
+    >>> registry = ComponentRegistry()
     >>> registry.register(Database, PostgresDB)
     >>> 
     >>> analyzer = TypeAnalyzer(registry)
@@ -236,7 +236,7 @@ class TypeAnalyzer:
         """Initialize the type analyzer.
 
         Args:
-            registry: Optional ServiceRegistry for checking registrations
+            registry: Optional ComponentRegistry for checking registrations
         """
         self.registry = registry
         self._analysis_cache: dict[Any, InjectResult] = {}
@@ -364,7 +364,7 @@ class TypeAnalyzer:
 
         # Handle generic types (e.g., Service[T])
         if self._is_generic_type(origin):
-            return self._analyze_generic_service_type(type_hint, origin, args)
+            return self._analyze_generic_component_type(type_hint, origin, args)
 
         # Handle other generic types - analyze the origin
         return self._analyze_type_hint(origin)
@@ -541,8 +541,8 @@ class TypeAnalyzer:
             # Find types that might implement this protocol
             candidates = []
             for descriptor in self.registry.list_all():
-                if self._implements_protocol(descriptor.service_type, type_hint):
-                    candidates.append(descriptor.service_type)
+                if self._implements_protocol(descriptor.component_type, type_hint):
+                    candidates.append(descriptor.component_type)
 
             if len(candidates) == 1:
                 return InjectResult(
@@ -630,10 +630,10 @@ class TypeAnalyzer:
         root_module = module_name.split(".")[0]
         return root_module in self.STDLIB_MODULES
 
-    def _analyze_generic_service_type(
+    def _analyze_generic_component_type(
         self, type_hint: Any, origin: Any, args: tuple
     ) -> InjectResult:
-        """Analyze generic service types like Service[T].
+        """Analyze generic component types like Component[T].
 
         Args:
             type_hint: The full generic type
@@ -650,7 +650,7 @@ class TypeAnalyzer:
             return InjectResult(
                 InjectDecision.YES,
                 type_hint,
-                f"Generic service type registered: {origin} with args {args}",
+                f"Generic component type registered: {origin} with args {args}",
                 inner_type=origin,
             )
 

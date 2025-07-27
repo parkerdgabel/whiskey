@@ -5,16 +5,16 @@ dependency injection system. It exports all the essential classes, decorators,
 and utilities needed to build applications with automatic dependency resolution.
 
 Key Components:
-    Container: Dict-like service registry with automatic dependency resolution
+    Container: Dict-like component registry with automatic dependency resolution
     Whiskey: Application class with lifecycle management and rich IoC features
-    Decorators: @component, @singleton, @inject for service registration
+    Decorators: @component, @singleton, @inject for component registration
     TypeAnalyzer: Smart type analysis for automatic injection decisions
     Scopes: Lifecycle management (singleton, transient, scoped)
     
 Usage Example:
     >>> from whiskey.core import Container, component, inject, singleton
     >>> 
-    >>> # Register services
+    >>> # Register components
     >>> @singleton
     ... class Database:
     ...     def query(self, sql: str): ...
@@ -26,8 +26,8 @@ Usage Example:
     >>> 
     >>> # Use injection in functions
     >>> @inject
-    ... async def process_user(user_id: int, service: UserService):
-    ...     return await service.get_user(user_id)
+    ... async def process_user(user_id: int, user_service: UserService):
+    ...     return await user_service.get_user(user_id)
 
 For more detailed examples, see the individual module documentation.
 """
@@ -64,7 +64,7 @@ from whiskey.core.errors import (
     WhiskeyError,
 )
 from whiskey.core.performance import PerformanceMetrics, PerformanceMonitor
-from whiskey.core.registry import Scope, ServiceDescriptor, ServiceRegistry
+from whiskey.core.registry import ComponentDescriptor, ComponentRegistry, Scope
 from whiskey.core.scopes import ContextVarScope, ScopeType
 from whiskey.core.types import Disposable, Initializable
 
@@ -88,9 +88,9 @@ __all__ = [
     "Scope",
     "ScopeError",
     "ScopeType",
-    "ServiceDescriptor",
-    # Registry
-    "ServiceRegistry",
+    "ComponentDescriptor",
+    # Registry  
+    "ComponentRegistry",
     "TypeAnalysisError",
     # Analysis
     "TypeAnalyzer",

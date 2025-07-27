@@ -446,7 +446,7 @@ class Whiskey:
             # Initialize all services that implement Initializable
             for descriptor in self.container.registry.list_all():
                 # Get or create instance
-                instance = await self.container.resolve(descriptor.service_type)
+                instance = await self.container.resolve(descriptor.component_type)
                 # Initialize if it implements Initializable
                 if hasattr(instance, 'initialize') and callable(instance.initialize):
                     await instance.initialize()
@@ -509,7 +509,7 @@ class Whiskey:
             if descriptor.scope == Scope.SINGLETON:
                 try:
                     # Get singleton instance if it exists
-                    instance = self.container.resolve_sync(descriptor.service_type)
+                    instance = self.container.resolve_sync(descriptor.component_type)
                     if instance not in disposed_instances and hasattr(instance, 'dispose') and callable(instance.dispose):
                         await instance.dispose()
                         disposed_instances.add(instance)

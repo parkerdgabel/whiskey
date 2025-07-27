@@ -338,7 +338,7 @@ class TestContainerScopeIntegration:
         # Verify the registration has the scope metadata
         descriptor = container.registry.get(SimpleService)
         assert descriptor.scope == RegistryScope.SCOPED
-        # Note: scope_name is passed to register but not stored in ServiceDescriptor
+        # Note: scope_name is passed to register but not stored in ComponentDescriptor
 
     def test_singleton_scope_behavior(self):
         """Test singleton scope behavior."""
@@ -383,7 +383,7 @@ class TestWhiskeyScopeIntegration:
         # Should be registered with the scope metadata
         descriptor = app.container.registry.get(RequestService)
         assert descriptor.scope == RegistryScope.SCOPED
-        # Note: scope_name is not stored in ServiceDescriptor
+        # Note: scope_name is not stored in ComponentDescriptor
 
     def test_app_resolve_with_scoped_service(self):
         """Test resolving scoped services through app."""

@@ -371,10 +371,10 @@ class ContainerInspector:
         services = {}
 
         for descriptor in self.container.registry.list_all():
-            service_type = descriptor.service_type
+            component_type = descriptor.component_type
             
             # Filter by interface
-            if interface and inspect.isclass(service_type) and not issubclass(service_type, interface):
+            if interface and inspect.isclass(component_type) and not issubclass(component_type, interface):
                 continue
 
             # Filter by scope
@@ -386,7 +386,7 @@ class ContainerInspector:
                 continue
 
             services[descriptor.key] = {
-                "type": service_type,
+                "type": component_type,
                 "scope": descriptor.scope.value,
                 "tags": list(descriptor.tags),
                 "registered": True
@@ -394,20 +394,20 @@ class ContainerInspector:
 
         return services
 
-    def get_dependencies(self, service_type: type) -> dict[str, type]:
+    def get_dependencies(self, component_type: type) -> dict[str, type]:
         """Get dependencies of a service.
 
         Args:
-            service_type: Service type to inspect
+            component_type: Service type to inspect
 
         Returns:
             Dict mapping parameter names to types
         """
-        if not inspect.isclass(service_type):
+        if not inspect.isclass(component_type):
             return {}
 
         try:
-            sig = inspect.signature(service_type)
+            sig = inspect.signature(component_type)
         except (ValueError, TypeError):
             # Can't get signature for some types
             return {}
@@ -420,23 +420,23 @@ class ContainerInspector:
 
         return dependencies
 
-    def can_resolve(self, service_type: type) -> bool:
+    def can_resolve(self, component_type: type) -> bool:
         """Check if a service can be resolved.
 
         Args:
-            service_type: Service type to check
+            component_type: Service type to check
 
         Returns:
             True if service is explicitly registered
         """
         # Only return True for explicitly registered services
-        return service_type in self.container
+        return component_type in self.container
 
-    def resolution_report(self, service_type: type) -> dict[str, Any]:
+    def resolution_report(self, component_type: type) -> dict[str, Any]:
         """Generate a detailed resolution report.
 
         Args:
-            service_type: Service type to analyze
+            component_type: Service type to analyze
 
         Returns:
             Dict with resolution details
@@ -444,22 +444,22 @@ class ContainerInspector:
         # Try to get service descriptor to determine scope
         scope = "transient"  # default
         try:
-            descriptor = self.container.registry.get(service_type)
+            descriptor = self.container.registry.get(component_type)
             scope = descriptor.scope.value
         except KeyError:
             pass
             
         report = {
-            "type": service_type,
-            "registered": service_type in self.container,
-            "can_resolve": self.can_resolve(service_type),
+            "type": component_type,
+            "registered": component_type in self.container,
+            "can_resolve": self.can_resolve(component_type),
             "dependencies": {},
             "missing_dependencies": [],
             "resolution_path": [],
             "scope": scope,
         }
 
-        deps = self.get_dependencies(service_type)
+        deps = self.get_dependencies(component_type)
         for param_name, dep_type in deps.items():
             # Handle Annotated types
             actual_type = dep_type
@@ -502,9 +502,9 @@ class ContainerInspector:
         graph = {}
 
         for descriptor in self.container.registry.list_all():
-            service_type = descriptor.service_type
-            deps = self.get_dependencies(service_type)
-            graph[service_type] = {
+            component_type = descriptor.component_type
+            deps = self.get_dependencies(component_type)
+            graph[component_type] = {
                 dep_type for dep_type in deps.values() if isinstance(dep_type, type)
             }
 
