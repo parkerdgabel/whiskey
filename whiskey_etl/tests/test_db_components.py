@@ -20,6 +20,7 @@ from whiskey_etl import (
     ValidateTransform,
     AggregateTransform,
 )
+from whiskey_etl.errors import TransformError
 
 
 @pytest.fixture
@@ -377,6 +378,246 @@ class TestSQLTransforms:
         assert result["agg_total_orders"] == 42
         assert result["agg_total_revenue"] == 12345.67
         assert "agg_avg_order_value" not in result  # Not in aggregate_fields
+
+
+async def test_database_sink_base_not_implemented(mock_database):
+    """Test that DatabaseSink base class raises NotImplementedError."""
+    from whiskey_etl import DatabaseSink
+    
+    sink = DatabaseSink(mock_database)
+    with pytest.raises(NotImplementedError):
+        await sink.load([])
+
+
+async def test_sql_transform_base_not_implemented(mock_database):
+    """Test that SQLTransform base class raises NotImplementedError."""
+    from whiskey_etl import SQLTransform
+    
+    transform = SQLTransform(mock_database)
+    with pytest.raises(NotImplementedError):
+        await transform.transform({})
+
+
+async def test_lookup_transform_with_all_fields(mock_database):
+    """Test LookupTransform returns all fields when output_fields is None."""
+    from whiskey_etl import LookupTransform
+    
+    mock_database.fetch_one.return_value = {
+        "name": "John",
+        "email": "john@example.com",
+        "department": "Engineering",
+        "level": 5
+    }
+    
+    transform = LookupTransform(
+        mock_database,
+        "SELECT * FROM users WHERE id = :user_id",
+        input_fields=["user_id"],
+        output_fields=None,  # Should include all fields
+    )
+    
+    result = await transform.transform({"user_id": 123, "order_id": 456})
+    
+    # Should have all fields from lookup
+    assert result["name"] == "John"
+    assert result["email"] == "john@example.com"
+    assert result["department"] == "Engineering"
+    assert result["level"] == 5
+    assert result["order_id"] == 456
+
+
+async def test_lookup_transform_error_on_missing(mock_database):
+    """Test LookupTransform with on_missing='error'."""
+    from whiskey_etl import LookupTransform
+    
+    mock_database.fetch_one.return_value = None
+    
+    transform = LookupTransform(
+        mock_database,
+        "SELECT * FROM users WHERE id = :user_id",
+        input_fields=["user_id"],
+        on_missing="error",
+    )
+    
+    with pytest.raises(TransformError) as exc_info:
+        await transform.transform({"user_id": 999})
+    
+    assert "Lookup returned no results" in str(exc_info.value)
+
+
+async def test_sql_file_source(mock_database, tmp_path):
+    """Test SQLFileSource functionality."""
+    from whiskey_etl import SQLFileSource
+    
+    # Create SQL file
+    sql_file = tmp_path / "query.sql"
+    sql_file.write_text("SELECT * FROM users WHERE active = :active")
+    
+    source = SQLFileSource(mock_database, str(sql_file))
+    
+    records = []
+    async for record in source.extract(active=True):
+        records.append(record)
+    
+    assert len(records) == 3
+
+
+async def test_table_source_with_stream_disabled(mock_database):
+    """Test TableSource without streaming."""
+    from whiskey_etl import TableSource
+    
+    source = TableSource(mock_database, "products")
+    
+    records = []
+    async for record in source.extract(stream=False):
+        records.append(record)
+    
+    assert len(records) == 2  # fetch_all returns 2 records
+    mock_database.fetch_all.assert_called()
+
+
+async def test_create_sql_transform_invalid_type():
+    """Test create_sql_transform with invalid type."""
+    from whiskey_etl import create_sql_transform
+    from whiskey_sql import Database
+    
+    mock_db = MagicMock(spec=Database)
+    
+    with pytest.raises(ValueError) as exc_info:
+        create_sql_transform("invalid_type", mock_db)
+    
+    assert "Unknown transform type" in str(exc_info.value)
+
+
+async def test_table_sink_empty_records(mock_database):
+    """Test TableSink with empty records list."""
+    from whiskey_etl import TableSink
+    
+    sink = TableSink(mock_database, "users")
+    await sink.load([])  # Should return early without error
+    
+    mock_database.execute_many.assert_not_called()
+
+
+async def test_join_transform_inner_no_match(mock_database):
+    """Test JoinTransform INNER join with no match filters record."""
+    from whiskey_etl import JoinTransform
+    
+    mock_database.fetch_one.return_value = None  # No match
+    
+    transform = JoinTransform(
+        mock_database,
+        "categories",
+        join_keys={"category_id": "id"},
+        join_type="INNER",
+    )
+    
+    result = await transform.transform({"product_id": 123, "category_id": 999})
+    
+    assert result is None  # INNER join with no match returns None
+
+
+async def test_join_transform_missing_key(mock_database):
+    """Test JoinTransform with missing join key."""
+    from whiskey_etl import JoinTransform
+    
+    transform = JoinTransform(
+        mock_database,
+        "categories",
+        join_keys={"category_id": "id"},
+    )
+    
+    with pytest.raises(TransformError) as exc_info:
+        await transform.transform({"product_id": 123})
+    
+    assert "Missing join key field" in str(exc_info.value)
+
+
+async def test_validate_transform_error_mode(mock_database):
+    """Test ValidateTransform with on_invalid='error'."""
+    from whiskey_etl import ValidateTransform
+    
+    mock_database.fetch_val.return_value = False
+    
+    transform = ValidateTransform(
+        mock_database,
+        "SELECT 1 FROM products WHERE sku = :sku",
+        validation_fields=["sku"],
+        on_invalid="error",
+    )
+    
+    with pytest.raises(TransformError) as exc_info:
+        await transform.transform({"sku": "INVALID"})
+    
+    assert "Record failed validation" in str(exc_info.value)
+
+
+async def test_bulk_update_sink_empty_records(mock_database):
+    """Test BulkUpdateSink with empty records."""
+    from whiskey_etl import BulkUpdateSink
+    
+    sink = BulkUpdateSink(
+        mock_database,
+        "inventory",
+        key_columns=["id"],
+        update_columns=["quantity"],
+    )
+    
+    await sink.load([])
+    mock_database.execute_many.assert_not_called()
+
+
+async def test_sql_execute_sink_empty_records(mock_database):
+    """Test SQLExecuteSink with empty records."""
+    from whiskey_etl import SQLExecuteSink
+    
+    sink = SQLExecuteSink(mock_database, "CALL process_order(:id)")
+    await sink.load([])
+    
+    mock_database.execute_many.assert_not_called()
+
+
+async def test_sql_transform_factories(mock_database):
+    """Test SQL transform factory functions."""
+    from whiskey_etl import (
+        create_lookup_transform,
+        create_join_transform,
+        create_validate_transform,
+        create_aggregate_transform,
+    )
+    
+    # Test lookup factory
+    lookup = create_lookup_transform(
+        mock_database,
+        "SELECT * FROM users WHERE id = :id",
+        input_fields=["id"],
+    )
+    assert callable(lookup)
+    
+    # Test join factory
+    join = create_join_transform(
+        mock_database,
+        "categories",
+        join_keys={"cat_id": "id"},
+    )
+    assert callable(join)
+    
+    # Test validate factory
+    validate = create_validate_transform(
+        mock_database,
+        "SELECT 1 FROM products WHERE sku = :sku",
+        validation_fields=["sku"],
+    )
+    assert callable(validate)
+    
+    # Test aggregate factory
+    aggregate = create_aggregate_transform(
+        mock_database,
+        "SELECT COUNT(*) as count FROM orders WHERE user_id = :user_id",
+        group_by_fields=["user_id"],
+        aggregate_fields=["count"],
+    )
+    assert callable(aggregate)
 
 
 async def test_etl_with_database_pipeline(mock_database):
