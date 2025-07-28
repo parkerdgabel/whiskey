@@ -1,9 +1,7 @@
 """Tests for validation framework."""
 
 import re
-from datetime import datetime, timedelta
-
-import pytest
+from datetime import datetime
 
 from whiskey_etl.validation import (
     ChoiceValidator,
@@ -18,7 +16,6 @@ from whiskey_etl.validation import (
     RequiredValidator,
     TypeValidator,
     UniqueValidator,
-    ValidationBuilder,
     ValidationMode,
     ValidationResult,
     create_validation_transform,
@@ -32,40 +29,40 @@ class TestIndividualValidators:
     async def test_required_validator(self):
         """Test required field validation."""
         validator = RequiredValidator(field="name")
-        
+
         # Valid cases
         result = await validator.validate("John")
         assert result.valid
         assert len(result.errors) == 0
-        
+
         # Invalid cases
         result = await validator.validate(None)
         assert not result.valid
         assert len(result.errors) == 1
         assert "required" in result.errors[0].message.lower()
-        
+
         result = await validator.validate("")
         assert not result.valid
-        
+
         result = await validator.validate("   ")
         assert not result.valid
 
     async def test_type_validator(self):
         """Test type validation."""
         validator = TypeValidator(int, field="age")
-        
+
         # Valid
         result = await validator.validate(25)
         assert result.valid
-        
+
         result = await validator.validate(None)
         assert result.valid  # None is allowed
-        
+
         # Invalid
         result = await validator.validate("25")
         assert not result.valid
         assert "int" in result.errors[0].message
-        
+
         # Multiple types
         validator = TypeValidator((int, float), field="number")
         result = await validator.validate(25)
@@ -78,26 +75,26 @@ class TestIndividualValidators:
     async def test_range_validator(self):
         """Test numeric range validation."""
         validator = RangeValidator(min_value=0, max_value=100, field="score")
-        
+
         # Valid
         result = await validator.validate(50)
         assert result.valid
-        
+
         result = await validator.validate(0)
         assert result.valid
-        
+
         result = await validator.validate(100)
         assert result.valid
-        
+
         # Invalid
         result = await validator.validate(-1)
         assert not result.valid
         assert ">= 0" in result.errors[0].message
-        
+
         result = await validator.validate(101)
         assert not result.valid
         assert "<= 100" in result.errors[0].message
-        
+
         # Non-numeric
         result = await validator.validate("fifty")
         assert not result.valid
@@ -106,48 +103,48 @@ class TestIndividualValidators:
     async def test_length_validator(self):
         """Test length validation."""
         validator = LengthValidator(min_length=3, max_length=10, field="username")
-        
+
         # Valid
         result = await validator.validate("john")
         assert result.valid
-        
+
         result = await validator.validate("abc")
         assert result.valid
-        
+
         result = await validator.validate("1234567890")
         assert result.valid
-        
+
         # Invalid
         result = await validator.validate("ab")
         assert not result.valid
         assert ">= 3" in result.errors[0].message
-        
+
         result = await validator.validate("12345678901")
         assert not result.valid
         assert "<= 10" in result.errors[0].message
-        
+
         # Lists
         result = await validator.validate([1, 2, 3, 4])
         assert result.valid
-        
+
         result = await validator.validate([1, 2])
         assert not result.valid
 
     async def test_pattern_validator(self):
         """Test regex pattern validation."""
         validator = PatternValidator(r"^\d{3}-\d{3}-\d{4}$", field="phone")
-        
+
         # Valid
         result = await validator.validate("123-456-7890")
         assert result.valid
-        
+
         # Invalid
         result = await validator.validate("1234567890")
         assert not result.valid
-        
+
         result = await validator.validate("123-45-6789")
         assert not result.valid
-        
+
         # Compiled pattern
         validator = PatternValidator(re.compile(r"^[A-Z]{2}\d{4}$"), field="code")
         result = await validator.validate("AB1234")
@@ -158,19 +155,19 @@ class TestIndividualValidators:
     async def test_choice_validator(self):
         """Test choice validation."""
         validator = ChoiceValidator(["active", "inactive", "pending"], field="status")
-        
+
         # Valid
         result = await validator.validate("active")
         assert result.valid
-        
+
         result = await validator.validate("inactive")
         assert result.valid
-        
+
         # Invalid
         result = await validator.validate("deleted")
         assert not result.valid
         assert "one of" in result.errors[0].message
-        
+
         # None is allowed
         result = await validator.validate(None)
         assert result.valid
@@ -178,7 +175,7 @@ class TestIndividualValidators:
     async def test_email_validator(self):
         """Test email validation."""
         validator = EmailValidator(field="email")
-        
+
         # Valid
         valid_emails = [
             "user@example.com",
@@ -186,11 +183,11 @@ class TestIndividualValidators:
             "test123@subdomain.example.com",
             "user+tag@example.com",
         ]
-        
+
         for email in valid_emails:
             result = await validator.validate(email)
             assert result.valid, f"Email {email} should be valid"
-        
+
         # Invalid
         invalid_emails = [
             "not-an-email",
@@ -201,7 +198,7 @@ class TestIndividualValidators:
             "user @example.com",
             "user@exam ple.com",
         ]
-        
+
         for email in invalid_emails:
             result = await validator.validate(email)
             assert not result.valid, f"Email {email} should be invalid"
@@ -210,55 +207,55 @@ class TestIndividualValidators:
         """Test date validation."""
         # Basic date validation
         validator = DateValidator(field="birth_date")
-        
+
         # Valid datetime
         result = await validator.validate(datetime.now())
         assert result.valid
-        
+
         # Valid string formats
         result = await validator.validate("2024-01-15")
         assert result.valid
-        
+
         result = await validator.validate("2024-01-15 10:30:00")
         assert result.valid
-        
+
         # Invalid format
         result = await validator.validate("15/01/2024")
         assert not result.valid
-        
+
         # With specific format
         validator = DateValidator(date_format="%d/%m/%Y", field="date")
         result = await validator.validate("15/01/2024")
         assert result.valid
-        
+
         result = await validator.validate("2024-01-15")
         assert not result.valid
-        
+
         # With date range
         min_date = datetime(2020, 1, 1)
         max_date = datetime(2025, 12, 31)
         validator = DateValidator(min_date=min_date, max_date=max_date, field="date")
-        
+
         result = await validator.validate("2023-06-15")
         assert result.valid
-        
+
         result = await validator.validate("2019-12-31")
         assert not result.valid
-        
+
         result = await validator.validate("2026-01-01")
         assert not result.valid
 
     async def test_unique_validator(self):
         """Test uniqueness validation."""
         validator = UniqueValidator(field="id")
-        
+
         # First occurrence is valid
         result = await validator.validate("user123")
         assert result.valid
-        
+
         result = await validator.validate("user456")
         assert result.valid
-        
+
         # Duplicate is invalid
         result = await validator.validate("user123")
         assert not result.valid
@@ -269,15 +266,15 @@ class TestIndividualValidators:
         # Simple boolean function
         def is_even(value, record):
             return value % 2 == 0
-        
+
         validator = CustomValidator(is_even, field="number")
-        
+
         result = await validator.validate(4)
         assert result.valid
-        
+
         result = await validator.validate(3)
         assert not result.valid
-        
+
         # Function returning ValidationResult
         def complex_validation(value, record):
             result = ValidationResult(valid=True)
@@ -286,14 +283,14 @@ class TestIndividualValidators:
             if value and not any(c.isdigit() for c in value):
                 result.add_warning("password", "Password should contain numbers")
             return result
-        
+
         validator = CustomValidator(complex_validation, field="password")
-        
+
         result = await validator.validate("abc")
         assert not result.valid
         assert len(result.errors) == 1
         assert len(result.warnings) == 1
-        
+
         result = await validator.validate("abcdef123")
         assert result.valid
         assert len(result.warnings) == 0
@@ -306,31 +303,31 @@ class TestIndividualValidators:
             TypeValidator(str),
             LengthValidator(min_length=3, max_length=10),
         ], field="username")
-        
+
         result = await validator.validate("john")
         assert result.valid
-        
+
         result = await validator.validate(None)
         assert not result.valid  # Fails required
-        
+
         result = await validator.validate(123)
         assert not result.valid  # Fails type
-        
+
         result = await validator.validate("ab")
         assert not result.valid  # Fails length
-        
+
         # ANY mode
         validator = CompositeValidator([
             TypeValidator(int),
             PatternValidator(r"^\d+$"),  # String of digits
         ], require_all=False, field="id")
-        
+
         result = await validator.validate(123)
         assert result.valid  # Passes first validator
-        
+
         result = await validator.validate("456")
         assert result.valid  # Passes second validator
-        
+
         result = await validator.validate("abc")
         assert not result.valid  # Fails both
 
@@ -347,7 +344,7 @@ class TestRecordValidator:
                 "email": EmailValidator(),
             }
         )
-        
+
         # Valid record
         record = {
             "name": "John Doe",
@@ -356,7 +353,7 @@ class TestRecordValidator:
         }
         result = await validator.validate_record(record)
         assert result.valid
-        
+
         # Invalid record - missing required field
         record = {
             "age": 30,
@@ -365,7 +362,7 @@ class TestRecordValidator:
         result = await validator.validate_record(record)
         assert not result.valid
         assert any(e.field == "name" for e in result.errors)
-        
+
         # Invalid record - wrong type
         record = {
             "name": "John",
@@ -382,22 +379,22 @@ class TestRecordValidator:
             field_validators={"age": RangeValidator(0, 100)},
             mode=ValidationMode.DROP
         )
-        
+
         # Valid record passes through
         result = await validator.transform({"age": 50})
         assert result == {"age": 50}
-        
+
         # Invalid record is dropped
         result = await validator.transform({"age": 150})
         assert result is None
-        
+
         # MARK mode
         validator.mode = ValidationMode.MARK
         result = await validator.transform({"age": 150})
         assert result is not None
         assert "_validation" in result
         assert not result["_validation"]["valid"]
-        
+
         # QUARANTINE mode
         validator.mode = ValidationMode.QUARANTINE
         result = await validator.transform({"age": 150})
@@ -414,17 +411,17 @@ class TestRecordValidator:
             },
             collect_stats=True
         )
-        
+
         records = [
             {"email": "valid@example.com", "age": 30},
             {"email": "invalid-email", "age": 50},
             {"email": "test@example.com", "age": 150},
             {"email": "another@example.com", "age": 40},
         ]
-        
+
         for record in records:
             await validator.validate_record(record)
-        
+
         stats = validator.get_stats()
         assert stats["total"] == 4
         assert stats["valid"] == 2
@@ -445,7 +442,7 @@ class TestValidationBuilder:
             .field("email").email().end_field()
             .build()
         )
-        
+
         # Valid record
         record = {
             "name": "John",
@@ -454,7 +451,7 @@ class TestValidationBuilder:
         }
         result = await validator.validate_record(record)
         assert result.valid
-        
+
         # Invalid record
         record = {
             "name": "",
@@ -499,7 +496,7 @@ class TestValidationBuilder:
                 .end_field()
             .build()
         )
-        
+
         # First valid record
         record1 = {
             "username": "john_doe123",
@@ -511,7 +508,7 @@ class TestValidationBuilder:
         }
         result = await validator.validate_record(record1)
         assert result.valid
-        
+
         # Second record with duplicate email
         record2 = {
             "username": "jane_doe",
@@ -534,15 +531,15 @@ class TestValidationBuilder:
             },
             mode=ValidationMode.DROP
         )
-        
+
         # Valid record
         result = await transform({"price": 10.99, "quantity": 5})
         assert result == {"price": 10.99, "quantity": 5}
-        
+
         # Invalid record (negative price)
         result = await transform({"price": -5, "quantity": 1})
         assert result is None
-        
+
         # Invalid record (zero quantity)
         result = await transform({"price": 10, "quantity": 0})
         assert result is None
@@ -554,7 +551,7 @@ class TestValidationIntegration:
     async def test_pipeline_validation(self):
         """Test validation in pipeline context."""
         from whiskey_etl.transforms import filter_transform
-        
+
         # Create validation transform
         validator = (
             validation_transform(ValidationMode.MARK)
@@ -563,7 +560,7 @@ class TestValidationIntegration:
             .field("age").type(int).range(13, None).end_field()
             .build()
         )
-        
+
         # Sample records
         records = [
             {"user_id": "123", "email": "valid@example.com", "age": 25},
@@ -571,16 +568,16 @@ class TestValidationIntegration:
             {"user_id": None, "email": "test@example.com", "age": 20},
             {"user_id": "789", "email": "another@example.com", "age": 10},
         ]
-        
+
         # Process records
         validated_records = []
         for record in records:
             result = await validator.transform(record)
             if result:
                 validated_records.append(result)
-        
+
         assert len(validated_records) == 4  # All records pass (MARK mode)
-        
+
         # Filter valid records
         valid_records = []
         for record in validated_records:
@@ -590,7 +587,7 @@ class TestValidationIntegration:
             )
             if result:
                 valid_records.append(result)
-        
+
         assert len(valid_records) == 1  # Only first record is valid
 
     async def test_cross_field_validation(self):
@@ -598,21 +595,21 @@ class TestValidationIntegration:
         def validate_date_range(record, _):
             start = record.get("start_date")
             end = record.get("end_date")
-            
+
             if start and end:
                 # Assume they're already datetime objects or parseable strings
                 if isinstance(start, str):
                     start = datetime.fromisoformat(start)
                 if isinstance(end, str):
                     end = datetime.fromisoformat(end)
-                
+
                 if start > end:
                     result = ValidationResult(valid=False)
                     result.add_error("date_range", "Start date must be before end date")
                     return result
-            
+
             return ValidationResult(valid=True)
-        
+
         validator = RecordValidator(
             field_validators={
                 "start_date": DateValidator(),
@@ -620,7 +617,7 @@ class TestValidationIntegration:
             },
             record_validators=[CustomValidator(validate_date_range)]
         )
-        
+
         # Valid range
         record = {
             "start_date": "2024-01-01",
@@ -628,7 +625,7 @@ class TestValidationIntegration:
         }
         result = await validator.validate_record(record)
         assert result.valid
-        
+
         # Invalid range
         record = {
             "start_date": "2024-12-31",

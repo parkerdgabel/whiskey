@@ -21,7 +21,7 @@ def etl_extension(
     retry_delay: float = 1.0,
     **kwargs,
 ) -> None:
-    """ETL extension that adds declarative data pipeline capabilities.
+    """Add declarative data pipeline capabilities to a Whiskey application.
 
     This extension provides:
     - Declarative pipeline definition with @app.pipeline
@@ -319,7 +319,7 @@ def etl_extension(
 
             # Create the SQL transform wrapper that will get database injected
             from .sql_transform import create_sql_transform
-            
+
             async def sql_transform_wrapper(record: dict[str, Any], database: Database) -> dict[str, Any] | None:
                 # Create transform with injected database
                 transform_func = create_sql_transform(transform_type, database, **config)
