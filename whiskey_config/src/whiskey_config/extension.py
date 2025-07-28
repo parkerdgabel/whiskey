@@ -77,7 +77,7 @@ def config_extension(app: Whiskey) -> None:
                 raise ValueError("Schema must be a dataclass type")
             config_manager.set_schema(schema)
             # Register schema type for injection
-            app.container.register(schema, factory=lambda: config_manager.get())
+            app.container.register(schema, lambda: config_manager.get())
 
         # Add sources
         if sources:
@@ -200,7 +200,7 @@ def config_extension(app: Whiskey) -> None:
     whiskey_config.providers._config_manager = config_manager
 
     # Health check for configuration
-    @app.on_ready
+    @app.on_startup
     async def setup_config_health():
         """Set up configuration health check."""
 
