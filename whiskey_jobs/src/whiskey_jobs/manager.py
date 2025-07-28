@@ -206,15 +206,18 @@ class JobManager:
         return metadata
 
     async def enqueue(self, job_name: str, *args, **kwargs) -> Job:
-        """Enqueue a job for execution.
+        """Enqueue a registered job for execution.
 
         Args:
-            job_name: Name of registered job
-            *args: Positional arguments for the job
-            **kwargs: Keyword arguments for the job
+            job_name: Name of registered job.
+            *args: Positional arguments for the job function.
+            **kwargs: Keyword arguments for the job function.
 
         Returns:
-            Created Job instance
+            Created Job instance.
+            
+        Raises:
+            ValueError: If job_name is not registered.
         """
         if job_name not in self._job_metadata:
             raise ValueError(f"Job '{job_name}' not registered")
@@ -235,17 +238,17 @@ class JobManager:
         priority: JobPriority = JobPriority.NORMAL,
         **kwargs,
     ) -> Job:
-        """Enqueue a function directly without registration.
+        """Enqueue a function directly without prior registration.
 
         Args:
-            func: Function to execute
-            *args: Positional arguments
-            queue: Queue name
-            priority: Job priority
-            **kwargs: Keyword arguments
+            func: Function to execute.
+            *args: Positional arguments for the function.
+            queue: Queue name. Defaults to "default".
+            priority: Job priority. Defaults to NORMAL.
+            **kwargs: Keyword arguments for the function.
 
         Returns:
-            Created Job instance
+            Created Job instance.
         """
         metadata = JobMetadata(
             func=func,
@@ -264,10 +267,10 @@ class JobManager:
         """Get the result of a completed job.
 
         Args:
-            job_id: Job ID
+            job_id: Unique job identifier.
 
         Returns:
-            JobResult if available, None otherwise
+            JobResult if available, None otherwise.
         """
         return self._job_results.get(job_id)
 
@@ -275,14 +278,14 @@ class JobManager:
         """Wait for a job to complete.
 
         Args:
-            job: Job instance or job ID
-            timeout: Maximum wait time in seconds
+            job: Job instance or job ID string.
+            timeout: Maximum wait time in seconds. Defaults to None.
 
         Returns:
-            JobResult
+            JobResult containing execution results.
 
         Raises:
-            TimeoutError: If timeout is exceeded
+            TimeoutError: If timeout is exceeded.
         """
         job_id = job.job_id if isinstance(job, Job) else job
 
@@ -299,18 +302,22 @@ class JobManager:
             await asyncio.sleep(0.1)
 
     def list_jobs(self) -> list[str]:
-        """List all registered job names."""
+        """Return a list of all registered job names."""
         return list(self._job_metadata.keys())
 
     def list_scheduled_jobs(self) -> list[dict[str, Any]]:
-        """List all scheduled jobs."""
+        """Return information about all scheduled jobs.
+        
+        Returns:
+            List of dictionaries containing scheduled job information.
+        """
         return self.scheduler.list_jobs()
 
     def get_stats(self) -> dict[str, Any]:
-        """Get comprehensive statistics.
+        """Get comprehensive job system statistics.
 
         Returns:
-            Manager statistics
+            Dictionary containing statistics about jobs, queues, workers, and scheduler.
         """
         return {
             "running": self._running,
@@ -325,31 +332,36 @@ class JobManager:
         }
 
     async def clear_queue(self, queue_name: str | None = None) -> None:
-        """Clear jobs from a queue.
+        """Clear pending jobs from a queue.
 
         Args:
-            queue_name: Queue name (all queues if None)
+            queue_name: Queue name to clear. Clears all queues if None.
         """
         self.queues.clear(queue_name)
         logger.info(f"Cleared queue: {queue_name or 'all'}")
 
     def create_job_chain(self) -> JobChainBuilder:
-        """Create a job chain builder.
+        """Create a job chain builder for sequential job execution.
 
         Returns:
-            JobChainBuilder instance
+            JobChainBuilder instance for fluent chain construction.
         """
         return JobChainBuilder(self)
 
 
 class JobChainBuilder:
-    """Builder for creating job chains."""
+    """Build chains of jobs for sequential execution.
+    
+    The JobChainBuilder provides a fluent interface for creating
+    sequences of jobs where each job executes after the previous
+    one completes successfully.
+    """
 
     def __init__(self, manager: JobManager):
         """Initialize the chain builder.
 
         Args:
-            manager: JobManager instance
+            manager: JobManager instance for job execution.
         """
         self.manager = manager
         self._jobs: list[Job] = []

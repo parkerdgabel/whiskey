@@ -20,13 +20,17 @@ logger = logging.getLogger(__name__)
 
 
 class ScheduledJob:
-    """Represents a scheduled job."""
+    """Represent a job that runs on a schedule.
+    
+    Handles both cron-based and interval-based scheduling,
+    tracking execution times and managing schedule constraints.
+    """
 
     def __init__(self, metadata: ScheduledJobMetadata):
         """Initialize a scheduled job.
 
         Args:
-            metadata: Scheduled job metadata
+            metadata: Scheduled job metadata containing schedule configuration.
         """
         self.metadata = metadata
         self._next_run: datetime | None = None
@@ -47,7 +51,7 @@ class ScheduledJob:
         self._calculate_next_run()
 
     def _calculate_next_run(self) -> None:
-        """Calculate the next run time."""
+        """Calculate the next scheduled run time."""
         now = datetime.now(UTC)
 
         # Check date constraints
@@ -90,7 +94,11 @@ class ScheduledJob:
             self._next_run = self._cron.get_next(datetime)
 
     def should_run(self) -> bool:
-        """Check if the job should run now."""
+        """Check if the job should run at the current time.
+        
+        Returns:
+            True if the job is due to run, False otherwise.
+        """
         if self._next_run is None:
             return False
 

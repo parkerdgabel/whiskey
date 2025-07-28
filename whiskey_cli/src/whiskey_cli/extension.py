@@ -157,7 +157,7 @@ class CLIManager:
                 else:
                     # For sync functions, use call_sync
                     return self.app.container.call_sync(target_func, *args, **kwargs)
-            except Exception as e:
+            except Exception:
                 # If container call fails, fallback to calling original function directly
                 # This handles cases where the function doesn't need DI
                 result = original_callback(*args, **kwargs)
@@ -194,7 +194,7 @@ class CLIManager:
 
 
 def cli_extension(app: Whiskey) -> None:
-    """CLI extension that adds command-line interface capabilities.
+    """Add command-line interface capabilities to a Whiskey application.
 
     This extension provides a framework-agnostic API for building CLIs:
     - @app.command() decorator with argument() and option() methods
@@ -225,7 +225,7 @@ def cli_extension(app: Whiskey) -> None:
     app.cli = manager.cli_group
 
     def command(name: str | None = None, description: str | None = None, group: str | None = None):
-        """Decorator to register a CLI command.
+        """Register a CLI command.
 
         Args:
             name: Command name (defaults to function name)

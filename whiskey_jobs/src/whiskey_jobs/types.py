@@ -10,7 +10,11 @@ from typing import Any
 
 
 class JobStatus(Enum):
-    """Job execution status."""
+    """Represent the execution status of a job.
+    
+    Tracks the lifecycle of a job from pending through
+    completion or failure.
+    """
 
     PENDING = "pending"
     RUNNING = "running"
@@ -21,7 +25,11 @@ class JobStatus(Enum):
 
 
 class JobPriority(Enum):
-    """Job priority levels."""
+    """Define priority levels for job execution.
+    
+    Higher numeric values indicate higher priority, with
+    CRITICAL being the highest priority.
+    """
 
     LOW = 1
     NORMAL = 5
@@ -31,7 +39,12 @@ class JobPriority(Enum):
 
 @dataclass
 class JobMetadata:
-    """Metadata for a job definition."""
+    """Store metadata for a job definition.
+    
+    Contains all configuration needed to execute a job,
+    including the function, queue assignment, retry policy,
+    and other execution parameters.
+    """
 
     func: Callable
     name: str
@@ -46,7 +59,11 @@ class JobMetadata:
 
 @dataclass
 class ScheduledJobMetadata(JobMetadata):
-    """Metadata for scheduled jobs."""
+    """Store metadata for scheduled job definitions.
+    
+    Extends JobMetadata with scheduling-specific configuration,
+    supporting both cron expressions and interval-based scheduling.
+    """
 
     cron: str | None = None
     interval: float | None = None  # seconds
@@ -55,7 +72,11 @@ class ScheduledJobMetadata(JobMetadata):
     timezone: str = "UTC"
 
     def __post_init__(self):
-        """Validate scheduling configuration."""
+        """Validate that scheduling configuration is properly specified.
+        
+        Raises:
+            ValueError: If scheduling configuration is invalid.
+        """
         if not self.cron and not self.interval:
             raise ValueError("Either 'cron' or 'interval' must be specified")
         if self.cron and self.interval:
@@ -64,7 +85,11 @@ class ScheduledJobMetadata(JobMetadata):
 
 @dataclass
 class JobResult:
-    """Result of a job execution."""
+    """Store the result of a job execution.
+    
+    Contains execution status, timing information, results or errors,
+    and retry count for a completed job execution.
+    """
 
     job_id: str
     status: JobStatus
@@ -76,17 +101,25 @@ class JobResult:
     retry_count: int = 0
 
     def __post_init__(self):
-        """Calculate duration if not provided."""
+        """Calculate duration from start and completion times if not provided."""
         if self.duration is None and self.started_at and self.completed_at:
             delta = self.completed_at - self.started_at
             self.duration = delta.total_seconds()
 
     @property
     def is_success(self) -> bool:
-        """Check if job completed successfully."""
+        """Check if the job completed successfully.
+        
+        Returns:
+            True if status is COMPLETED, False otherwise.
+        """
         return self.status == JobStatus.COMPLETED
 
     @property
     def is_failure(self) -> bool:
-        """Check if job failed."""
+        """Check if the job failed or was cancelled.
+        
+        Returns:
+            True if status is FAILED or CANCELLED, False otherwise.
+        """
         return self.status in (JobStatus.FAILED, JobStatus.CANCELLED)

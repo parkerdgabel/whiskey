@@ -127,7 +127,7 @@ class Pipeline:
     retry_delay: float = 1.0
     error_handler: str | None = None
     enable_checkpointing: bool = False
-    
+
     # Validation configuration
     validators: RecordValidator | None = None
     validation_mode: ValidationMode = ValidationMode.FAIL
