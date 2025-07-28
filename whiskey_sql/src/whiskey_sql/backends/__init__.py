@@ -34,7 +34,12 @@ async def create_database_pool(**config) -> Any:
 
         return await create_pool(**config)
 
+    elif dialect == "duckdb":
+        from whiskey_sql.backends.duckdb import create_pool
+
+        return await create_pool(**config)
+
     else:
         raise ConfigurationError(
-            f"Unsupported database dialect: {dialect}. Supported: postgresql, mysql, sqlite"
+            f"Unsupported database dialect: {dialect}. Supported: postgresql, mysql, sqlite, duckdb"
         )

@@ -19,6 +19,7 @@ pip install whiskey[sql]  # Includes whiskey-sql with asyncpg
 pip install whiskey-sql[postgresql]  # PostgreSQL support
 pip install whiskey-sql[mysql]       # MySQL support  
 pip install whiskey-sql[sqlite]      # SQLite support
+pip install whiskey-sql[duckdb]      # DuckDB support (analytics)
 pip install whiskey-sql[all]         # All database drivers
 ```
 
@@ -360,6 +361,63 @@ users_query = SQL(f"""
 """)
 ```
 
+### 11. DuckDB Analytics Features
+
+DuckDB provides powerful analytics capabilities:
+
+```python
+# Configure DuckDB for analytics
+app.configure_database(
+    dialect="duckdb",
+    url=":memory:",  # or "analytics.duckdb" for persistence
+)
+
+@inject
+async def analyze_sales(db: Database):
+    # Window functions for rankings
+    top_products = await db.fetch_all(SQL("""
+        SELECT 
+            product_name,
+            SUM(quantity * unit_price) as revenue,
+            RANK() OVER (ORDER BY SUM(quantity * unit_price) DESC) as rank
+        FROM sales
+        GROUP BY product_name
+        LIMIT 10
+    """))
+    
+    # Export results to Parquet
+    await db.export_parquet(
+        SQL("SELECT * FROM sales WHERE date >= :start_date"),
+        "sales_export.parquet",
+        {"start_date": "2024-01-01"}
+    )
+    
+    # Import from CSV
+    await db.execute(SQL("""
+        CREATE TABLE imports AS 
+        SELECT * FROM read_csv_auto('data.csv', header=true)
+    """))
+    
+    # Complex analytical queries
+    cohort_analysis = await db.fetch_all(SQL("""
+        WITH cohorts AS (
+            SELECT 
+                DATE_TRUNC('month', first_purchase_date) as cohort_month,
+                customer_id,
+                DATE_DIFF('month', first_purchase_date, purchase_date) as months_since_first
+            FROM customer_purchases
+        )
+        SELECT 
+            cohort_month,
+            months_since_first,
+            COUNT(DISTINCT customer_id) as customers,
+            SUM(revenue) as total_revenue
+        FROM cohorts
+        GROUP BY cohort_month, months_since_first
+        ORDER BY cohort_month, months_since_first
+    """))
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -411,6 +469,15 @@ app.configure_database(
 - Automatic foreign key enforcement
 - JSON1 extension support (SQLite 3.38+)
 
+### DuckDB (duckdb)
+- Optimized for analytical workloads (OLAP)
+- Columnar storage for efficient analytics
+- Native Parquet and CSV import/export
+- Window functions and advanced SQL features
+- In-memory and file-based operation modes
+- Perfect for data analysis and reporting
+- Async support via thread pool execution
+
 ## Best Practices
 
 1. **Use Type Hints**: Define dataclasses for your results
@@ -425,6 +492,7 @@ See the `examples/` directory for complete examples:
 - `postgresql_example.py` - PostgreSQL with advanced features
 - `mysql_example.py` - MySQL with JSON and grouping
 - `sqlite_example.py` - SQLite for development/testing
+- `duckdb_example.py` - DuckDB for analytics and reporting
 - `basic_crud.py` - Simple CRUD operations
 - `transactions.py` - Transaction patterns
 - `migrations.py` - Migration setup
