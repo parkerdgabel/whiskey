@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class JobWorker:
-    """Worker that processes jobs from queues."""
+    """Process jobs from queues with concurrency control.
+    
+    Workers pull jobs from assigned queues and execute them with
+    dependency injection, managing concurrency and tracking results.
+    """
 
     def __init__(
         self,
@@ -28,11 +32,11 @@ class JobWorker:
         """Initialize a job worker.
 
         Args:
-            container: Whiskey container for dependency injection
-            queues: MultiQueue instance
-            name: Worker name
-            concurrency: Maximum concurrent jobs
-            result_callback: Optional callback to store job results
+            container: Whiskey container for dependency injection.
+            queues: MultiQueue instance containing job queues.
+            name: Worker name for identification. Defaults to "worker".
+            concurrency: Maximum concurrent jobs. Defaults to 10.
+            result_callback: Optional callback for job results. Defaults to None.
         """
         self.container = container
         self.queues = queues
@@ -51,15 +55,15 @@ class JobWorker:
         self._monitored_queues: list[str] = []
 
     def monitor_queues(self, *queue_names: str) -> None:
-        """Set which queues this worker should monitor.
+        """Set which queues this worker should monitor for jobs.
 
         Args:
-            *queue_names: Queue names to monitor
+            *queue_names: Names of queues to monitor. If empty, monitors all queues.
         """
         self._monitored_queues = list(queue_names) or ["default"]
 
     async def start(self) -> None:
-        """Start the worker."""
+        """Start the worker and begin processing jobs."""
         if self._running:
             return
 
@@ -71,7 +75,7 @@ class JobWorker:
         self._tasks.add(task)
 
     async def stop(self) -> None:
-        """Stop the worker gracefully."""
+        """Stop the worker gracefully, waiting for current jobs to complete."""
         if not self._running:
             return
 
@@ -97,7 +101,7 @@ class JobWorker:
         )
 
     async def _monitor_all_queues(self) -> None:
-        """Monitor all queues for jobs."""
+        """Monitor queues continuously for available jobs to process."""
         semaphore = asyncio.Semaphore(self.concurrency)
         logger.info(f"Worker {self.name} monitoring all queues")
 

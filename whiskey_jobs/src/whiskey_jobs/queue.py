@@ -11,39 +11,63 @@ from .job import Job
 
 
 class JobQueue(ABC):
-    """Abstract base class for job queues."""
+    """Abstract base class for job queue implementations.
+    
+    Defines the interface that all job queues must implement,
+    supporting basic queue operations like push, pop, and peek.
+    """
 
     @abstractmethod
     async def push(self, job: Job) -> None:
-        """Add a job to the queue."""
+        """Add a job to the queue.
+        
+        Args:
+            job: Job instance to add.
+        """
         pass
 
     @abstractmethod
     async def pop(self) -> Job | None:
-        """Remove and return a job from the queue."""
+        """Remove and return a job from the queue.
+        
+        Returns:
+            Next Job from the queue, or None if empty.
+        """
         pass
 
     @abstractmethod
     async def peek(self) -> Job | None:
-        """Return the next job without removing it."""
+        """Return the next job without removing it.
+        
+        Returns:
+            Next Job in the queue, or None if empty.
+        """
         pass
 
     @abstractmethod
     def size(self) -> int:
-        """Get the number of jobs in the queue."""
+        """Return the number of jobs in the queue.
+        
+        Returns:
+            Number of jobs currently in the queue.
+        """
         pass
 
     @abstractmethod
     def clear(self) -> None:
-        """Clear all jobs from the queue."""
+        """Remove all jobs from the queue."""
         pass
 
 
 class MemoryQueue(JobQueue):
-    """In-memory FIFO job queue."""
+    """In-memory FIFO (First-In-First-Out) job queue.
+    
+    Implements a simple queue where jobs are processed in the
+    order they were added, using an efficient deque structure.
+    """
 
     def __init__(self):
-        """Initialize the queue."""
+        """Initialize an empty FIFO queue."""
         self._queue: deque[Job] = deque()
         self._lock = asyncio.Lock()
 
@@ -76,10 +100,14 @@ class MemoryQueue(JobQueue):
 
 
 class PriorityQueue(JobQueue):
-    """In-memory priority queue for jobs."""
+    """In-memory priority queue for jobs.
+    
+    Implements a priority queue where jobs with higher priority
+    values are processed first, using a heap-based structure.
+    """
 
     def __init__(self):
-        """Initialize the priority queue."""
+        """Initialize an empty priority queue."""
         self._heap: list[tuple[int, int, Job]] = []
         self._counter = 0  # For stable sorting of same priority
         self._lock = asyncio.Lock()

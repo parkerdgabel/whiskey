@@ -52,52 +52,38 @@ def jobs_extension(
     auto_start: bool = True,
     **kwargs,
 ) -> None:
-    """Jobs extension that adds background job execution capabilities.
+    """Add background job execution capabilities to Whiskey applications.
     
-    This extension provides:
-    - Background job execution with queues and priorities
-    - Job scheduling (cron and periodic)
-    - Job retries and error handling
-    - Job chaining and dependencies
-    - Full dependency injection support
-    - Job monitoring and statistics
+    This extension provides comprehensive job management including background
+    execution with queues and priorities, scheduling (cron and periodic),
+    retries and error handling, job chaining, full dependency injection
+    support, and monitoring statistics.
     
     Args:
-        app: Whiskey instance
-        worker_pool_size: Number of workers in the pool (default: 4)
-        worker_concurrency: Concurrent jobs per worker (default: 10)
-        use_priority_queues: Use priority queues instead of FIFO (default: True)
-        auto_start: Automatically start job manager on app startup (default: True)
-        **kwargs: Additional configuration options
+        app: Whiskey instance.
+        worker_pool_size: Number of workers in the pool. Defaults to 4.
+        worker_concurrency: Concurrent jobs per worker. Defaults to 10.
+        use_priority_queues: Use priority queues instead of FIFO. Defaults to True.
+        auto_start: Automatically start job manager on app startup. Defaults to True.
+        **kwargs: Additional configuration options.
     
-    Example:
-        app = Whiskey()
-        app.use(jobs_extension, worker_pool_size=8, auto_start=False)
+    Examples:
+        Basic usage::
         
-        @app.job(queue="emails", priority=JobPriority.HIGH)
-        async def send_email(to: str, subject: str, email_service: EmailService):
-            await email_service.send(to, subject)
-        
-        @app.scheduled_job(cron="0 * * * *")  # Every hour
-        async def cleanup_old_data(db: Database):
-            await db.cleanup_expired_sessions()
-        
-        @app.periodic_job(interval=300)  # Every 5 minutes
-        async def health_check(monitoring: MonitoringService):
-            await monitoring.check_all_services()
-        
-        # Enqueue jobs
-        await app.jobs.enqueue("send_email", "user@example.com", "Welcome!")
-        
-        # Ad-hoc jobs
-        await app.jobs.enqueue_func(lambda: print("Hello!"))
-        
-        # Job chains
-        chain = app.jobs.create_job_chain()
-        await chain.add("process_upload", file_id=123) \\
-                   .add("generate_thumbnail", size="small") \\
-                   .add("notify_user") \\
-                   .enqueue()
+            app = Whiskey()
+            app.use(jobs_extension, worker_pool_size=8, auto_start=False)
+            
+            @app.job(queue="emails", priority=JobPriority.HIGH)
+            async def send_email(to: str, subject: str, email_service: EmailService):
+                await email_service.send(to, subject)
+            
+            @app.scheduled_job(cron="0 * * * *")  # Every hour
+            async def cleanup_old_data(db: Database):
+                await db.cleanup_expired_sessions()
+            
+            # Enqueue jobs
+            await app.jobs.enqueue("send_email", "user@example.com", "Welcome!")
+    
     """
 
     # Create job manager
@@ -124,22 +110,28 @@ def jobs_extension(
         timeout: float | None = None,
         tags: list[str] | None = None,
     ):
-        """Decorator to register a background job.
+        """Register a function as a background job.
 
         Args:
-            name: Job name (defaults to function name)
-            queue: Queue name
-            priority: Job priority (JobPriority enum or int)
-            max_retries: Maximum retry attempts
-            retry_delay: Delay between retries in seconds
-            timeout: Job timeout in seconds
-            tags: Job tags for categorization
+            name: Job name. Defaults to function name.
+            queue: Queue name. Defaults to "default".
+            priority: Job priority (JobPriority enum or int). Defaults to NORMAL.
+            max_retries: Maximum retry attempts. Defaults to 3.
+            retry_delay: Delay between retries in seconds. Defaults to 60.0.
+            timeout: Job timeout in seconds. Defaults to None.
+            tags: Job tags for categorization. Defaults to None.
 
-        Example:
-            @app.job(queue="emails", priority=JobPriority.HIGH)
-            async def send_welcome_email(user_id: int, user_service: UserService):
-                user = await user_service.get_user(user_id)
-                # Send email...
+        Returns:
+            Decorated function that can be enqueued as a job.
+
+        Examples:
+            Basic job registration::
+            
+                @app.job(queue="emails", priority=JobPriority.HIGH)
+                async def send_welcome_email(user_id: int, user_service: UserService):
+                    user = await user_service.get_user(user_id)
+                    await email_service.send_welcome(user)
+        
         """
         # Keep priority as-is (JobPriority enum or int)
 
@@ -192,26 +184,32 @@ def jobs_extension(
         timeout: float | None = None,
         tags: list[str] | None = None,
     ):
-        """Decorator to register a scheduled job.
+        """Register a function as a scheduled job.
 
         Args:
-            name: Job name (defaults to function name)
-            cron: Cron expression (e.g., "0 * * * *" for hourly)
-            interval: Interval in seconds (alternative to cron)
-            start_date: When to start scheduling
-            end_date: When to stop scheduling
-            timezone: Timezone for cron expressions
-            queue: Queue name
-            priority: Job priority
-            max_retries: Maximum retry attempts
-            retry_delay: Delay between retries in seconds
-            timeout: Job timeout in seconds
-            tags: Job tags
+            name: Job name. Defaults to function name.
+            cron: Cron expression (e.g., "0 * * * *" for hourly). Defaults to None.
+            interval: Interval in seconds (alternative to cron). Defaults to None.
+            start_date: When to start scheduling. Defaults to None.
+            end_date: When to stop scheduling. Defaults to None.
+            timezone: Timezone for cron expressions. Defaults to "UTC".
+            queue: Queue name. Defaults to "default".
+            priority: Job priority. Defaults to NORMAL.
+            max_retries: Maximum retry attempts. Defaults to 3.
+            retry_delay: Delay between retries in seconds. Defaults to 60.0.
+            timeout: Job timeout in seconds. Defaults to None.
+            tags: Job tags. Defaults to None.
 
-        Example:
-            @app.scheduled_job(cron="0 0 * * *")  # Daily at midnight
-            async def daily_report(reporting_service: ReportingService):
-                await reporting_service.generate_daily_report()
+        Returns:
+            Original function with scheduling metadata attached.
+
+        Examples:
+            Daily scheduled job::
+            
+                @app.scheduled_job(cron="0 0 * * *")  # Daily at midnight
+                async def daily_report(reporting_service: ReportingService):
+                    await reporting_service.generate_daily_report()
+        
         """
         # Keep priority as-is (JobPriority enum or int)
 
@@ -252,26 +250,32 @@ def jobs_extension(
         timeout: float | None = None,
         tags: list[str] | None = None,
     ):
-        """Decorator to register a periodic job.
+        """Register a function as a periodic job.
 
-        This is a convenience decorator for interval-based scheduled jobs.
+        Convenience decorator for interval-based scheduled jobs.
 
         Args:
-            interval: Interval in seconds
-            name: Job name (defaults to function name)
-            start_date: When to start scheduling
-            end_date: When to stop scheduling
-            queue: Queue name
-            priority: Job priority
-            max_retries: Maximum retry attempts
-            retry_delay: Delay between retries in seconds
-            timeout: Job timeout in seconds
-            tags: Job tags
+            interval: Interval in seconds between executions.
+            name: Job name. Defaults to function name.
+            start_date: When to start scheduling. Defaults to None.
+            end_date: When to stop scheduling. Defaults to None.
+            queue: Queue name. Defaults to "default".
+            priority: Job priority. Defaults to NORMAL.
+            max_retries: Maximum retry attempts. Defaults to 3.
+            retry_delay: Delay between retries in seconds. Defaults to 60.0.
+            timeout: Job timeout in seconds. Defaults to None.
+            tags: Job tags. Defaults to None.
 
-        Example:
-            @app.periodic_job(300)  # Every 5 minutes
-            async def sync_data(sync_service: SyncService):
-                await sync_service.sync_all()
+        Returns:
+            Original function with scheduling metadata attached.
+
+        Examples:
+            Periodic data sync::
+            
+                @app.periodic_job(300)  # Every 5 minutes
+                async def sync_data(sync_service: SyncService):
+                    await sync_service.sync_all()
+        
         """
         return scheduled_job(
             name=name,
@@ -304,12 +308,12 @@ def jobs_extension(
 
         @app.on_startup
         async def start_job_manager():
-            """Start the job manager on app startup."""
+            """Start the job manager on application startup."""
             await manager.start()
 
         @app.on_shutdown
         async def stop_job_manager():
-            """Stop the job manager on app shutdown."""
+            """Stop the job manager on application shutdown."""
             await manager.stop()
 
     # CLI commands if CLI extension is available
@@ -398,7 +402,7 @@ def jobs_extension(
         original_run = app.run
 
         def enhanced_run(main: Callable | None = None) -> None:
-            """Enhanced run that starts job manager."""
+            """Run the application with job manager support."""
             if main is None and hasattr(app, "_main_func"):
                 original_run()
             else:

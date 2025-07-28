@@ -12,7 +12,12 @@ from .types import JobMetadata, JobPriority, JobResult, JobStatus
 
 
 class Job:
-    """Represents a job to be executed."""
+    """Represent a job to be executed in the background.
+    
+    A Job encapsulates a function call with its arguments and metadata,
+    tracking execution state and supporting features like retries,
+    timeouts, and job chaining.
+    """
 
     def __init__(
         self,
@@ -21,13 +26,13 @@ class Job:
         kwargs: dict[str, Any] | None = None,
         job_id: str | None = None,
     ):
-        """Initialize a job.
+        """Initialize a new job.
 
         Args:
-            metadata: Job metadata
-            args: Positional arguments for the job function
-            kwargs: Keyword arguments for the job function
-            job_id: Optional job ID (auto-generated if not provided)
+            metadata: Job metadata containing function and configuration.
+            args: Positional arguments for the job function. Defaults to ().
+            kwargs: Keyword arguments for the job function. Defaults to None.
+            job_id: Optional job ID. Auto-generated if not provided.
         """
         self.metadata = metadata
         self.args = args
@@ -48,29 +53,37 @@ class Job:
 
     @property
     def name(self) -> str:
-        """Get job name."""
+        """Return the job name."""
         return self.metadata.name
 
     @property
     def queue(self) -> str:
-        """Get job queue."""
+        """Return the job queue name."""
         return self.metadata.queue
 
     @property
     def priority(self) -> JobPriority | int:
-        """Get job priority."""
+        """Return the job priority."""
         return self.metadata.priority
 
     @property
     def duration(self) -> float | None:
-        """Get job execution duration in seconds."""
+        """Return the job execution duration in seconds.
+        
+        Returns:
+            Duration in seconds if job has completed, None otherwise.
+        """
         if self.started_at is not None and self.completed_at is not None:
             delta = self.completed_at - self.started_at
             return delta.total_seconds()
         return None
 
     def to_result(self) -> JobResult:
-        """Convert job to result object."""
+        """Convert the job to a JobResult object.
+        
+        Returns:
+            JobResult containing the current job state.
+        """
         return JobResult(
             job_id=self.job_id,
             status=self.status,
@@ -86,10 +99,10 @@ class Job:
         """Execute the job with dependency injection.
 
         Args:
-            container: Whiskey container for dependency injection
+            container: Whiskey container for dependency injection.
 
         Returns:
-            JobResult object
+            JobResult object containing execution results.
         """
         self.status = JobStatus.RUNNING
         self.started_at = datetime.now(UTC)
@@ -123,10 +136,10 @@ class Job:
         """Execute the job function with dependency injection.
 
         Args:
-            container: Whiskey container
+            container: Whiskey container for resolving dependencies.
 
         Returns:
-            Job function result
+            Result from the job function execution.
         """
         # Merge provided kwargs with args
         call_kwargs = self.kwargs.copy()
@@ -142,22 +155,26 @@ class Job:
             )
 
     def should_retry(self) -> bool:
-        """Check if job should be retried."""
+        """Check if the job should be retried.
+        
+        Returns:
+            True if job failed and hasn't exceeded max retries, False otherwise.
+        """
         return self.status == JobStatus.FAILED and self.retry_count < self.metadata.max_retries
 
     def increment_retry(self) -> None:
-        """Increment retry count."""
+        """Increment the retry count and update status."""
         self.retry_count += 1
         self.status = JobStatus.RETRYING
 
     def on_success(self, job: Job) -> Job:
-        """Chain a job to run on success.
+        """Chain a job to run on successful completion.
 
         Args:
-            job: Job to run if this job succeeds
+            job: Job to run if this job succeeds.
 
         Returns:
-            The chained job for fluent API
+            The chained job for fluent API usage.
         """
         self._on_success = job
         return job
@@ -166,16 +183,16 @@ class Job:
         """Chain a job to run on failure.
 
         Args:
-            job: Job to run if this job fails
+            job: Job to run if this job fails.
 
         Returns:
-            The chained job for fluent API
+            The chained job for fluent API usage.
         """
         self._on_failure = job
         return job
 
     def __repr__(self) -> str:
-        """String representation."""
+        """Return string representation of the job."""
         return (
             f"Job(id={self.job_id}, name={self.name}, "
             f"status={self.status.value}, queue={self.queue})"
