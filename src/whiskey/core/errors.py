@@ -146,3 +146,41 @@ class TypeAnalysisError(WhiskeyError):
     def __init__(self, message: str, type_hint=None):
         super().__init__(message)
         self.type_hint = type_hint
+
+
+class ParameterResolutionError(ResolutionError):
+    """Raised when a specific parameter cannot be resolved during injection.
+    
+    This provides detailed information about which parameter failed and why,
+    making debugging much easier.
+    """
+    
+    def __init__(self, 
+                 class_name: str,
+                 parameter_name: str,
+                 parameter_type: Any,
+                 reason: str,
+                 missing_dependencies: list[str] | None = None):
+        self.class_name = class_name
+        self.parameter_name = parameter_name
+        self.parameter_type = parameter_type
+        self.reason = reason
+        self.missing_dependencies = missing_dependencies or []
+        
+        # Build detailed error message
+        type_name = getattr(parameter_type, '__name__', str(parameter_type))
+        message = f"Cannot resolve parameter '{parameter_name}: {type_name}' for {class_name}"
+        
+        if reason:
+            message += f"\nReason: {reason}"
+            
+        if self.missing_dependencies:
+            message += f"\nMissing dependencies: {', '.join(self.missing_dependencies)}"
+            
+        # Add helpful suggestions
+        if "not registered" in reason.lower():
+            message += f"\n\nHint: Register {type_name} using @component, @singleton, or container.register()"
+        elif "built-in type" in reason.lower():
+            message += f"\n\nHint: Built-in types like {type_name} cannot be auto-injected. Provide a value when calling."
+        
+        super().__init__(message, service_key=class_name)

@@ -426,54 +426,22 @@ class TypeAnalyzer:
         Returns:
             InjectResult with decision and context
         """
-        # Try to resolve the forward reference more systematically
-        resolved_type = None
+        # This method is called when we have a string annotation that couldn't be resolved
+        # by get_type_hints_safe. At this point, we should check if the type might be
+        # registered in the container by name
         
-        try:
-            # Method 1: Walk the stack looking for the type in any frame's globals
-            frame = inspect.currentframe()
-            while frame:
-                if type_str in frame.f_globals:
-                    candidate = frame.f_globals[type_str]
-                    # Verify it's actually a class
-                    if inspect.isclass(candidate):
-                        resolved_type = candidate
-                        break
-                frame = frame.f_back
-                    
-            # Method 2: Try to resolve in loaded modules
-            if resolved_type is None:
-                import sys
-                frame = inspect.currentframe()
-                for _ in range(15):  # Look back more frames
-                    if frame is None:
-                        break
-                    module_name = frame.f_globals.get('__name__')
-                    if module_name and module_name in sys.modules:
-                        module = sys.modules[module_name]
-                        if hasattr(module, type_str):
-                            candidate = getattr(module, type_str)
-                            if inspect.isclass(candidate):
-                                resolved_type = candidate
-                                break
-                    frame = frame.f_back
-
-            # Method 3: Try built-ins
-            if resolved_type is None and hasattr(__builtins__, type_str):
-                candidate = getattr(__builtins__, type_str)
-                if inspect.isclass(candidate):
-                    resolved_type = candidate
-
-            # If we found a valid type, analyze it
-            if resolved_type is not None and inspect.isclass(resolved_type):
-                return self._analyze_type_hint(resolved_type)
-
-        except Exception:
-            pass
-
-        # Rule 6: Cannot resolve forward reference
+        if self.registry and self.registry.has(type_str):
+            return InjectResult(
+                InjectDecision.YES, 
+                type_str, 
+                f"Forward reference '{type_str}' found in registry"
+            )
+        
+        # If not in registry, we can't inject it
         return InjectResult(
-            InjectDecision.ERROR, type_str, f"Cannot resolve forward reference: '{type_str}'"
+            InjectDecision.NO,
+            type_str,
+            f"Forward reference '{type_str}' not found in registry"
         )
 
     def _is_stdlib_type(self, type_hint: Any) -> bool:
@@ -893,13 +861,60 @@ def get_type_hints_safe(func: callable) -> dict[str, Any]:
         Dict of type hints, empty if analysis fails
     """
     try:
-        # Try the standard way first
+        # Try the standard way first with proper namespace
         from typing import get_type_hints
-
-        return get_type_hints(func)
-    except (NameError, AttributeError, TypeError):
-        # Fall back to raw annotations
-        return getattr(func, "__annotations__", {})
+        
+        # Get the module where the function is defined
+        module = inspect.getmodule(func)
+        globalns = getattr(module, '__dict__', {}) if module else {}
+        
+        # Also include the function's own globals if available
+        if hasattr(func, '__globals__'):
+            globalns = {**globalns, **func.__globals__}
+        
+        # Try to get local namespace from the function's closure
+        localns = {}
+        if hasattr(func, '__code__'):
+            # For methods, include the class namespace
+            if hasattr(func, '__qualname__') and '.' in func.__qualname__:
+                class_name = func.__qualname__.rsplit('.', 1)[0]
+                if class_name in globalns:
+                    cls = globalns[class_name]
+                    if hasattr(cls, '__annotations__'):
+                        localns.update(cls.__annotations__)
+        
+        return get_type_hints(func, globalns=globalns, localns=localns, include_extras=True)
+    except (NameError, AttributeError, TypeError) as e:
+        # If get_type_hints fails, try to resolve forward references manually
+        annotations = getattr(func, "__annotations__", {})
+        if not annotations:
+            return {}
+        
+        # Try to resolve string annotations manually
+        resolved = {}
+        for name, annotation in annotations.items():
+            if isinstance(annotation, str):
+                # Try to resolve the string annotation
+                try:
+                    # Get the function's module and globals
+                    module = inspect.getmodule(func)
+                    if module and hasattr(module, '__dict__'):
+                        # Try to find the type in the module
+                        if annotation in module.__dict__:
+                            resolved[name] = module.__dict__[annotation]
+                        elif hasattr(func, '__globals__') and annotation in func.__globals__:
+                            resolved[name] = func.__globals__[annotation]
+                        else:
+                            # Keep as string if can't resolve
+                            resolved[name] = annotation
+                    else:
+                        resolved[name] = annotation
+                except Exception:
+                    resolved[name] = annotation
+            else:
+                resolved[name] = annotation
+        
+        return resolved
 
 
 # Utility functions for common type checks

@@ -688,8 +688,8 @@ class TestEdgeCases:
         container.register(ServiceA, ServiceA)
         container.register(ServiceB, ServiceB)
 
-        # Should raise TypeError for forward reference since ServiceB is function-local
-        with pytest.raises(TypeError, match="Cannot resolve forward reference"):
+        # Should raise CircularDependencyError due to genuine circular dependency
+        with pytest.raises(CircularDependencyError):
             container.resolve_sync(ServiceA)
 
     @pytest.mark.unit

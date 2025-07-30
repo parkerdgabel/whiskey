@@ -222,8 +222,8 @@ class TestComponentDecorators:
         assert isinstance(instance, DatabaseService)
         
     def test_factory_error_without_key(self):
-        """Test factory decorator raises error without key."""
-        with pytest.raises(ValueError, match="Factory decorator requires a key"):
+        """Test factory decorator raises helpful error without key or return type hint."""
+        with pytest.raises(ValueError, match="Cannot determine factory key"):
             @factory
             def create_something():
                 return "something"

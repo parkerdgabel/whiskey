@@ -301,9 +301,24 @@ class Whiskey:
         lazy: bool = False,
     ) -> type[T] | Callable[[type[T]], type[T]]:
         """Decorator to register a class as a scoped component."""
-        return self.component(
-            cls, key=key, name=name, scope=Scope.SCOPED, tags=tags, condition=condition, lazy=lazy
-        )
+        def decorator(target_cls: type[T]) -> type[T]:
+            # Register with container, including scope_name in metadata
+            descriptor = self.container.register(
+                key or target_cls,
+                target_cls,
+                name=name,
+                scope=Scope.SCOPED,
+                tags=tags,
+                condition=condition,
+                lazy=lazy,
+                metadata={"scope_name": scope_name}
+            )
+            return target_cls
+        
+        if cls is None:
+            return decorator
+        else:
+            return decorator(cls)
 
     def factory(
         self,

@@ -179,63 +179,60 @@ def factory(
     lazy: bool = False,
     app: Whiskey = None,
 ) -> Callable | Callable[[Callable], Callable]:
-    """Global decorator to register a function as a factory.
-
+    """Improved factory decorator with automatic key inference.
+    
+    This decorator can be used in multiple ways:
+    
+    1. With automatic key inference (recommended):
+       @factory
+       def create_service() -> UserService:
+           return UserService()
+    
+    2. With explicit key:
+       @factory(key=UserService)
+       def create_service():
+           return UserService()
+    
+    3. With positional key:
+       @factory(UserService)
+       def create_service():
+           return UserService()
+    
+    4. With options:
+       @factory(scope=Scope.SINGLETON)
+       def create_cache() -> RedisCache:
+           return RedisCache()
+    
     Args:
         key_or_func: Either the component key or the factory function
-        key: Component key (if not provided as first arg)
+        key: Explicit key for the factory (alternative to positional key)
         name: Optional name for named components
         scope: Component scope (default: transient)
         tags: Set of tags for categorization
         condition: Optional registration condition
         lazy: Whether to use lazy resolution
         app: Optional Whiskey instance (uses default if None)
-
-    Returns:
-        The registered function
-
-    Examples:
-        >>> @factory(SimpleService)
-        >>> def create_simple():
-        ...     return SimpleService()
-
-        >>> @factory(key=Cache, scope=Scope.SINGLETON)
-        >>> def create_cache():
-        ...     return RedisCache()
-    """
-    # Handle different call patterns
-    if key_or_func is not None and inspect.isclass(key_or_func):
-        # Called as @factory(ServiceClass) - first arg is the key (a class)
-        actual_key = key_or_func
-        func = None
-    elif key_or_func is not None and callable(key_or_func) and key is None:
-        # Called as @factory without parentheses - first arg is the function
-        # This case requires key to be specified via key parameter
-        func = key_or_func
-        actual_key = None
-    else:
-        # Called as @factory(key=...) or @factory()
-        func = key_or_func
-        actual_key = key
-
-    def decorator(f: Callable) -> Callable:
-        target_app = app or _get_default_app()
-        # The app.factory expects key as first positional argument
-        if actual_key is None:
-            raise ValueError("Factory decorator requires a key")
-        target_app.factory(
-            actual_key, f, name=name, scope=scope, tags=tags, condition=condition, lazy=lazy
-        )
-        return f
     
-    if func is None:
-        # Called with parentheses or key: @factory(key=...) or @factory(ServiceClass)
-        return decorator
-    else:
-        # Called without parentheses: @factory - but this requires key parameter
-        if actual_key is None:
-            raise ValueError("Factory decorator requires a key")
-        return decorator(func)
+    Returns:
+        The decorated function
+    """
+    # Import here to avoid circular imports
+    from .improved_factory import ImprovedFactoryDecorator
+    
+    decorator = ImprovedFactoryDecorator(
+        key_or_func=key_or_func,
+        key=key,
+        name=name,
+        scope=scope,
+        tags=tags,
+        condition=condition,
+        lazy=lazy,
+        app=app or _get_default_app(),
+    )
+    
+    # Only pass key_or_func as func if it's a function (not a class)
+    func_to_pass = key_or_func if callable(key_or_func) and not inspect.isclass(key_or_func) else None
+    return decorator(func_to_pass)
 
 
 # Alias for backward compatibility
