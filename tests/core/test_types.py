@@ -150,8 +150,8 @@ class TestInject:
         """Test that Inject raises deprecation warning."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            inject = Inject()
-            
+            Inject()
+
             assert len(w) == 1
             assert issubclass(w[0].category, DeprecationWarning)
             assert "Inject() is deprecated" in str(w[0].message)
@@ -161,6 +161,6 @@ class TestInject:
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             inject = Inject(name="test", optional=True)
-            
+
             assert inject.name == "test"
             assert inject.optional is True

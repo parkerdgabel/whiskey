@@ -138,8 +138,8 @@ async def demonstrate_scoped_services():
         service1a = await container.resolve(UserService)
         service1b = await container.resolve(UserService)
 
-        user1 = await service1a.process_user(1)
-        user2 = await service1b.process_user(2)
+        await service1a.process_user(1)
+        await service1b.process_user(2)
 
         print(f"Service 1a context: {service1a.context.request_id}")
         print(f"Service 1b context: {service1b.context.request_id}")
@@ -151,7 +151,7 @@ async def demonstrate_scoped_services():
         service2a = await container.resolve(UserService)
         service2b = await container.resolve(UserService)
 
-        user3 = await service2a.process_user(3)
+        await service2a.process_user(3)
 
         print(f"Service 2a context: {service2a.context.request_id}")
         print(f"Service 2b context: {service2b.context.request_id}")
@@ -217,7 +217,7 @@ async def demonstrate_performance_monitoring():
         # Perform various operations
         for i in range(5):
             service = await container.resolve(UserService)
-            user = await service.process_user(i + 1)
+            await service.process_user(i + 1)
 
     # Print performance report
     print(metrics.generate_report())

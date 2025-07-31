@@ -254,7 +254,7 @@ class TestComponentDiscoverer:
         class Component:
             pass
 
-        registered = discoverer.auto_register({Component}, scope=Scope.SINGLETON)
+        discoverer.auto_register({Component}, scope=Scope.SINGLETON)
 
         # Should register as singleton
         instance1 = container.resolve_sync(Component)
@@ -340,7 +340,7 @@ class TestContainerInspector:
         inspector = ContainerInspector(container)
 
         # Filter by interface - implementation may vary
-        services = inspector.list_components(interface=BaseService)
+        inspector.list_components(interface=BaseService)
         # Should return services that implement BaseService
 
     def test_list_services_by_tags(self):
@@ -359,10 +359,10 @@ class TestContainerInspector:
         inspector = ContainerInspector(container)
 
         # Filter by tags
-        services = inspector.list_components(tags={"core"})
+        inspector.list_components(tags={"core"})
         # Should include Service1
 
-        services = inspector.list_components(tags={"experimental"})
+        inspector.list_components(tags={"experimental"})
         # Should include Service2
 
     def test_get_dependencies(self):
@@ -431,7 +431,7 @@ class TestContainerInspector:
         container.register(Database, Database())
 
         # Service not registered but dependencies available
-        result = inspector.can_resolve(Service)
+        inspector.can_resolve(Service)
         # Result depends on auto-creation support
 
     def test_resolution_report(self):
@@ -537,7 +537,7 @@ class TestDiscoverComponentsFunction:
         # Should require container parameter
         with pytest.raises(TypeError):
             # Missing required container parameter
-            components = discover_components("some_module")
+            discover_components("some_module")
 
     def test_discover_and_register(self):
         """Test discovering and auto-registering components."""

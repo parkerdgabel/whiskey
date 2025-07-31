@@ -11,11 +11,11 @@ Decorators:
     @factory: Register a factory function for component creation
     @scoped: Register a scoped component (one instance per scope)
     @inject: Enable automatic dependency injection for functions
-    
+
     @on_startup: Register startup callbacks
-    @on_shutdown: Register shutdown callbacks  
+    @on_shutdown: Register shutdown callbacks
     @on_error: Register error handlers
-    
+
     @when_env: Conditional registration based on environment variable
     @when_debug: Register only in debug mode
     @when_production: Register only in production
@@ -32,22 +32,22 @@ Functions:
 
 Example:
     >>> from whiskey import component, singleton, inject
-    >>> 
+    >>>
     >>> @singleton
     ... class Database:
     ...     def __init__(self):
     ...         self.connected = True
-    >>> 
+    >>>
     >>> @component
     ... class UserService:
     ...     def __init__(self, db: Database):
     ...         self.db = db  # Auto-injected
-    >>> 
+    >>>
     >>> @inject
     ... async def get_user(user_id: int, service: UserService):
     ...     # user_id must be provided, component is auto-injected
     ...     return await service.fetch_user(user_id)
-    
+
 Note:
     These decorators use a default global application instance. For more
     control or multiple applications, use app-specific decorators instead.
@@ -117,6 +117,7 @@ def component(
         >>> class CacheService:
         ...     pass
     """
+
     def decorator(cls: type[T]) -> type[T]:
         # Validate that target is a class
         if not inspect.isclass(cls):
@@ -125,7 +126,7 @@ def component(
         return target_app.component(
             cls, key=key, name=name, scope=scope, tags=tags, condition=condition, lazy=lazy
         )
-    
+
     if cls is None:
         return decorator
     else:
@@ -159,12 +160,18 @@ def scoped(
 ) -> Callable[[type[T]], type[T]]:
     """Global decorator to register a class as a scoped component."""
     target_app = app or _get_default_app()
-    
+
     def decorator(cls: type[T]) -> type[T]:
         return target_app.scoped(
-            cls, scope_name=scope_name, key=key, name=name, tags=tags, condition=condition, lazy=lazy
+            cls,
+            scope_name=scope_name,
+            key=key,
+            name=name,
+            tags=tags,
+            condition=condition,
+            lazy=lazy,
         )
-    
+
     return decorator
 
 
@@ -180,29 +187,29 @@ def factory(
     app: Whiskey = None,
 ) -> Callable | Callable[[Callable], Callable]:
     """Improved factory decorator with automatic key inference.
-    
+
     This decorator can be used in multiple ways:
-    
+
     1. With automatic key inference (recommended):
        @factory
        def create_service() -> UserService:
            return UserService()
-    
+
     2. With explicit key:
        @factory(key=UserService)
        def create_service():
            return UserService()
-    
+
     3. With positional key:
        @factory(UserService)
        def create_service():
            return UserService()
-    
+
     4. With options:
        @factory(scope=Scope.SINGLETON)
        def create_cache() -> RedisCache:
            return RedisCache()
-    
+
     Args:
         key_or_func: Either the component key or the factory function
         key: Explicit key for the factory (alternative to positional key)
@@ -212,13 +219,13 @@ def factory(
         condition: Optional registration condition
         lazy: Whether to use lazy resolution
         app: Optional Whiskey instance (uses default if None)
-    
+
     Returns:
         The decorated function
     """
     # Import here to avoid circular imports
     from .improved_factory import ImprovedFactoryDecorator
-    
+
     decorator = ImprovedFactoryDecorator(
         key_or_func=key_or_func,
         key=key,
@@ -229,9 +236,11 @@ def factory(
         lazy=lazy,
         app=app or _get_default_app(),
     )
-    
+
     # Only pass key_or_func as func if it's a function (not a class)
-    func_to_pass = key_or_func if callable(key_or_func) and not inspect.isclass(key_or_func) else None
+    func_to_pass = (
+        key_or_func if callable(key_or_func) and not inspect.isclass(key_or_func) else None
+    )
     return decorator(func_to_pass)
 
 

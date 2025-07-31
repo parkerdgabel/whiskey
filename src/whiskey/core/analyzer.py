@@ -32,16 +32,16 @@ Functions:
 
 Example:
     >>> from whiskey.core import TypeAnalyzer, ComponentRegistry
-    >>> 
+    >>>
     >>> registry = ComponentRegistry()
     >>> registry.register(Database, PostgresDB)
-    >>> 
+    >>>
     >>> analyzer = TypeAnalyzer(registry)
-    >>> 
+    >>>
     >>> # Analyze a callable
     >>> def process(name: str, db: Database, cache: Optional[Cache]):
     ...     pass
-    >>> 
+    >>>
     >>> results = analyzer.analyze_callable(process)
     >>> # results['name'] = InjectResult(NO, str, "built-in type")
     >>> # results['db'] = InjectResult(YES, Database, "registered component")
@@ -108,7 +108,7 @@ class InjectResult:
 
     def __repr__(self) -> str:
         return f"InjectResult({self.decision.value}, {self.type_hint}, '{self.reason}')"
-    
+
     def __eq__(self, other) -> bool:
         """Check equality based on all attributes."""
         if not isinstance(other, InjectResult):
@@ -241,7 +241,9 @@ class TypeAnalyzer:
         """
         self.registry = registry
         self._analysis_cache: dict[Any, InjectResult] = {}
-        self._callable_cache: dict[Any, dict[str, InjectResult]] = {}  # Cache for entire callable analysis
+        self._callable_cache: dict[
+            Any, dict[str, InjectResult]
+        ] = {}  # Cache for entire callable analysis
         self._generic_resolver = GenericTypeResolver(registry)
 
     def should_inject(self, param: inspect.Parameter, type_hint: Any = None) -> InjectResult:
@@ -298,17 +300,17 @@ class TypeAnalyzer:
         type_cache_key = self._create_cache_key(type_hint)
         if type_cache_key in self._analysis_cache:
             return self._analysis_cache[type_cache_key]
-        
+
         # Perform the actual analysis
         result = self._analyze_type_hint_uncached(type_hint)
-        
+
         # Cache the result
         self._cache_result(type_cache_key, result)
         return result
-    
+
     def _analyze_type_hint_uncached(self, type_hint: Any) -> InjectResult:
         """Perform the actual type hint analysis without caching.
-        
+
         Args:
             type_hint: The type hint to analyze
 
@@ -384,7 +386,7 @@ class TypeAnalyzer:
             )
 
         # Handle Callable types
-        if origin is Callable or (hasattr(origin, '__name__') and origin.__name__ == 'Callable'):
+        if origin is Callable or (hasattr(origin, "__name__") and origin.__name__ == "Callable"):
             return self._analyze_callable_type(type_hint, args)
 
         # Handle typing constructs
@@ -417,9 +419,9 @@ class TypeAnalyzer:
             # Rule 4: Check if T is something that should never be injected
             inner_result = self._analyze_type_hint(inner_type)
             if inner_result.decision == InjectDecision.NO and (
-                "generic type" in inner_result.reason.lower() or
-                "built-in type" in inner_result.reason.lower() or
-                "standard library type" in inner_result.reason.lower()
+                "generic type" in inner_result.reason.lower()
+                or "built-in type" in inner_result.reason.lower()
+                or "standard library type" in inner_result.reason.lower()
             ):
                 # If T is a built-in, generic, or stdlib type, Optional[T] should not be injected either
                 return InjectResult(
@@ -474,45 +476,41 @@ class TypeAnalyzer:
         # This method is called when we have a string annotation that couldn't be resolved
         # by get_type_hints_safe. At this point, we should check if the type might be
         # registered in the container by name
-        
+
         if self.registry and self.registry.has(type_str):
             return InjectResult(
-                InjectDecision.YES, 
-                type_str, 
-                f"Forward reference '{type_str}' found in registry"
+                InjectDecision.YES, type_str, f"Forward reference '{type_str}' found in registry"
             )
-        
+
         # Try to resolve the string to an actual type in common namespaces
         # This handles cases where a class is defined but not registered
         resolved_type = self._try_resolve_string_annotation(type_str)
         if resolved_type is not None:
             # Recursively analyze the resolved type
             return self._analyze_type_hint(resolved_type)
-        
+
         # If not in registry and can't resolve, we can't inject it
         return InjectResult(
-            InjectDecision.NO,
-            type_str,
-            f"Forward reference '{type_str}' not found in registry"
+            InjectDecision.NO, type_str, f"Forward reference '{type_str}' not found in registry"
         )
 
     def _try_resolve_string_annotation(self, type_str: str) -> type | None:
         """Try to resolve a string annotation to an actual type.
-        
+
         Args:
             type_str: The string type annotation
-            
+
         Returns:
             The resolved type or None if it can't be resolved
         """
         # Try to find the type in the calling frame's globals
         import inspect
-        
+
         try:
             # Get the calling frame (skipping internal analyzer frames)
             frame = inspect.currentframe()
             while frame:
-                if frame.f_globals.get('__name__') != __name__:
+                if frame.f_globals.get("__name__") != __name__:
                     # Found a frame outside the analyzer
                     globals_dict = frame.f_globals
                     if type_str in globals_dict:
@@ -521,11 +519,11 @@ class TypeAnalyzer:
                             return potential_type
                     break
                 frame = frame.f_back
-                
+
         except Exception:
             # If frame inspection fails, fall back to safe methods
             pass
-        
+
         return None
 
     def _is_stdlib_type(self, type_hint: Any) -> bool:
@@ -699,7 +697,7 @@ class TypeAnalyzer:
         if self.registry and self.registry.has(type_hint):
             return InjectResult(InjectDecision.YES, type_hint, "Full generic type registered")
 
-        # Use the generic resolver to find concrete implementations  
+        # Use the generic resolver to find concrete implementations
         concrete_type = self._generic_resolver.resolve_generic(type_hint)
         if concrete_type:
             return InjectResult(
@@ -720,28 +718,28 @@ class TypeAnalyzer:
 
         # Analyze the generic type for additional information
         analysis = self._generic_resolver.analyze_generic_type(type_hint)
-        
-        if analysis['is_protocol'] and analysis['concrete_implementations']:
+
+        if analysis["is_protocol"] and analysis["concrete_implementations"]:
             # Protocol with registered implementations
-            if len(analysis['concrete_implementations']) == 1:
+            if len(analysis["concrete_implementations"]) == 1:
                 return InjectResult(
                     InjectDecision.YES,
                     type_hint,
                     f"Protocol with single implementation: {analysis['concrete_implementations'][0]}",
-                    inner_type=analysis['concrete_implementations'][0],
+                    inner_type=analysis["concrete_implementations"][0],
                 )
             else:
                 return InjectResult(
                     InjectDecision.ERROR,
                     type_hint,
                     f"Ambiguous protocol - multiple implementations: {analysis['concrete_implementations']}",
-                    candidates=analysis['concrete_implementations'],
+                    candidates=analysis["concrete_implementations"],
                 )
 
         return InjectResult(
-            InjectDecision.NO, 
-            type_hint, 
-            f"Generic type not resolvable: {origin}[{args}] - no concrete implementations found"
+            InjectDecision.NO,
+            type_hint,
+            f"Generic type not resolvable: {origin}[{args}] - no concrete implementations found",
         )
 
     def analyze_callable(self, func: callable) -> dict[str, InjectResult]:
@@ -757,12 +755,12 @@ class TypeAnalyzer:
         func_cache_key = self._create_callable_cache_key(func)
         if func_cache_key in self._callable_cache:
             return self._callable_cache[func_cache_key].copy()  # Return copy to prevent mutation
-        
+
         try:
             sig = inspect.signature(func)
         except (TypeError, ValueError) as e:
             raise TypeAnalysisError(f"Cannot analyze non-callable object: {e}") from e
-        
+
         results = {}
 
         # Get type hints for better forward reference resolution
@@ -785,13 +783,13 @@ class TypeAnalyzer:
         # Cache the results
         self._cache_callable_result(func_cache_key, results)
         return results
-    
+
     def _create_callable_cache_key(self, func: callable) -> tuple:
         """Create a cache key for callable analysis.
-        
+
         Args:
             func: The callable to create a key for
-            
+
         Returns:
             Tuple that can be used as a cache key
         """
@@ -800,23 +798,23 @@ class TypeAnalyzer:
             return (func,)
         except TypeError:
             # If not hashable, use id and qualname
-            return (id(func), getattr(func, '__qualname__', str(func)))
-    
+            return (id(func), getattr(func, "__qualname__", str(func)))
+
     def _cache_callable_result(self, cache_key: tuple, results: dict[str, InjectResult]) -> None:
         """Cache callable analysis results with size management.
-        
+
         Args:
             cache_key: The cache key
             results: The analysis results to cache
         """
         max_callable_cache_size = 500  # Reasonable limit for callable cache
-        
+
         if len(self._callable_cache) >= max_callable_cache_size:
             # Remove oldest entries (simple FIFO for performance)
             oldest_keys = list(self._callable_cache.keys())[:50]  # Remove 10% of entries
             for old_key in oldest_keys:
                 del self._callable_cache[old_key]
-        
+
         self._callable_cache[cache_key] = results
 
     def can_auto_create(self, cls: type) -> bool:
@@ -1002,21 +1000,21 @@ class TypeAnalyzer:
 
     def _create_cache_key(self, type_hint: Any) -> tuple:
         """Create an efficient cache key for type hints.
-        
+
         Args:
             type_hint: The type hint to create a key for
-            
+
         Returns:
             Tuple that can be used as a cache key
         """
         # For basic types, use the type itself
         if isinstance(type_hint, type):
             return (type_hint,)
-        
+
         # For string annotations, use the string directly
         if isinstance(type_hint, str):
             return (type_hint,)
-        
+
         # For complex types (generics, unions), use a combination of id and repr
         # This handles cases like Optional[List[str]] efficiently
         try:
@@ -1025,24 +1023,24 @@ class TypeAnalyzer:
         except TypeError:
             # If not hashable, use id and repr as fallback
             return (id(type_hint), repr(type_hint))
-    
+
     def _cache_result(self, cache_key: tuple, result: InjectResult) -> None:
         """Cache an analysis result with size management.
-        
+
         Args:
             cache_key: The cache key
             result: The analysis result to cache
         """
         # Implement LRU-like behavior with size limit
         max_cache_size = 1000  # Reasonable limit for type analysis cache
-        
+
         if len(self._analysis_cache) >= max_cache_size:
             # Remove oldest entries (simple FIFO for performance)
             # In a production system, you might want a proper LRU cache
             oldest_keys = list(self._analysis_cache.keys())[:100]  # Remove 10% of entries
             for old_key in oldest_keys:
                 del self._analysis_cache[old_key]
-        
+
         self._analysis_cache[cache_key] = result
 
     def clear_cache(self) -> None:
@@ -1053,11 +1051,11 @@ class TypeAnalyzer:
 
     def register_generic_implementation(self, generic_type: Any, concrete_type: type) -> None:
         """Register a concrete implementation for a generic type.
-        
+
         Args:
             generic_type: The generic type (e.g., Repository[User])
             concrete_type: The concrete implementation class
-            
+
         Example:
             >>> analyzer.register_generic_implementation(Repository[User], UserRepository)
         """
@@ -1067,7 +1065,7 @@ class TypeAnalyzer:
 
     def get_generic_resolver(self) -> GenericTypeResolver:
         """Get the generic type resolver for advanced configuration.
-        
+
         Returns:
             The GenericTypeResolver instance
         """
@@ -1086,33 +1084,33 @@ def get_type_hints_safe(func: callable) -> dict[str, Any]:
     try:
         # Try the standard way first with proper namespace
         from typing import get_type_hints
-        
+
         # Get the module where the function is defined
         module = inspect.getmodule(func)
-        globalns = getattr(module, '__dict__', {}) if module else {}
-        
+        globalns = getattr(module, "__dict__", {}) if module else {}
+
         # Also include the function's own globals if available
-        if hasattr(func, '__globals__'):
+        if hasattr(func, "__globals__"):
             globalns = {**globalns, **func.__globals__}
-        
+
         # Try to get local namespace from the function's closure
         localns = {}
-        if hasattr(func, '__code__'):
+        if hasattr(func, "__code__"):
             # For methods, include the class namespace
-            if hasattr(func, '__qualname__') and '.' in func.__qualname__:
-                class_name = func.__qualname__.rsplit('.', 1)[0]
+            if hasattr(func, "__qualname__") and "." in func.__qualname__:
+                class_name = func.__qualname__.rsplit(".", 1)[0]
                 if class_name in globalns:
                     cls = globalns[class_name]
-                    if hasattr(cls, '__annotations__'):
+                    if hasattr(cls, "__annotations__"):
                         localns.update(cls.__annotations__)
-        
+
         return get_type_hints(func, globalns=globalns, localns=localns, include_extras=True)
-    except (NameError, AttributeError, TypeError) as e:
+    except (NameError, AttributeError, TypeError):
         # If get_type_hints fails, try to resolve forward references manually
         annotations = getattr(func, "__annotations__", {})
         if not annotations:
             return {}
-        
+
         # Try to resolve string annotations manually
         resolved = {}
         for name, annotation in annotations.items():
@@ -1121,11 +1119,11 @@ def get_type_hints_safe(func: callable) -> dict[str, Any]:
                 try:
                     # Get the function's module and globals
                     module = inspect.getmodule(func)
-                    if module and hasattr(module, '__dict__'):
+                    if module and hasattr(module, "__dict__"):
                         # Try to find the type in the module
                         if annotation in module.__dict__:
                             resolved[name] = module.__dict__[annotation]
-                        elif hasattr(func, '__globals__') and annotation in func.__globals__:
+                        elif hasattr(func, "__globals__") and annotation in func.__globals__:
                             resolved[name] = func.__globals__[annotation]
                         else:
                             # Keep as string if can't resolve
@@ -1136,7 +1134,7 @@ def get_type_hints_safe(func: callable) -> dict[str, Any]:
                     resolved[name] = annotation
             else:
                 resolved[name] = annotation
-        
+
         return resolved
 
 

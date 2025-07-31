@@ -263,6 +263,7 @@ class TestIndividualValidators:
 
     async def test_custom_validator(self):
         """Test custom validation function."""
+
         # Simple boolean function
         def is_even(value, record):
             return value % 2 == 0
@@ -298,11 +299,14 @@ class TestIndividualValidators:
     async def test_composite_validator(self):
         """Test combining multiple validators."""
         # ALL mode (default)
-        validator = CompositeValidator([
-            RequiredValidator(),
-            TypeValidator(str),
-            LengthValidator(min_length=3, max_length=10),
-        ], field="username")
+        validator = CompositeValidator(
+            [
+                RequiredValidator(),
+                TypeValidator(str),
+                LengthValidator(min_length=3, max_length=10),
+            ],
+            field="username",
+        )
 
         result = await validator.validate("john")
         assert result.valid
@@ -317,10 +321,14 @@ class TestIndividualValidators:
         assert not result.valid  # Fails length
 
         # ANY mode
-        validator = CompositeValidator([
-            TypeValidator(int),
-            PatternValidator(r"^\d+$"),  # String of digits
-        ], require_all=False, field="id")
+        validator = CompositeValidator(
+            [
+                TypeValidator(int),
+                PatternValidator(r"^\d+$"),  # String of digits
+            ],
+            require_all=False,
+            field="id",
+        )
 
         result = await validator.validate(123)
         assert result.valid  # Passes first validator
@@ -346,29 +354,18 @@ class TestRecordValidator:
         )
 
         # Valid record
-        record = {
-            "name": "John Doe",
-            "age": 30,
-            "email": "john@example.com"
-        }
+        record = {"name": "John Doe", "age": 30, "email": "john@example.com"}
         result = await validator.validate_record(record)
         assert result.valid
 
         # Invalid record - missing required field
-        record = {
-            "age": 30,
-            "email": "john@example.com"
-        }
+        record = {"age": 30, "email": "john@example.com"}
         result = await validator.validate_record(record)
         assert not result.valid
         assert any(e.field == "name" for e in result.errors)
 
         # Invalid record - wrong type
-        record = {
-            "name": "John",
-            "age": "thirty",
-            "email": "john@example.com"
-        }
+        record = {"name": "John", "age": "thirty", "email": "john@example.com"}
         result = await validator.validate_record(record)
         assert not result.valid
         assert any(e.field == "age" for e in result.errors)
@@ -376,8 +373,7 @@ class TestRecordValidator:
     async def test_validation_modes(self):
         """Test different validation modes."""
         validator = RecordValidator(
-            field_validators={"age": RangeValidator(0, 100)},
-            mode=ValidationMode.DROP
+            field_validators={"age": RangeValidator(0, 100)}, mode=ValidationMode.DROP
         )
 
         # Valid record passes through
@@ -409,7 +405,7 @@ class TestRecordValidator:
                 "email": EmailValidator(),
                 "age": RangeValidator(0, 100),
             },
-            collect_stats=True
+            collect_stats=True,
         )
 
         records = [
@@ -437,27 +433,26 @@ class TestValidationBuilder:
         """Test basic builder usage."""
         validator = (
             validation_transform(ValidationMode.FAIL)
-            .field("name").required().end_field()
-            .field("age").type(int).range(0, 150).end_field()
-            .field("email").email().end_field()
+            .field("name")
+            .required()
+            .end_field()
+            .field("age")
+            .type(int)
+            .range(0, 150)
+            .end_field()
+            .field("email")
+            .email()
+            .end_field()
             .build()
         )
 
         # Valid record
-        record = {
-            "name": "John",
-            "age": 30,
-            "email": "john@example.com"
-        }
+        record = {"name": "John", "age": 30, "email": "john@example.com"}
         result = await validator.validate_record(record)
         assert result.valid
 
         # Invalid record
-        record = {
-            "name": "",
-            "age": 200,
-            "email": "not-an-email"
-        }
+        record = {"name": "", "age": 200, "email": "not-an-email"}
         result = await validator.validate_record(record)
         assert not result.valid
         assert len(result.errors) == 3
@@ -467,33 +462,33 @@ class TestValidationBuilder:
         validator = (
             validation_transform()
             .field("username")
-                .required()
-                .type(str)
-                .length(3, 20)
-                .pattern(r"^[a-zA-Z0-9_]+$")
-                .end_field()
+            .required()
+            .type(str)
+            .length(3, 20)
+            .pattern(r"^[a-zA-Z0-9_]+$")
+            .end_field()
             .field("password")
-                .required()
-                .length(min_length=8)
-                .custom(lambda v, r: any(c.isupper() for c in v), "Must contain uppercase")
-                .end_field()
+            .required()
+            .length(min_length=8)
+            .custom(lambda v, r: any(c.isupper() for c in v), "Must contain uppercase")
+            .end_field()
             .field("email")
-                .required()
-                .email()
-                .unique()
-                .end_field()
+            .required()
+            .email()
+            .unique()
+            .end_field()
             .field("age")
-                .type(int)
-                .range(13, 120)
-                .end_field()
+            .type(int)
+            .range(13, 120)
+            .end_field()
             .field("country")
-                .choices(["US", "UK", "CA", "AU"])
-                .end_field()
+            .choices(["US", "UK", "CA", "AU"])
+            .end_field()
             .field("terms_accepted")
-                .required()
-                .type(bool)
-                .custom(lambda v, r: v is True, "Must accept terms")
-                .end_field()
+            .required()
+            .type(bool)
+            .custom(lambda v, r: v is True, "Must accept terms")
+            .end_field()
             .build()
         )
 
@@ -504,7 +499,7 @@ class TestValidationBuilder:
             "email": "john@example.com",
             "age": 25,
             "country": "US",
-            "terms_accepted": True
+            "terms_accepted": True,
         }
         result = await validator.validate_record(record1)
         assert result.valid
@@ -516,7 +511,7 @@ class TestValidationBuilder:
             "email": "john@example.com",  # Duplicate
             "age": 30,
             "country": "UK",
-            "terms_accepted": True
+            "terms_accepted": True,
         }
         result = await validator.validate_record(record2)
         assert not result.valid
@@ -529,7 +524,7 @@ class TestValidationBuilder:
                 "price": [RequiredValidator(), RangeValidator(0, None)],
                 "quantity": [RequiredValidator(), TypeValidator(int), RangeValidator(1, None)],
             },
-            mode=ValidationMode.DROP
+            mode=ValidationMode.DROP,
         )
 
         # Valid record
@@ -555,9 +550,18 @@ class TestValidationIntegration:
         # Create validation transform
         validator = (
             validation_transform(ValidationMode.MARK)
-            .field("user_id").required().type(str).end_field()
-            .field("email").required().email().end_field()
-            .field("age").type(int).range(13, None).end_field()
+            .field("user_id")
+            .required()
+            .type(str)
+            .end_field()
+            .field("email")
+            .required()
+            .email()
+            .end_field()
+            .field("age")
+            .type(int)
+            .range(13, None)
+            .end_field()
             .build()
         )
 
@@ -582,8 +586,7 @@ class TestValidationIntegration:
         valid_records = []
         for record in validated_records:
             result = await filter_transform(
-                record,
-                lambda r: r.get("_validation", {}).get("valid", True)
+                record, lambda r: r.get("_validation", {}).get("valid", True)
             )
             if result:
                 valid_records.append(result)
@@ -592,6 +595,7 @@ class TestValidationIntegration:
 
     async def test_cross_field_validation(self):
         """Test validation across multiple fields."""
+
         def validate_date_range(record, _):
             start = record.get("start_date")
             end = record.get("end_date")
@@ -615,22 +619,16 @@ class TestValidationIntegration:
                 "start_date": DateValidator(),
                 "end_date": DateValidator(),
             },
-            record_validators=[CustomValidator(validate_date_range)]
+            record_validators=[CustomValidator(validate_date_range)],
         )
 
         # Valid range
-        record = {
-            "start_date": "2024-01-01",
-            "end_date": "2024-12-31"
-        }
+        record = {"start_date": "2024-01-01", "end_date": "2024-12-31"}
         result = await validator.validate_record(record)
         assert result.valid
 
         # Invalid range
-        record = {
-            "start_date": "2024-12-31",
-            "end_date": "2024-01-01"
-        }
+        record = {"start_date": "2024-12-31", "end_date": "2024-01-01"}
         result = await validator.validate_record(record)
         assert not result.valid
         assert any("before end date" in str(e) for e in result.errors)

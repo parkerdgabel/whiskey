@@ -14,10 +14,10 @@ import asyncio
 from typing import Annotated, Protocol
 
 from whiskey import (
-    Whiskey,
     ComponentDiscoverer,
     Container,
     Inject,
+    Whiskey,
     discover_components,
     scoped,
     singleton,

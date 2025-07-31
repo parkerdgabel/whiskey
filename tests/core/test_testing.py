@@ -27,10 +27,10 @@ class TestScopeContextManager:
         """Test sync context manager."""
         container = Container()
         add_test_compatibility_methods(container)
-        
+
         with ScopeContextManager(container, "test") as scope:
             assert scope is not None
-            assert hasattr(container, '_scopes')
+            assert hasattr(container, "_scopes")
             assert "test" in container._scopes
 
     @pytest.mark.asyncio
@@ -38,10 +38,10 @@ class TestScopeContextManager:
         """Test async context manager."""
         container = Container()
         add_test_compatibility_methods(container)
-        
+
         async with ScopeContextManager(container, "test") as scope:
             assert scope is not None
-            assert hasattr(container, '_scopes')
+            assert hasattr(container, "_scopes")
             assert "test" in container._scopes
 
 
@@ -56,10 +56,10 @@ class TestTestContainer:
     def test_test_container_methods(self):
         """Test test container methods."""
         container = TestContainer()
-        
+
         # Test register
         container.register("test", lambda: "value")
-        
+
         # Test resolve - sync resolve for sync factory
         result = container.resolve_sync("test")
         assert result == "value"
@@ -67,11 +67,11 @@ class TestTestContainer:
     def test_test_container_compat_methods(self):
         """Test compatibility methods."""
         container = TestContainer()
-        
+
         # Test singleton registration
         container.register_singleton(str, "test")
         assert container[str] == "test"
-        
+
         # Test factory registration
         container.register_factory(int, lambda: 42)
         assert container[int] == 42

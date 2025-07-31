@@ -436,9 +436,7 @@ def create_join_transform(
     Returns:
         Transform function
     """
-    transform = JoinTransform(
-        database, join_table, join_keys, select_fields, join_type, where
-    )
+    transform = JoinTransform(database, join_table, join_keys, select_fields, join_type, where)
     return transform.transform
 
 

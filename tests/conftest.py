@@ -4,9 +4,9 @@ import asyncio
 
 import pytest
 
-from whiskey.core.container import Container
 from whiskey.core.application import Whiskey
-from whiskey.core.testing import TestContainer, add_test_compatibility_methods
+from whiskey.core.container import Container
+from whiskey.core.testing import add_test_compatibility_methods
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def container():
     # Add test compatibility methods for tests that need them
     add_test_compatibility_methods(container)
     # Verify methods were added
-    assert hasattr(container, 'enter_scope'), "enter_scope method not added"
+    assert hasattr(container, "enter_scope"), "enter_scope method not added"
     yield container
     # Cleanup caches
     container.clear_caches()

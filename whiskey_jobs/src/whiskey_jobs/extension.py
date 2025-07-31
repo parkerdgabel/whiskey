@@ -53,12 +53,12 @@ def jobs_extension(
     **kwargs,
 ) -> None:
     """Add background job execution capabilities to Whiskey applications.
-    
+
     This extension provides comprehensive job management including background
     execution with queues and priorities, scheduling (cron and periodic),
     retries and error handling, job chaining, full dependency injection
     support, and monitoring statistics.
-    
+
     Args:
         app: Whiskey instance.
         worker_pool_size: Number of workers in the pool. Defaults to 4.
@@ -66,24 +66,24 @@ def jobs_extension(
         use_priority_queues: Use priority queues instead of FIFO. Defaults to True.
         auto_start: Automatically start job manager on app startup. Defaults to True.
         **kwargs: Additional configuration options.
-    
+
     Examples:
         Basic usage::
-        
+
             app = Whiskey()
             app.use(jobs_extension, worker_pool_size=8, auto_start=False)
-            
+
             @app.job(queue="emails", priority=JobPriority.HIGH)
             async def send_email(to: str, subject: str, email_service: EmailService):
                 await email_service.send(to, subject)
-            
+
             @app.scheduled_job(cron="0 * * * *")  # Every hour
             async def cleanup_old_data(db: Database):
                 await db.cleanup_expired_sessions()
-            
+
             # Enqueue jobs
             await app.jobs.enqueue("send_email", "user@example.com", "Welcome!")
-    
+
     """
 
     # Create job manager
@@ -126,12 +126,12 @@ def jobs_extension(
 
         Examples:
             Basic job registration::
-            
+
                 @app.job(queue="emails", priority=JobPriority.HIGH)
                 async def send_welcome_email(user_id: int, user_service: UserService):
                     user = await user_service.get_user(user_id)
                     await email_service.send_welcome(user)
-        
+
         """
         # Keep priority as-is (JobPriority enum or int)
 
@@ -205,11 +205,11 @@ def jobs_extension(
 
         Examples:
             Daily scheduled job::
-            
+
                 @app.scheduled_job(cron="0 0 * * *")  # Daily at midnight
                 async def daily_report(reporting_service: ReportingService):
                     await reporting_service.generate_daily_report()
-        
+
         """
         # Keep priority as-is (JobPriority enum or int)
 
@@ -271,11 +271,11 @@ def jobs_extension(
 
         Examples:
             Periodic data sync::
-            
+
                 @app.periodic_job(300)  # Every 5 minutes
                 async def sync_data(sync_service: SyncService):
                     await sync_service.sync_all()
-        
+
         """
         return scheduled_job(
             name=name,

@@ -27,17 +27,17 @@ class CommandMetadata:
 
 class LazyClickGroup(click.Group):
     """Click group that finalizes pending commands when accessed."""
-    
+
     def __init__(self, manager: CLIManager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._manager = manager
-    
+
     def main(self, *args, **kwargs):
         """Override main to finalize commands before running."""
         # Finalize any pending commands
-        if hasattr(self._manager, 'finalize_pending'):
+        if hasattr(self._manager, "finalize_pending"):
             self._manager.finalize_pending()
-        
+
         # Override default Click behavior to return 0 when showing help
         try:
             return super().main(*args, **kwargs)
@@ -46,13 +46,13 @@ class LazyClickGroup(click.Group):
             if e.code == 2 and not (args and args[0]):
                 raise SystemExit(0) from None
             raise
-    
+
     def invoke(self, ctx):
         """Override invoke to finalize commands before running."""
         # Finalize any pending commands
-        if hasattr(self._manager, 'finalize_pending'):
+        if hasattr(self._manager, "finalize_pending"):
             self._manager.finalize_pending()
-        
+
         return super().invoke(ctx)
 
 
@@ -65,7 +65,7 @@ class CLIManager:
         self.commands: dict[str, CommandMetadata] = {}
         self.groups: dict[str, click.Group] = {}
         self.pending_commands: dict[str, CommandMetadata] = {}
-    
+
     def finalize_pending(self) -> None:
         """Register any pending commands."""
         for cmd_name, metadata in list(self.pending_commands.items()):
@@ -76,21 +76,24 @@ class CLIManager:
         """Add a command to the CLI."""
         # Build Click command from metadata
         func = metadata.func
-        
+
         # Auto-detect function parameters as arguments if no explicit arguments defined
         import inspect
+
         if not metadata.arguments and not metadata.options:
             sig = inspect.signature(metadata.func)
-            
+
             # Check if the function is decorated with @inject
-            has_inject = hasattr(metadata.func, "__wrapped__") or hasattr(metadata.func, "_inject_wrapper")
-            
+            has_inject = hasattr(metadata.func, "__wrapped__") or hasattr(
+                metadata.func, "_inject_wrapper"
+            )
+
             for param_name, param in sig.parameters.items():
                 # Skip parameters with defaults (they become options)
                 # Skip **kwargs and *args
                 if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
                     continue
-                
+
                 # Skip parameters that have type annotations for injection
                 # unless they're basic types
                 if has_inject and param.annotation != param.empty:
@@ -99,11 +102,11 @@ class CLIManager:
                     if param.annotation not in basic_types:
                         # This will be injected, skip it
                         continue
-                
+
                 if param.default == param.empty:
                     # No default = positional argument
                     metadata.arguments.append({"name": param_name})
-        
+
         # Add Click decorators for arguments and options
         for arg in reversed(metadata.arguments):
             func = click.argument(arg["name"], **{k: v for k, v in arg.items() if k != "name"})(
@@ -130,22 +133,22 @@ class CLIManager:
             # Check if the function is already wrapped by @inject
             # If so, we should call the unwrapped version through the container
             # If not, we can try container.call or fall back to direct call
-            
+
             target_func = original_callback
-            
+
             # If function has @inject wrapper, get the original function
-            if hasattr(original_callback, '__wrapped__'):
+            if hasattr(original_callback, "__wrapped__"):
                 # This is likely an @inject wrapped function
                 # We'll use the container to call the unwrapped version
                 target_func = original_callback.__wrapped__
-            
+
             try:
                 # Check if function is async
                 if asyncio.iscoroutinefunction(target_func):
                     # For async functions, we need to handle them in the event loop context
                     async def async_call():
                         return await self.app.container.call(target_func, *args, **kwargs)
-                    
+
                     try:
                         # Try to get existing event loop
                         loop = asyncio.get_running_loop()
@@ -161,7 +164,7 @@ class CLIManager:
                 # If container call fails, fallback to calling original function directly
                 # This handles cases where the function doesn't need DI
                 result = original_callback(*args, **kwargs)
-                
+
                 # Handle async results from direct call
                 if asyncio.iscoroutine(result):
                     try:
@@ -169,7 +172,7 @@ class CLIManager:
                         return loop.run_until_complete(asyncio.create_task(result))
                     except RuntimeError:
                         return asyncio.run(result)
-                
+
                 return result
 
         cmd.callback = wrapped_callback
@@ -449,9 +452,9 @@ def cli_extension(app: Whiskey) -> None:
                 print(f"\nRegistered services ({len(services)}):")
                 for service in services[:10]:  # Show first 10
                     # Handle both old and new descriptor types
-                    if hasattr(service, 'service_type'):
+                    if hasattr(service, "service_type"):
                         print(f"  - {service.service_type}")
-                    elif hasattr(service, 'type'):
+                    elif hasattr(service, "type"):
                         print(f"  - {service.type}")
                     else:
                         print(f"  - {service}")

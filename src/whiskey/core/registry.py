@@ -20,7 +20,7 @@ Key Concepts:
 
 Example:
     >>> registry = ComponentRegistry()
-    >>> 
+    >>>
     >>> # Register a singleton component
     >>> descriptor = registry.register(
     ...     Database,                    # key/type
@@ -29,11 +29,11 @@ Example:
     ...     tags={'infrastructure', 'critical'},
     ...     metadata={'version': '1.0'}
     ... )
-    >>> 
+    >>>
     >>> # Register named implementations
     >>> registry.register(Cache, RedisCache, name='redis')
     >>> registry.register(Cache, MemoryCache, name='memory')
-    >>> 
+    >>>
     >>> # Query components
     >>> db_descriptor = registry.get(Database)
     >>> cache_descriptors = registry.get_all(Cache)
@@ -232,6 +232,7 @@ class ComponentRegistry:
             elif callable(provider) and not isinstance(provider, type):
                 # For factory functions, try to infer from return type annotation
                 import inspect
+
                 try:
                     sig = inspect.signature(provider)
                     if sig.return_annotation != inspect.Signature.empty:
@@ -293,7 +294,7 @@ class ComponentRegistry:
             descriptor = self._descriptors[string_key]
         else:
             # For backwards compatibility, try case-insensitive lookup for types
-            if isinstance(key, type) and hasattr(key, '__name__'):
+            if isinstance(key, type) and hasattr(key, "__name__"):
                 # Try lowercase version
                 lowercase_key = key.__name__.lower() + (f":{name}" if name else "")
                 if lowercase_key in self._descriptors:
@@ -453,7 +454,7 @@ class ComponentRegistry:
         """
         if isinstance(key, str):
             base_key = key
-        elif hasattr(key, '__name__'):
+        elif hasattr(key, "__name__"):
             # Convert type to string (preserve original case)
             base_key = key.__name__
         else:

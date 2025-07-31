@@ -72,13 +72,13 @@ class TestBasicScope:
     def test_scope_sync_disposal_in_clear(self):
         """Test that clear() handles sync disposal properly."""
         scope = Scope("test")
-        
+
         sync_service = SimpleService()
         scope.set(SimpleService, sync_service)
-        
+
         # Clear should dispose sync services
         scope.clear()
-        
+
         assert sync_service.disposed
         assert scope.get(SimpleService) is None
 
@@ -163,7 +163,7 @@ class TestScopeType:
     def test_scope_type_usage_with_container(self):
         """Test using ScopeType constants with container."""
         from whiskey.core.registry import Scope as RegistryScope
-        
+
         # ScopeType constants should match RegistryScope values
         assert RegistryScope.SINGLETON.value == ScopeType.SINGLETON
         assert RegistryScope.TRANSIENT.value == ScopeType.TRANSIENT
@@ -278,7 +278,7 @@ class TestScopeManager:
         """Test creating scope manager."""
         container = Container()
         manager = ScopeManager(container, "test_scope")
-        
+
         assert manager.container is container
         assert manager.scope_name == "test_scope"
         assert manager.scope_instance is None
@@ -287,16 +287,16 @@ class TestScopeManager:
         """Test ScopeManager as context manager."""
         # Mock container with scope management methods
         from unittest.mock import Mock
-        
+
         container = Mock()
         test_scope = Scope("test")
         container.enter_scope = Mock(return_value=test_scope)
         container.exit_scope = Mock()
-        
+
         with ScopeManager(container, "test") as scope:
             assert scope is test_scope
             container.enter_scope.assert_called_once_with("test")
-        
+
         # Should call exit_scope after context
         container.exit_scope.assert_called_once_with("test")
 
@@ -304,23 +304,23 @@ class TestScopeManager:
         """Test ScopeManager as async context manager."""
         # Mock container with scope management methods
         from unittest.mock import Mock
-        
+
         container = Mock()
         test_scope = Scope("test")
         container.enter_scope = Mock(return_value=test_scope)
         container.exit_scope = Mock()
-        
+
         async with ScopeManager(container, "test") as scope:
             assert scope is test_scope
             container.enter_scope.assert_called_once_with("test")
-        
+
         # Should call exit_scope after context
         container.exit_scope.assert_called_once_with("test")
 
 
 class TestContainerScopeIntegration:
     """Test scope integration with Container.
-    
+
     Note: These tests are placeholder tests. The current Container implementation
     doesn't have built-in scope management methods like enter_scope, exit_scope, or scope().
     These would need to be implemented in Container for full scope support.
@@ -350,7 +350,7 @@ class TestContainerScopeIntegration:
         # Multiple resolutions should return same instance
         instance1 = container.resolve_sync(SimpleService)
         instance2 = container.resolve_sync(SimpleService)
-        
+
         assert instance1 is instance2
         assert instance1.id == instance2.id
 
@@ -364,7 +364,7 @@ class TestContainerScopeIntegration:
         # Multiple resolutions should return different instances
         instance1 = container.resolve_sync(SimpleService)
         instance2 = container.resolve_sync(SimpleService)
-        
+
         assert instance1 is not instance2
         assert instance1.id != instance2.id
 
@@ -399,7 +399,7 @@ class TestWhiskeyScopeIntegration:
         import pytest
 
         from whiskey.core.errors import ScopeError
-        
+
         with pytest.raises(ScopeError, match="Scope 'default' is not active"):
             app.resolve(SessionService)
 
@@ -430,7 +430,7 @@ class TestScopeEdgeCases:
     def test_disposal_with_exception(self):
         """Test disposal when service raises exception."""
         import pytest
-        
+
         scope = Scope("test")
 
         class BadService:
@@ -445,9 +445,8 @@ class TestScopeEdgeCases:
 
         # The current implementation doesn't handle exceptions during disposal
         # It will raise on the first disposal error
-        with pytest.raises(RuntimeError, match="Disposal failed"):
-            with scope:
-                pass
+        with pytest.raises(RuntimeError, match="Disposal failed"), scope:
+            pass
 
         # Due to the exception, good_service won't be disposed
         assert not good_service.disposed
@@ -455,7 +454,7 @@ class TestScopeEdgeCases:
     async def test_async_disposal_with_exception(self):
         """Test async disposal with exception."""
         import pytest
-        
+
         scope = Scope("test")
 
         class BadAsyncService:

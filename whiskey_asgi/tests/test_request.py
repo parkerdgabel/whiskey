@@ -1,6 +1,5 @@
 """Tests for Request class."""
 
-import asyncio
 import json
 
 import pytest
@@ -25,16 +24,16 @@ class TestRequest:
                 [b"content-type", b"application/json"],
             ],
         }
-        
+
         async def receive():
             return {"type": "http.request", "body": b"", "more_body": False}
-        
+
         request = Request(scope, receive)
-        
+
         assert request.method == "GET"
         assert request.path == "/test"
         assert request.query_string == b"foo=bar&baz=qux"
-        
+
         # Headers should be lowercase
         headers = request.headers
         assert headers["host"] == "example.com"
@@ -48,13 +47,13 @@ class TestRequest:
             "method": "GET",
             "path": "/users/123",
         }
-        
+
         async def receive():
             return {"type": "http.request", "body": b"", "more_body": False}
-        
+
         request = Request(scope, receive)
         request.route_params = {"id": "123"}
-        
+
         assert request.route_params == {"id": "123"}
 
     @pytest.mark.asyncio
@@ -65,17 +64,17 @@ class TestRequest:
             "method": "POST",
             "path": "/test",
         }
-        
+
         body_content = b"Hello, World!"
-        
+
         async def receive():
             return {"type": "http.request", "body": body_content, "more_body": False}
-        
+
         request = Request(scope, receive)
         body = await request.body()
-        
+
         assert body == body_content
-        
+
         # Should cache the body
         body2 = await request.body()
         assert body2 == body_content
@@ -88,10 +87,10 @@ class TestRequest:
             "method": "POST",
             "path": "/test",
         }
-        
+
         chunks = [b"Hello", b", ", b"World", b"!"]
         chunk_index = 0
-        
+
         async def receive():
             nonlocal chunk_index
             if chunk_index < len(chunks):
@@ -100,12 +99,12 @@ class TestRequest:
                 return {
                     "type": "http.request",
                     "body": chunk,
-                    "more_body": chunk_index < len(chunks)
+                    "more_body": chunk_index < len(chunks),
                 }
-        
+
         request = Request(scope, receive)
         body = await request.body()
-        
+
         assert body == b"Hello, World!"
 
     @pytest.mark.asyncio
@@ -116,18 +115,18 @@ class TestRequest:
             "method": "POST",
             "path": "/test",
         }
-        
+
         data = {"name": "Test", "value": 42, "active": True}
         body_content = json.dumps(data).encode("utf-8")
-        
+
         async def receive():
             return {"type": "http.request", "body": body_content, "more_body": False}
-        
+
         request = Request(scope, receive)
         parsed = await request.json()
-        
+
         assert parsed == data
-        
+
         # Should cache the result
         parsed2 = await request.json()
         assert parsed2 == data
@@ -140,13 +139,13 @@ class TestRequest:
             "method": "POST",
             "path": "/test",
         }
-        
+
         async def receive():
             return {"type": "http.request", "body": b"", "more_body": False}
-        
+
         request = Request(scope, receive)
         parsed = await request.json()
-        
+
         assert parsed is None
 
     @pytest.mark.asyncio
@@ -157,22 +156,22 @@ class TestRequest:
             "method": "POST",
             "path": "/test",
         }
-        
+
         form_data = "name=John+Doe&age=30&active=true"
         body_content = form_data.encode("utf-8")
-        
+
         async def receive():
             return {"type": "http.request", "body": body_content, "more_body": False}
-        
+
         request = Request(scope, receive)
         form = await request.form()
-        
+
         assert form == {
             "name": "John+Doe",  # Note: simple parsing doesn't decode
             "age": "30",
-            "active": "true"
+            "active": "true",
         }
-        
+
         # Should cache the result
         form2 = await request.form()
         assert form2 == form
@@ -185,13 +184,13 @@ class TestRequest:
             "method": "POST",
             "path": "/test",
         }
-        
+
         async def receive():
             return {"type": "http.request", "body": b"", "more_body": False}
-        
+
         request = Request(scope, receive)
         form = await request.form()
-        
+
         assert form == {}
 
     def test_cookies_parsing(self):
@@ -204,18 +203,14 @@ class TestRequest:
                 [b"cookie", b"session=abc123; user_id=42; preferences=dark_mode"],
             ],
         }
-        
+
         async def receive():
             return {"type": "http.request", "body": b"", "more_body": False}
-        
+
         request = Request(scope, receive)
         cookies = request.cookies
-        
-        assert cookies == {
-            "session": "abc123",
-            "user_id": "42",
-            "preferences": "dark_mode"
-        }
+
+        assert cookies == {"session": "abc123", "user_id": "42", "preferences": "dark_mode"}
 
     def test_cookies_no_header(self):
         """Test cookie parsing when no cookie header present."""
@@ -225,13 +220,13 @@ class TestRequest:
             "path": "/test",
             "headers": [],
         }
-        
+
         async def receive():
             return {"type": "http.request", "body": b"", "more_body": False}
-        
+
         request = Request(scope, receive)
         cookies = request.cookies
-        
+
         assert cookies == {}
 
     def test_missing_optional_fields(self):
@@ -242,11 +237,11 @@ class TestRequest:
             "path": "/test",
             # No query_string or headers
         }
-        
+
         async def receive():
             return {"type": "http.request", "body": b"", "more_body": False}
-        
+
         request = Request(scope, receive)
-        
+
         assert request.query_string == b""
         assert request.headers == {}

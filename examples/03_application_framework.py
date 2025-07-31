@@ -16,10 +16,10 @@ Run this example:
 import asyncio
 
 from whiskey import (
-    Whiskey,
-    WhiskeyConfig,
     Disposable,
     Initializable,
+    Whiskey,
+    WhiskeyConfig,
 )
 
 # Step 1: Services with Rich Metadata
@@ -130,7 +130,7 @@ class NotificationService:
     async def send(self, recipient: str, message: str, type: str = "info") -> None:
         """Send a notification."""
         self.sent_count += 1
-        emoji = {"info": "ℹ️", "warning": "⚠️", "error": "❌", "success": "✅"}.get(type, "📧")
+        emoji = {"info": "📋", "warning": "⚠️", "error": "❌", "success": "✅"}.get(type, "📧")
         print(f"{emoji} Notification to {recipient}: {message}")
         await asyncio.sleep(0.05)  # Simulate sending
 
@@ -473,7 +473,7 @@ async def main():
 
             # Get users (should hit cache on second call)
             user1 = await user_service.get_user(1)
-            user1_again = await user_service.get_user(1)  # Cache hit
+            await user_service.get_user(1)  # Cache hit
 
             print(f"Retrieved user: {user1}")
 

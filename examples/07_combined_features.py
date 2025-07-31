@@ -14,7 +14,7 @@ import asyncio
 import os
 import time
 from datetime import datetime
-from typing import Annotated, Protocol
+from typing import Annotated, Optional, Protocol
 
 from whiskey import Container, factory, provide, singleton
 from whiskey.core.conditions import all_conditions, env_equals, env_exists, env_truthy
@@ -138,7 +138,7 @@ class DevLogger:
         print("📝 Development logger initialized")
 
     def log(self, level: str, message: str) -> None:
-        emoji = {"info": "ℹ️", "warn": "⚠️", "error": "❌"}.get(level, "📝")
+        emoji = {"info": "📋", "warn": "⚠️", "error": "❌"}.get(level, "📝")
         print(f"{emoji} DEV [{level.upper()}]: {message}")
 
 
@@ -337,7 +337,7 @@ class ApplicationService:
         }
 
     async def process_user_request(
-        self, action: str, user_id: int = None, name: str = None
+        self, action: str, user_id: Optional[int] = None, name: Optional[str] = None
     ) -> dict:
         """Process user requests, initializing services as needed."""
         start_time = time.time()

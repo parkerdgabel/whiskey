@@ -8,7 +8,8 @@ import pytest
 
 # Check for optional dependencies
 try:
-    import aioboto3
+    import aioboto3  # noqa: F401
+
     HAS_AIOBOTO3 = True
 except ImportError:
     HAS_AIOBOTO3 = False
@@ -35,9 +36,21 @@ class TestObjectStoreSource:
             async def list_objects(self, bucket, prefix="", **kwargs):
                 # Mock objects
                 objects = [
-                    {"key": "data/2024/01/file1.json", "size": 1000, "last_modified": datetime(2024, 1, 1)},
-                    {"key": "data/2024/01/file2.csv", "size": 2000, "last_modified": datetime(2024, 1, 2)},
-                    {"key": "data/2024/02/file3.json", "size": 3000, "last_modified": datetime(2024, 2, 1)},
+                    {
+                        "key": "data/2024/01/file1.json",
+                        "size": 1000,
+                        "last_modified": datetime(2024, 1, 1),
+                    },
+                    {
+                        "key": "data/2024/01/file2.csv",
+                        "size": 2000,
+                        "last_modified": datetime(2024, 1, 2),
+                    },
+                    {
+                        "key": "data/2024/02/file3.json",
+                        "size": 3000,
+                        "last_modified": datetime(2024, 2, 1),
+                    },
                 ]
                 for obj in objects:
                     if obj["key"].startswith(prefix):
@@ -165,9 +178,7 @@ class TestS3Source:
         mock_session_class.return_value = mock_session
 
         # Mock response
-        mock_response = {
-            "Body": AsyncMock()
-        }
+        mock_response = {"Body": AsyncMock()}
         mock_response["Body"].read.return_value = b'{"test": "data"}'
         mock_client.__aenter__.return_value.get_object.return_value = mock_response
 
@@ -337,10 +348,7 @@ class TestS3Sink:
         # Test put object
         sink = S3Sink(storage_class="GLACIER")
         await sink.put_object(
-            "test-bucket",
-            "test.json",
-            b'{"test": "data"}',
-            {"custom": "metadata"}
+            "test-bucket", "test.json", b'{"test": "data"}', {"custom": "metadata"}
         )
 
         # Verify call
@@ -401,7 +409,7 @@ class TestProcessors:
     async def test_csv_processor(self):
         """Test CSV processor."""
         # With header
-        content = b'id,name\n1,Alice\n2,Bob'
+        content = b"id,name\n1,Alice\n2,Bob"
 
         records = []
         async for record in csv_processor("test.csv", content):
@@ -411,7 +419,7 @@ class TestProcessors:
         assert records[0]["name"] == "Alice"
 
         # Without header
-        content = b'1,Alice\n2,Bob'
+        content = b"1,Alice\n2,Bob"
 
         records = []
         async for record in csv_processor("test.csv", content, has_header=False):

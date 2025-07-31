@@ -1,6 +1,6 @@
 """Core ML abstractions."""
 
-from whiskey_ml.core.dataset import Dataset, DataLoader, DatasetConfig
+from whiskey_ml.core.dataset import DataLoader, Dataset, DatasetConfig
 from whiskey_ml.core.metrics import Metric, MetricCollection, MetricResult
 from whiskey_ml.core.model import Model, ModelConfig, ModelOutput
 from whiskey_ml.core.pipeline import MLPipeline, PipelineConfig, PipelineState

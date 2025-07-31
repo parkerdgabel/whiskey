@@ -13,8 +13,7 @@ try:
     import duckdb
 except ImportError as e:
     raise ImportError(
-        "duckdb is required for DuckDB support. "
-        "Install with: pip install whiskey-sql[duckdb]"
+        "duckdb is required for DuckDB support. Install with: pip install whiskey-sql[duckdb]"
     ) from e
 
 from whiskey_sql.core import SQL, Database, Transaction
@@ -37,22 +36,19 @@ async def create_pool(**config) -> DuckDBDatabase:
     """
     url = config["url"]
     read_only = config.get("read_only", False)
-    
+
     # Parse DuckDB URL formats
     if url.startswith("duckdb://"):
         # Remove protocol prefix
         db_path = url[9:]
     else:
         db_path = url
-    
+
     # Special handling for in-memory databases
     if db_path in (":memory:", ""):
         # For named in-memory databases, use format ":memory:name"
-        if "database_name" in config:
-            db_path = f":memory:{config['database_name']}"
-        else:
-            db_path = ":memory:"
-    
+        db_path = f":memory:{config['database_name']}" if "database_name" in config else ":memory:"
+
     pool = DuckDBPool(db_path, read_only=read_only, config=config)
     await pool.initialize()
     return DuckDBDatabase(pool)
@@ -65,7 +61,9 @@ class DuckDBPool:
     for writes and create read-only connections as needed.
     """
 
-    def __init__(self, database: str, read_only: bool = False, config: dict[str, Any] | None = None):
+    def __init__(
+        self, database: str, read_only: bool = False, config: dict[str, Any] | None = None
+    ):
         """Initialize DuckDB pool.
 
         Args:
@@ -90,14 +88,14 @@ class DuckDBPool:
             self._primary_conn = duckdb.connect(
                 database=self.database,
                 read_only=self.read_only,
-                config=self.config.get("duckdb_config", {})
+                config=self.config.get("duckdb_config", {}),
             )
-            
+
             # Set any pragmas
             if "pragmas" in self.config:
                 for pragma, value in self.config["pragmas"].items():
                     self._primary_conn.execute(f"PRAGMA {pragma} = {value}")
-                    
+
         except Exception as e:
             raise DatabaseConnectionError(f"Failed to create DuckDB connection: {e}") from e
 
@@ -106,7 +104,7 @@ class DuckDBPool:
         """Acquire a connection context."""
         if self._closed:
             raise RuntimeError("Pool is closed")
-            
+
         # For read-only operations, we could create additional connections
         # For now, we'll use the primary connection with thread safety
         try:
@@ -134,9 +132,7 @@ class DuckDBDatabase(Database):
         """
         super().__init__(pool, dialect="duckdb")
 
-    def _convert_params(
-        self, query: SQL, params: dict[str, Any] | None
-    ) -> tuple[str, list[Any]]:
+    def _convert_params(self, query: SQL, params: dict[str, Any] | None) -> tuple[str, list[Any]]:
         """Convert named parameters to positional for DuckDB.
 
         DuckDB uses $1, $2 syntax for parameters.
@@ -216,16 +212,14 @@ class DuckDBDatabase(Database):
                 query_str, query_params = self._convert_params(query, params)
 
                 # Execute in thread pool
-                result = await asyncio.to_thread(
-                    conn.execute, query_str, query_params
-                )
-                
+                result = await asyncio.to_thread(conn.execute, query_str, query_params)
+
                 # Get column names
                 columns = [desc[0] for desc in result.description]
-                
+
                 # Fetch one row
                 row = result.fetchone()
-                
+
                 return self._map_result(row, columns, result_type)
 
             except Exception as e:
@@ -240,16 +234,14 @@ class DuckDBDatabase(Database):
                 query_str, query_params = self._convert_params(query, params)
 
                 # Execute in thread pool
-                result = await asyncio.to_thread(
-                    conn.execute, query_str, query_params
-                )
-                
+                result = await asyncio.to_thread(conn.execute, query_str, query_params)
+
                 # Get column names
                 columns = [desc[0] for desc in result.description]
-                
+
                 # Fetch all rows
                 rows = result.fetchall()
-                
+
                 return [self._map_result(row, columns, result_type) for row in rows]
 
             except Exception as e:
@@ -264,13 +256,11 @@ class DuckDBDatabase(Database):
                 query_str, query_params = self._convert_params(query, params)
 
                 # Execute in thread pool
-                result = await asyncio.to_thread(
-                    conn.execute, query_str, query_params
-                )
-                
+                result = await asyncio.to_thread(conn.execute, query_str, query_params)
+
                 # Fetch one row
                 row = result.fetchone()
-                
+
                 if row is None:
                     return None
 
@@ -288,13 +278,11 @@ class DuckDBDatabase(Database):
                 query_str, query_params = self._convert_params(query, params)
 
                 # Execute in thread pool
-                result = await asyncio.to_thread(
-                    conn.execute, query_str, query_params
-                )
-                
+                result = await asyncio.to_thread(conn.execute, query_str, query_params)
+
                 # Fetch one row
                 row = result.fetchone()
-                
+
                 return row
 
             except Exception as e:
@@ -307,13 +295,13 @@ class DuckDBDatabase(Database):
                 query_str, query_params = self._convert_params(query, params)
 
                 # Execute in thread pool
-                result = await asyncio.to_thread(
-                    conn.execute, query_str, query_params
-                )
-                
+                result = await asyncio.to_thread(conn.execute, query_str, query_params)
+
                 # Get row count
-                rowcount = result.fetchone()[0] if query_str.strip().upper().startswith("SELECT") else -1
-                
+                rowcount = (
+                    result.fetchone()[0] if query_str.strip().upper().startswith("SELECT") else -1
+                )
+
                 # Try to get affected rows for DML
                 if rowcount == -1:
                     try:
@@ -322,7 +310,7 @@ class DuckDBDatabase(Database):
                             conn.execute, "SELECT COUNT(*) FROM last_query_profiling()"
                         )
                         rowcount = count_result.fetchone()[0]
-                    except:
+                    except Exception:
                         rowcount = 0
 
                 # Return status similar to PostgreSQL
@@ -333,7 +321,7 @@ class DuckDBDatabase(Database):
                 elif query_str.strip().upper().startswith("DELETE"):
                     return f"DELETE {rowcount}"
                 else:
-                    return f"OK"
+                    return "OK"
 
             except Exception as e:
                 raise QueryError(f"Query failed: {e}", str(query), params) from e
@@ -372,19 +360,15 @@ class DuckDBDatabase(Database):
                 query_str, query_params = self._convert_params(query, params)
 
                 # Execute query
-                result = await asyncio.to_thread(
-                    conn.execute, query_str, query_params
-                )
-                
+                result = await asyncio.to_thread(conn.execute, query_str, query_params)
+
                 # Get column names
                 columns = [desc[0] for desc in result.description]
-                
+
                 while True:
                     # Fetch batch
-                    rows = await asyncio.to_thread(
-                        result.fetchmany, fetch_size
-                    )
-                    
+                    rows = await asyncio.to_thread(result.fetchmany, fetch_size)
+
                     if not rows:
                         break
 
@@ -450,13 +434,13 @@ class DuckDBDatabase(Database):
                 try:
                     # DuckDB can handle multiple statements
                     await tx.execute(SQL(up_sql))
-                    
+
                     # Record migration
                     await tx.execute(
                         SQL("INSERT INTO schema_migrations (version) VALUES (:version)"),
-                        {"version": version}
+                        {"version": version},
                     )
-                    
+
                     await tx.commit()
                     print(f"✅ Applied migration: {version}")
 
@@ -466,7 +450,9 @@ class DuckDBDatabase(Database):
                     raise
 
     # DuckDB-specific features
-    async def export_parquet(self, query: SQL, path: str, params: dict[str, Any] | None = None) -> None:
+    async def export_parquet(
+        self, query: SQL, path: str, params: dict[str, Any] | None = None
+    ) -> None:
         """Export query results to Parquet file.
 
         Args:
@@ -477,12 +463,12 @@ class DuckDBDatabase(Database):
         async with self.pool.acquire() as conn:
             try:
                 query_str, query_params = self._convert_params(query, params)
-                
+
                 # Create export query
                 export_query = f"COPY ({query_str}) TO '{path}' (FORMAT PARQUET)"
-                
+
                 await asyncio.to_thread(conn.execute, export_query, query_params)
-                
+
             except Exception as e:
                 raise QueryError(f"Parquet export failed: {e}", str(query), params) from e
 
@@ -499,9 +485,9 @@ class DuckDBDatabase(Database):
                     query = f"CREATE TABLE {table_name} AS SELECT * FROM read_parquet('{path}')"
                 else:
                     query = f"SELECT * FROM read_parquet('{path}')"
-                
+
                 await asyncio.to_thread(conn.execute, query)
-                
+
             except Exception as e:
                 raise QueryError(f"Parquet read failed: {e}", query, None) from e
 
@@ -516,12 +502,12 @@ class DuckDBDatabase(Database):
         async with self.pool.acquire() as conn:
             try:
                 query_str, query_params = self._convert_params(query, params)
-                
+
                 # Create export query
                 export_query = f"COPY ({query_str}) TO '{path}' (FORMAT CSV, HEADER)"
-                
+
                 await asyncio.to_thread(conn.execute, export_query, query_params)
-                
+
             except Exception as e:
                 raise QueryError(f"CSV export failed: {e}", str(query), params) from e
 
@@ -575,14 +561,12 @@ class DuckDBTransaction(Transaction):
             raise RuntimeError("Transaction not active")
 
         query_str, query_params = self.db._convert_params(query, params)
-        
-        result = await asyncio.to_thread(
-            self._conn.execute, query_str, query_params
-        )
-        
+
+        result = await asyncio.to_thread(self._conn.execute, query_str, query_params)
+
         columns = [desc[0] for desc in result.description]
         row = result.fetchone()
-        
+
         return self.db._map_result(row, columns, result_type)
 
     async def execute(self, query: SQL, params: dict | None = None) -> str:
@@ -591,9 +575,7 @@ class DuckDBTransaction(Transaction):
             raise RuntimeError("Transaction not active")
 
         query_str, query_params = self.db._convert_params(query, params)
-        
-        await asyncio.to_thread(
-            self._conn.execute, query_str, query_params
-        )
-        
+
+        await asyncio.to_thread(self._conn.execute, query_str, query_params)
+
         return "OK"

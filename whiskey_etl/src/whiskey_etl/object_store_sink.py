@@ -84,10 +84,7 @@ class ObjectStoreSink(DataSink):
             partition=partition or "default",
         )
 
-    def _partition_records(
-        self,
-        records: list[dict[str, Any]]
-    ) -> dict[str, list[dict[str, Any]]]:
+    def _partition_records(self, records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         """Partition records by specified fields."""
         if not self.partition_by:
             return {"default": records}
@@ -107,10 +104,7 @@ class ObjectStoreSink(DataSink):
 
         return partitions
 
-    async def _serialize_records(
-        self,
-        records: list[dict[str, Any]]
-    ) -> bytes:
+    async def _serialize_records(self, records: list[dict[str, Any]]) -> bytes:
         """Serialize records to bytes based on format."""
         if self.format == "json":
             content = json.dumps(records, indent=2, default=str).encode("utf-8")
@@ -137,8 +131,7 @@ class ObjectStoreSink(DataSink):
                 import pyarrow.parquet as pq
             except ImportError as e:
                 raise ImportError(
-                    "pyarrow required for parquet format. "
-                    "Install with: pip install pyarrow"
+                    "pyarrow required for parquet format. Install with: pip install pyarrow"
                 ) from e
 
             # Convert to Arrow table
@@ -161,6 +154,7 @@ class ObjectStoreSink(DataSink):
         """Compress content."""
         if self.compression == "gzip":
             import gzip
+
             return gzip.compress(content)
         elif self.compression == "snappy":
             try:
@@ -205,11 +199,13 @@ class ObjectStoreSink(DataSink):
 
                 # Prepare metadata
                 metadata = self.metadata.copy()
-                metadata.update({
-                    "record_count": str(len(partition_records)),
-                    "format": self.format,
-                    "partition": partition_key,
-                })
+                metadata.update(
+                    {
+                        "record_count": str(len(partition_records)),
+                        "format": self.format,
+                        "partition": partition_key,
+                    }
+                )
                 if self.compression:
                     metadata["compression"] = self.compression
 
@@ -349,10 +345,12 @@ class S3Sink(ObjectStoreSink):
                         Body=chunk,
                     )
 
-                    parts.append({
-                        "ETag": part["ETag"],
-                        "PartNumber": part_number,
-                    })
+                    parts.append(
+                        {
+                            "ETag": part["ETag"],
+                            "PartNumber": part_number,
+                        }
+                    )
                     part_number += 1
 
                 # Complete multipart upload
@@ -415,9 +413,7 @@ class AzureBlobSink(ObjectStoreSink):
                 ) from e
 
             if self.connection_string:
-                self._client = BlobServiceClient.from_connection_string(
-                    self.connection_string
-                )
+                self._client = BlobServiceClient.from_connection_string(self.connection_string)
             else:
                 self._client = BlobServiceClient(
                     account_url=f"https://{self.account_name}.blob.core.windows.net",

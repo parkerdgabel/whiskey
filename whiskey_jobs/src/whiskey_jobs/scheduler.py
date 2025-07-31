@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class ScheduledJob:
     """Represent a job that runs on a schedule.
-    
+
     Handles both cron-based and interval-based scheduling,
     tracking execution times and managing schedule constraints.
     """
@@ -95,7 +95,7 @@ class ScheduledJob:
 
     def should_run(self) -> bool:
         """Check if the job should run at the current time.
-        
+
         Returns:
             True if the job is due to run, False otherwise.
         """

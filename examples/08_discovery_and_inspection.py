@@ -300,10 +300,7 @@ async def demonstrate_advanced_discovery():
             return False
 
         # Must not be a DTO or exception
-        if cls.__name__.endswith("DTO") or issubclass(cls, Exception):
-            return False
-
-        return True
+        return not (cls.__name__.endswith("DTO") or issubclass(cls, Exception))
 
     components = discover_components(
         __name__, container=container, predicate=complex_predicate, auto_register=True
@@ -465,7 +462,7 @@ async def demonstrate_resolution_debugging():
             if not sub_report["registered"]:
                 missing_services.append(service_type)
 
-            for param, info in sub_report["dependencies"].items():
+            for _param, info in sub_report["dependencies"].items():
                 if not info["registered"]:
                     find_missing_services(info["type"], visited)
 

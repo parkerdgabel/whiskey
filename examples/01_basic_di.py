@@ -19,7 +19,7 @@ from whiskey import Container, inject, provide, singleton
 # ============================
 
 
-@provide  # Register with default container  
+@provide  # Register with default container
 class Database:
     """A simple database service."""
 
@@ -191,6 +191,7 @@ async def main():
 
     # Direct application configuration (builder removed)
     from whiskey.core.application import Whiskey
+
     app = Whiskey()
     app.singleton(Database)
     app.singleton(Logger)

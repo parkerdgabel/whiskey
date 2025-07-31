@@ -30,7 +30,7 @@ Quick Start:
     ... class UserService:
     ...     def __init__(self, db: Database):  # Automatically injected!
     ...         self.db = db
-    ...     
+    ...
     ...     async def get_user(self, user_id: int):
     ...         return await self.db.query(f"SELECT * FROM users WHERE id={user_id}")
     >>>
@@ -74,54 +74,54 @@ from whiskey.core.decorators import (
     when_production,
     wrap_function,
 )
+from whiskey.core.generic_resolution import GenericTypeResolver, TypeParameterBinder
 from whiskey.core.lazy import Lazy, lazy_inject
 from whiskey.core.registry import Scope
 from whiskey.core.scopes import ContextVarScope, ScopeType
 from whiskey.core.types import Disposable, Initializable, Inject
-from whiskey.core.generic_resolution import GenericTypeResolver, TypeParameterBinder
 
 # Application class has been renamed to Whiskey
 
 __all__ = [
     # Core DI
     "Container",
-    "inject",
-    "singleton",
-    "factory",
-    "scoped",
-    "component",
-    "provide",  # Alias for component
-    # Application Framework
-    "Whiskey",
-    # Scopes
-    "Scope",
     "ContextVarScope",
-    "ScopeType",
-    # Lazy
-    "Lazy",
-    "lazy_inject",
-    # Types
-    "Inject",
-    "Initializable",
     "Disposable",
     # Generic Resolution
     "GenericTypeResolver",
+    "Initializable",
+    # Types
+    "Inject",
+    # Lazy
+    "Lazy",
+    # Scopes
+    "Scope",
+    "ScopeType",
     "TypeParameterBinder",
-    # Lifecycle
-    "on_startup",
-    "on_shutdown",
-    "on_error",
-    # Conditional
-    "when_env",
-    "when_debug",
-    "when_production",
+    # Application Framework
+    "Whiskey",
     # Utilities
     "call",
     "call_sync",
+    "component",
+    "configure_app",
+    "factory",
+    "get_app",
+    "inject",
     "invoke",
-    "wrap_function",
+    "lazy_inject",
+    "on_error",
+    "on_shutdown",
+    # Lifecycle
+    "on_startup",
+    "provide",  # Alias for component
     "resolve",
     "resolve_async",
-    "get_app",
-    "configure_app",
+    "scoped",
+    "singleton",
+    "when_debug",
+    # Conditional
+    "when_env",
+    "when_production",
+    "wrap_function",
 ]

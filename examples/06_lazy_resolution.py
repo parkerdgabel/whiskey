@@ -74,7 +74,7 @@ class UserService:
         # Lazy database - only connected when first used
         db: Lazy[DatabaseConnection],
         # Regular dependency - initialized immediately
-        logger: Annotated[Logger, Inject()],
+        logger: Annotated["Logger", Inject()],
     ):
         self.db = db
         self.logger = logger

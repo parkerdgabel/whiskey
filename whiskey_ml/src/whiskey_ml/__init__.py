@@ -1,9 +1,10 @@
 """Whiskey ML - Declarative machine learning extension for Whiskey framework."""
 
-from whiskey_ml.core.dataset import Dataset, DataLoader, DatasetConfig
+from whiskey_ml.core.dataset import DataLoader, Dataset, DatasetConfig
 from whiskey_ml.core.metrics import Metric, MetricCollection, MetricResult
 from whiskey_ml.core.model import Model, ModelConfig, ModelOutput
 from whiskey_ml.core.pipeline import MLPipeline, PipelineConfig, PipelineState
+
 # ML scopes are managed using Whiskey's built-in scope system
 # Use app.container.scope("scope_name") context managers
 from whiskey_ml.core.trainer import Trainer, TrainerConfig, TrainingResult
@@ -13,12 +14,13 @@ from whiskey_ml.integrations.base import MLContext
 # Optional visualization imports
 try:
     from whiskey_ml.visualization import (
-        MetricsTracker,
         ConsoleMetricsHandler,
+        MetricsTracker,
         ProgressTracker,
         RichProgressHandler,
         TensorBoardHandler,
     )
+
     _has_visualization = True
 except ImportError:
     _has_visualization = False
@@ -51,10 +53,12 @@ __all__ = [
 
 # Add visualization exports if available
 if _has_visualization:
-    __all__.extend([
-        "MetricsTracker",
-        "ConsoleMetricsHandler",
-        "ProgressTracker",
-        "RichProgressHandler",
-        "TensorBoardHandler",
-    ])
+    __all__.extend(
+        [
+            "MetricsTracker",
+            "ConsoleMetricsHandler",
+            "ProgressTracker",
+            "RichProgressHandler",
+            "TensorBoardHandler",
+        ]
+    )

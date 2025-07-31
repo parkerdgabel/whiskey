@@ -23,27 +23,27 @@ Functions:
 
 Example:
     >>> app = Whiskey()
-    >>> 
+    >>>
     >>> # Register components with decorators
     >>> @app.singleton
     ... class Database:
     ...     async def initialize(self):
     ...         await self.connect()
-    >>> 
+    >>>
     >>> @app.component
     ... class EmailService:
     ...     def __init__(self, db: Database):
     ...         self.db = db
-    >>> 
+    >>>
     >>> # Lifecycle hooks
     >>> @app.on_startup
     ... async def configure():
     ...     print("Application starting...")
-    >>> 
+    >>>
     >>> # Run the application
     >>> async with app:
     ...     component = await app.resolve(EmailService)
-    
+
 See Also:
     - whiskey.core.container: Base container functionality
     - whiskey.core.decorators: Global decorators
@@ -70,26 +70,26 @@ _current_application: Whiskey = None
 
 class Whiskey:
     """Main Whiskey class with lifecycle management and decorator support.
-    
+
     This class provides the main entry point for Whiskey applications,
     integrating container functionality with lifecycle management
     and convenience decorators.
-    
+
     Examples:
         Direct instantiation:
-        
+
         >>> app = Whiskey()
         >>> app.singleton(DatabaseService)
         >>> app.component(EmailService)
-        
+
         Using decorators:
-        
+
         >>> app = Whiskey()
-        >>> 
+        >>>
         >>> @app.component
         >>> class DatabaseService:
         ...     pass
-        >>> 
+        >>>
         >>> @app.singleton
         >>> class CacheService:
         ...     pass
@@ -104,7 +104,7 @@ class Whiskey:
         """
         self.container = container if container is not None else Container()
         self.name = name if name is not None else "Whiskey"
-        
+
         # Initialize callbacks - if container has them, use them; otherwise create new
         if hasattr(self.container, "_startup_callbacks"):
             self._startup_callbacks = self.container._startup_callbacks
@@ -126,7 +126,7 @@ class Whiskey:
         self._hooks = {
             "before_startup": self._startup_callbacks,
             "after_shutdown": self._shutdown_callbacks,
-            "tasks": []
+            "tasks": [],
         }
 
     # Builder pattern removed - use Whiskey() or Whiskey.create() directly
@@ -134,21 +134,21 @@ class Whiskey:
     @classmethod
     def create(cls, container: Container = None, name: str | None = None) -> Whiskey:
         """Create a new Whiskey application.
-        
+
         Args:
             container: Optional Container instance (creates new one if None)
             name: Optional name for the application
-            
+
         Returns:
             New Whiskey instance
         """
         return cls(container=container, name=name)
 
     # Direct registration methods
-    
+
     def register(self, key: str | type, provider: Any, **kwargs) -> None:
         """Register a component directly.
-        
+
         Args:
             key: Component key
             provider: Component provider
@@ -157,10 +157,10 @@ class Whiskey:
         if provider is None:
             raise ValueError("Provider cannot be None")
         self.container.register(key, provider, **kwargs)
-    
+
     def transient(self, key: str | type, provider: Any = None, **kwargs) -> None:
         """Register a transient component.
-        
+
         Args:
             key: Component key
             provider: Component provider (uses key if None and key is a type)
@@ -169,7 +169,7 @@ class Whiskey:
         if provider is None and isinstance(key, type):
             provider = key
         self.container.register(key, provider, scope=Scope.TRANSIENT, **kwargs)
-    
+
     # Decorator methods for component registration
 
     def component(
@@ -231,18 +231,14 @@ class Whiskey:
                 "lazy": lazy,
                 "allow_override": True,  # Allow decorators to override registrations
             }
-            
+
             # Add metadata if provided
             if metadata is not None:
                 registration_kwargs["metadata"] = metadata
             if priority is not None:
                 registration_kwargs.setdefault("metadata", {})["priority"] = priority
-            
-            self.container.register(
-                component_key,
-                cls,
-                **registration_kwargs
-            )
+
+            self.container.register(component_key, cls, **registration_kwargs)
 
             return cls
 
@@ -278,7 +274,7 @@ class Whiskey:
                 lazy=lazy,
             )
             return cls or type(instance)
-        
+
         return self.component(
             cls,
             key=key,
@@ -301,9 +297,10 @@ class Whiskey:
         lazy: bool = False,
     ) -> type[T] | Callable[[type[T]], type[T]]:
         """Decorator to register a class as a scoped component."""
+
         def decorator(target_cls: type[T]) -> type[T]:
             # Register with container, including scope_name in metadata
-            descriptor = self.container.register(
+            self.container.register(
                 key or target_cls,
                 target_cls,
                 name=name,
@@ -311,10 +308,10 @@ class Whiskey:
                 tags=tags,
                 condition=condition,
                 lazy=lazy,
-                metadata={"scope_name": scope_name}
+                metadata={"scope_name": scope_name},
             )
             return target_cls
-        
+
         if cls is None:
             return decorator
         else:
@@ -353,23 +350,26 @@ class Whiskey:
         )
 
     # Removed decorator aliases - use component() and singleton() directly
-    
+
     @property
     def inject(self):
         """Decorator for dependency injection in functions."""
+
         def decorator(func: Callable) -> Callable:
             return self.wrap_function(func)
+
         return decorator
-    
+
     # Lifecycle decorators
-    
+
     @property
     def on_startup(self):
         """Decorator to register startup callbacks."""
+
         def decorator(func: Callable) -> Callable:
             # Add to startup callbacks
             self._startup_callbacks.append(func)
-            # If app is already running, execute immediately  
+            # If app is already running, execute immediately
             if self._is_running:
                 if asyncio.iscoroutinefunction(func):
                     # Create a task for immediate execution
@@ -378,28 +378,34 @@ class Whiskey:
                 else:
                     func()
             return func
+
         return decorator
-    
+
     @property
     def on_shutdown(self):
         """Decorator to register shutdown callbacks."""
+
         def decorator(func: Callable) -> Callable:
             self._shutdown_callbacks.append(func)
             return func
+
         return decorator
-    
+
     @property
     def on_error(self):
         """Decorator to register error handlers."""
+
         def decorator(func: Callable) -> Callable:
             # Register as a generic error handler
             self._error_handlers[Exception] = func
             return func
+
         return decorator
-    
+
     @property
     def task(self):
         """Decorator to register background tasks."""
+
         def decorator(interval: float | None = None, **kwargs):
             def inner(func: Callable) -> Callable:
                 # Store task metadata
@@ -407,9 +413,11 @@ class Whiskey:
                 func._task_kwargs = kwargs
                 self._hooks.setdefault("tasks", []).append(func)
                 return func
+
             return inner
+
         return decorator
-    
+
     # Conditional decorators
 
     def when_env(self, var_name: str, expected_value: str | None = None):
@@ -417,9 +425,11 @@ class Whiskey:
         import os
 
         if expected_value is None:
+
             def condition():
                 return var_name in os.environ
         else:
+
             def condition():
                 return os.environ.get(var_name) == expected_value
 
@@ -439,6 +449,7 @@ class Whiskey:
 
         def condition():
             return os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
+
         return _conditional_decorator(self, condition)
 
     def when_production(self):
@@ -447,6 +458,7 @@ class Whiskey:
 
         def condition():
             return os.environ.get("ENV", "").lower() in ("prod", "production")
+
         return _conditional_decorator(self, condition)
 
     # Lifecycle methods
@@ -458,13 +470,13 @@ class Whiskey:
 
         try:
             self._is_running = True
-            
+
             # Initialize all components that implement Initializable
             for descriptor in self.container.registry.list_all():
                 # Get or create instance
                 instance = await self.container.resolve(descriptor.component_type)
                 # Initialize if it implements Initializable
-                if hasattr(instance, 'initialize') and callable(instance.initialize):
+                if hasattr(instance, "initialize") and callable(instance.initialize):
                     await instance.initialize()
 
             # Run startup callbacks
@@ -473,7 +485,7 @@ class Whiskey:
                     await callback()
                 else:
                     callback()
-            
+
             # Start background tasks
             if "tasks" in self._hooks:
                 for task_func in self._hooks["tasks"]:
@@ -485,7 +497,7 @@ class Whiskey:
                                 while self._is_running:
                                     await func()
                                     await asyncio.sleep(sleep_interval)
-                            
+
                             task = asyncio.create_task(run_periodic())
                             self._hooks.setdefault("running_tasks", []).append(task)
         except Exception:
@@ -499,7 +511,7 @@ class Whiskey:
             return
 
         self._is_running = False
-        
+
         # Cancel running tasks
         if "running_tasks" in self._hooks:
             for task in self._hooks["running_tasks"]:
@@ -518,7 +530,7 @@ class Whiskey:
             except Exception as e:
                 # Log error but don't stop shutdown process
                 print(f"Error in shutdown callback: {e}")
-        
+
         # Dispose all components that implement Disposable
         disposed_instances = set()
         for descriptor in self.container.registry.list_all():
@@ -526,7 +538,11 @@ class Whiskey:
                 try:
                     # Get singleton instance if it exists
                     instance = self.container.resolve_sync(descriptor.component_type)
-                    if instance not in disposed_instances and hasattr(instance, 'dispose') and callable(instance.dispose):
+                    if (
+                        instance not in disposed_instances
+                        and hasattr(instance, "dispose")
+                        and callable(instance.dispose)
+                    ):
                         await instance.dispose()
                         disposed_instances.add(instance)
                 except Exception:
@@ -544,39 +560,39 @@ class Whiskey:
     async def stop(self) -> None:
         """Alias for shutdown."""
         await self.shutdown()
-    
+
     # Standardized run API
-    
+
     def run(self, main: Callable | None = None, *, mode: str = "auto", **kwargs) -> Any:
         """Execute a callable within the Whiskey IoC context.
-        
+
         This is the standardized way to run programs with Whiskey. It handles:
         - Application lifecycle (startup/shutdown)
         - Dependency injection for the main callable
         - Async/sync execution based on the callable
         - Extension-specific runners (CLI, ASGI, etc.)
-        
+
         Args:
             main: The main callable to execute. If None, will attempt to find
                   an appropriate runner based on registered extensions.
             mode: Execution mode - "auto", "sync", or "async". Auto detects
                   based on the callable.
             **kwargs: Additional arguments passed to the main callable or runner.
-            
+
         Returns:
             The result of executing the main callable.
-            
+
         Examples:
             # Run a simple function
             app.run(lambda: print("Hello"))
-            
+
             # Run an async function with DI
             @inject
             async def main(db: Database):
                 await db.connect()
-                
+
             app.run(main)
-            
+
             # Let extensions handle execution
             app.use(cli_extension)
             app.run()  # Will run CLI
@@ -593,7 +609,7 @@ class Whiskey:
                     return runners[0](**kwargs)
                 else:
                     raise RuntimeError("No main callable provided and no runners found")
-        
+
         # Execute with lifecycle management
         if mode == "async":
             try:
@@ -606,7 +622,7 @@ class Whiskey:
                 return asyncio.run(self._run_async(main, **kwargs))
         else:
             return self._run_sync(main, **kwargs)
-    
+
     async def _run_async(self, main: Callable, **kwargs) -> Any:
         """Run an async callable with lifecycle management."""
         async with self:
@@ -615,12 +631,13 @@ class Whiskey:
                 with contextlib.suppress(KeyboardInterrupt):
                     await asyncio.Event().wait()
                 return None
-            
+
             # Execute the main callable with DI
             return await self.call_async(main, **kwargs)
-    
+
     def _run_sync(self, main: Callable, **kwargs) -> Any:
         """Run a sync callable with lifecycle management."""
+
         async def wrapper():
             async with self:
                 if main is None:
@@ -629,13 +646,13 @@ class Whiskey:
                 if asyncio.iscoroutinefunction(main):
                     # It's an async function, await it
                     return await self.call_async(main, **kwargs)
-                elif hasattr(main, '__wrapped__') or self._needs_injection(main):
+                elif hasattr(main, "__wrapped__") or self._needs_injection(main):
                     # Sync function that needs injection
                     return await self.call_async(main, **kwargs)
                 else:
                     # Plain sync function, just call it
                     return main(**kwargs)
-        
+
         try:
             # Check if we're already in an event loop
             loop = asyncio.get_running_loop()
@@ -644,60 +661,70 @@ class Whiskey:
         except RuntimeError:
             # No loop, create one
             return asyncio.run(wrapper())
-    
+
     def _needs_injection(self, func: Callable) -> bool:
         """Check if a function might need dependency injection."""
         import inspect
+
         if not callable(func):
             return False
-        
+
         try:
             sig = inspect.signature(func)
             # Check if any parameters have type annotations that might be injectable
             for param in sig.parameters.values():
-                if param.annotation != param.empty and param.annotation not in (str, int, float, bool, list, dict, tuple, set):
+                if param.annotation != param.empty and param.annotation not in (
+                    str,
+                    int,
+                    float,
+                    bool,
+                    list,
+                    dict,
+                    tuple,
+                    set,
+                ):
                     # Has a complex type annotation, might need injection
                     return True
             return False
         except Exception:
             return False
-    
+
     def _find_runners(self) -> list[Callable]:
         """Find available runners from extensions."""
         runners = []
-        
+
         # Check for known runner methods added by extensions
-        runner_attrs = ['run_cli', 'run_asgi', 'run_worker', 'run_scheduler']
+        runner_attrs = ["run_cli", "run_asgi", "run_worker", "run_scheduler"]
         for attr in runner_attrs:
             if hasattr(self, attr):
                 runners.append(getattr(self, attr))
-        
+
         # Check for custom runners registered via hooks
-        if 'runners' in self._hooks:
-            runners.extend(self._hooks['runners'])
-        
+        if "runners" in self._hooks:
+            runners.extend(self._hooks["runners"])
+
         return runners
-    
+
     def register_runner(self, name: str, runner: Callable) -> None:
         """Register a custom runner.
-        
+
         Extensions can use this to register their own runners that will be
         available via app.run() when no main callable is provided.
-        
+
         Args:
             name: Name of the runner (e.g., "cli", "asgi")
             runner: Callable that runs the application
-            
+
         Example:
             def my_runner(**kwargs):
                 # Custom runner logic
                 pass
-                
+
             app.register_runner("custom", my_runner)
         """
-        self._hooks.setdefault('runners', []).append(runner)
+        self._hooks.setdefault("runners", []).append(runner)
         # Also set as attribute for direct access
-        setattr(self, f'run_{name}', runner)
+        setattr(self, f"run_{name}", runner)
 
     async def emit(self, event: str, *args, **kwargs) -> None:
         """Emit an event to all registered handlers."""
@@ -710,13 +737,13 @@ class Whiskey:
                 handler = self._error_handlers[type(error)]
             elif Exception in self._error_handlers:
                 handler = self._error_handlers[Exception]
-            
+
             if handler:
                 if asyncio.iscoroutinefunction(handler):
                     await handler(error)
                 else:
                     handler(error)
-        
+
         # Handle regular events
         if event in self._hooks:
             for handler in self._hooks[event]:
@@ -724,7 +751,7 @@ class Whiskey:
                     await handler(*args, **kwargs)
                 else:
                     handler(*args, **kwargs)
-        
+
         # Handle wildcard handlers
         if "*" in self._hooks:
             for handler in self._hooks["*"]:
@@ -745,23 +772,23 @@ class Whiskey:
             await asyncio.gather(*self._hooks["startup_tasks"])
             self._hooks["startup_tasks"].clear()
         await self.shutdown()
-    
+
     @property
     def lifespan(self):
         """Context manager for application lifecycle.
-        
+
         Can be used in both sync and async contexts:
-        
+
         async with app.lifespan():
             # Async context
             await app.resolve(Component)
-            
+
         with app.lifespan():
             # Sync context (requires no running event loop)
             app.resolve_sync(Component)
         """
         return self
-    
+
     def __enter__(self):
         """Sync context manager entry."""
         # Run startup synchronously
@@ -773,7 +800,7 @@ class Whiskey:
             # No event loop, we can create one
             asyncio.run(self.startup())
         return self
-    
+
     def __exit__(self, *args):
         """Sync context manager exit."""
         try:
@@ -789,7 +816,7 @@ class Whiskey:
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """Call a function with dependency injection (synchronous)."""
         return self.container.call_sync(func, *args, **kwargs)
-    
+
     async def call_async(self, func: Callable, *args, **kwargs) -> Any:
         """Call a function with dependency injection (asynchronous)."""
         return await self.container.call(func, *args, **kwargs)
@@ -797,7 +824,7 @@ class Whiskey:
     def call_sync(self, func: Callable, *args, **kwargs) -> Any:
         """Call a function with dependency injection (synchronous)."""
         return self.container.call_sync(func, *args, **kwargs)
-    
+
     def invoke(self, func: Callable, **overrides) -> Any:
         """Invoke a function with full dependency injection (synchronous)."""
         return self.container.call_sync(func, **overrides)
@@ -861,36 +888,36 @@ class Whiskey:
     def __contains__(self, key: str | type) -> bool:
         """Check if a component is registered."""
         return key in self.container
-    
+
     # Extension methods
-    
+
     def use(self, extension: Callable[..., None], **kwargs) -> Whiskey:
         """Apply an extension to the application with optional configuration.
-        
+
         Extensions are functions that add functionality to the Whiskey instance.
         They are executed immediately when called.
-        
+
         Args:
             extension: Function that takes a Whiskey instance and optional kwargs
             **kwargs: Configuration options passed to the extension
-            
+
         Returns:
             Self for chaining
-            
+
         Example:
             def jobs_extension(app: Whiskey, worker_pool_size: int = 4, **kwargs) -> None:
                 app.jobs = JobManager(worker_pool_size=worker_pool_size)
                 app.add_decorator("job", job_decorator)
-            
+
             app = Whiskey()
             app.use(jobs_extension, worker_pool_size=8, auto_start=False)
         """
         extension(self, **kwargs)
         return self
-    
+
     def on(self, event: str, handler: Callable | None = None) -> Whiskey | Callable:
         """Register an event handler.
-        
+
         Can be used as a method or decorator:
             app.on("event", handler)
             @app.on("event")
@@ -901,43 +928,51 @@ class Whiskey:
             def decorator(func: Callable) -> Callable:
                 self._hooks.setdefault(event, []).append(func)
                 return func
+
             return decorator
         else:
             # Used as method
             self._hooks.setdefault(event, []).append(handler)
             return self
-    
+
     @property
     def hook(self):
         """Decorator to register a hook."""
+
         def decorator(name: str):
             def inner(func: Callable) -> Callable:
                 self._hooks.setdefault(name, []).append(func)
                 return func
+
             return inner
+
         return decorator
-    
+
     @property
     def emits(self):
         """Decorator that automatically emits an event with the function's return value.
-        
+
         Usage:
             @app.emits("user.created")
             async def create_user(name: str) -> dict:
                 user = {"id": 1, "name": name}
                 return user  # Automatically emitted as "user.created" event
         """
+
         def decorator(event_name: str):
             def inner(func: Callable) -> Callable:
                 if asyncio.iscoroutinefunction(func):
+
                     @wraps(func)
                     async def async_wrapper(*args, **kwargs):
                         result = await func(*args, **kwargs)
                         # Emit the event with the result
                         await self.emit(event_name, result)
                         return result
+
                     return async_wrapper
                 else:
+
                     @wraps(func)
                     def sync_wrapper(*args, **kwargs):
                         result = func(*args, **kwargs)
@@ -950,48 +985,52 @@ class Whiskey:
                             # No event loop running, emit synchronously
                             asyncio.run(self.emit(event_name, result))
                         return result
+
                     return sync_wrapper
+
             return inner
+
         return decorator
-    
+
     def extend(self, *extensions: Callable, **kwargs) -> Whiskey:
         """Apply one or more extensions to the application.
-        
+
         Args:
             *extensions: Extension functions to apply
             **kwargs: Configuration passed to all extensions
-            
+
         Returns:
             Self for chaining
-            
+
         Example:
             app.extend(jobs_extension, auth_extension, worker_pool_size=8)
         """
         for extension in extensions:
             extension(self, **kwargs)
         return self
-    
+
     def add_decorator(self, name: str, decorator: Callable) -> Whiskey:
         """Add a custom decorator method."""
         setattr(self, name, decorator)
         return self
-    
+
     # Removed add_singleton and add_transient - use singleton() and transient() instead
-    
+
     # Removed builder property - use direct registration methods instead
 
 
 def _conditional_decorator(app: Whiskey, condition: Callable[[], bool]):
     """Create a conditional decorator."""
+
     def decorator(target=None, **kwargs):
         kwargs["condition"] = condition
         return app.component(target, **kwargs)
-    
+
     # Add methods for different registration types
     decorator.component = lambda target=None, **kw: app.component(target, condition=condition, **kw)
     decorator.singleton = lambda target=None, **kw: app.singleton(target, condition=condition, **kw)
     decorator.factory = lambda key, func, **kw: app.factory(key, func, condition=condition, **kw)
-    
+
     return decorator
 
 

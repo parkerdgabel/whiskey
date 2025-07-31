@@ -203,8 +203,7 @@ class S3Source(ObjectStoreSource):
                 import aioboto3
             except ImportError as e:
                 raise ImportError(
-                    "aioboto3 required for S3Source. "
-                    "Install with: pip install aioboto3"
+                    "aioboto3 required for S3Source. Install with: pip install aioboto3"
                 ) from e
 
             session = aioboto3.Session(
@@ -301,9 +300,7 @@ class AzureBlobSource(ObjectStoreSource):
                 ) from e
 
             if self.connection_string:
-                self._client = BlobServiceClient.from_connection_string(
-                    self.connection_string
-                )
+                self._client = BlobServiceClient.from_connection_string(self.connection_string)
             else:
                 self._client = BlobServiceClient(
                     account_url=f"https://{self.account_name}.blob.core.windows.net",
@@ -331,9 +328,7 @@ class AzureBlobSource(ObjectStoreSource):
                 "last_modified": blob.last_modified,
                 "etag": blob.etag,
                 "content_type": (
-                    blob.content_settings.content_type
-                    if blob.content_settings
-                    else None
+                    blob.content_settings.content_type if blob.content_settings else None
                 ),
             }
 
@@ -417,8 +412,7 @@ class GCSSource(ObjectStoreSource):
         # GCS client is sync, so we run in executor
         loop = asyncio.get_event_loop()
         blobs = await loop.run_in_executor(
-            None,
-            lambda: list(bucket_obj.list_blobs(prefix=prefix or self.prefix, **kwargs))
+            None, lambda: list(bucket_obj.list_blobs(prefix=prefix or self.prefix, **kwargs))
         )
 
         for blob in blobs:
@@ -453,7 +447,7 @@ class GCSSource(ObjectStoreSource):
         content = await self.get_object(bucket, key)
 
         for i in range(0, len(content), chunk_size):
-            yield content[i:i + chunk_size]
+            yield content[i : i + chunk_size]
 
 
 # Utility processors for common file formats
@@ -478,8 +472,7 @@ async def jsonl_processor(key: str, content: bytes) -> AsyncIterator[dict]:
                 yield json.loads(line)
             except json.JSONDecodeError as e:
                 raise SourceError(
-                    "jsonl_processor",
-                    f"Invalid JSON on line {line_num} in {key}: {e}"
+                    "jsonl_processor", f"Invalid JSON on line {line_num} in {key}: {e}"
                 ) from e
 
 
@@ -494,10 +487,14 @@ async def csv_processor(
     import io
 
     text = content.decode("utf-8")
-    reader = csv.DictReader(
-        io.StringIO(text),
-        delimiter=delimiter,
-    ) if has_header else csv.reader(io.StringIO(text), delimiter=delimiter)
+    reader = (
+        csv.DictReader(
+            io.StringIO(text),
+            delimiter=delimiter,
+        )
+        if has_header
+        else csv.reader(io.StringIO(text), delimiter=delimiter)
+    )
 
     for row in reader:
         if has_header:

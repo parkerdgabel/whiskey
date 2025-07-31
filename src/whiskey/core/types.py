@@ -16,12 +16,12 @@ Protocols:
 
 Lifecycle Patterns:
     Components can implement these protocols to participate in lifecycle:
-    
+
     1. Initialization (Initializable):
        - Called during app startup or first resolution
        - Used for async setup (connections, resource allocation)
        - Failures prevent component usage
-    
+
     2. Disposal (Disposable):
        - Called during app shutdown or scope cleanup
        - Used for resource cleanup (closing connections, flushing)
@@ -29,13 +29,13 @@ Lifecycle Patterns:
 
 Example:
     >>> from whiskey.core.types import Initializable, Disposable
-    >>> 
+    >>>
     >>> @singleton
     ... class DatabasePool(Initializable, Disposable):
     ...     def __init__(self, config: Config):
     ...         self.config = config
     ...         self.pool = None
-    ...     
+    ...
     ...     async def initialize(self):
     ...         # Create connection pool on startup
     ...         self.pool = await create_pool(
@@ -43,7 +43,7 @@ Example:
     ...             min_size=10,
     ...             max_size=20
     ...         )
-    ...     
+    ...
     ...     async def dispose(self):
     ...         # Clean up connections on shutdown
     ...         if self.pool:
@@ -91,10 +91,11 @@ class Inject:
             optional: If True, None is returned if dependency not found (deprecated)
         """
         import warnings
+
         warnings.warn(
             "Inject() is deprecated. Whiskey now uses automatic injection based on type hints.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         self.name = name
         self.optional = optional

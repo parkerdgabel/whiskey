@@ -164,7 +164,8 @@ class TestConditionalRegistry:
             pass
 
         # Set condition
-        condition = lambda: True
+        def condition():
+            return True
         registry.set_condition(TestService, None, condition)
 
         # Get condition

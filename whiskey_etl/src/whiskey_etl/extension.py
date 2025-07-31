@@ -320,7 +320,9 @@ def etl_extension(
             # Create the SQL transform wrapper that will get database injected
             from .sql_transform import create_sql_transform
 
-            async def sql_transform_wrapper(record: dict[str, Any], database: Database) -> dict[str, Any] | None:
+            async def sql_transform_wrapper(
+                record: dict[str, Any], database: Database
+            ) -> dict[str, Any] | None:
                 # Create transform with injected database
                 transform_func = create_sql_transform(transform_type, database, **config)
                 return await transform_func(record)

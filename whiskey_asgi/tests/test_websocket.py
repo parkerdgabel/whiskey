@@ -1,6 +1,5 @@
 """Tests for WebSocket class."""
 
-import asyncio
 
 import pytest
 
@@ -22,15 +21,15 @@ class TestWebSocket:
                 [b"sec-websocket-key", b"x3JJHMbDL1EzLkh9GBhXDw=="],
             ],
         }
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             pass
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         assert ws.path == "/ws"
         assert ws.headers["host"] == "example.com"
         assert ws.headers["upgrade"] == "websocket"
@@ -42,16 +41,16 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws/room/123",
         }
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             pass
-        
+
         ws = WebSocket(scope, receive, send)
         ws.route_params = {"room_id": "123"}
-        
+
         assert ws.route_params == {"room_id": "123"}
 
     @pytest.mark.asyncio
@@ -61,20 +60,20 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         sent_messages = []
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             sent_messages.append(message)
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         # Accept without subprotocol
         await ws.accept()
-        
+
         assert ws._accepted is True
         assert len(sent_messages) == 1
         assert sent_messages[0] == {
@@ -89,20 +88,20 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         sent_messages = []
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             sent_messages.append(message)
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         # Accept with subprotocol
         await ws.accept("chat")
-        
+
         assert ws._accepted is True
         assert sent_messages[0] == {
             "type": "websocket.accept",
@@ -116,24 +115,24 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         sent_messages = []
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             sent_messages.append(message)
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         # Must accept first
         await ws.accept()
         sent_messages.clear()
-        
+
         # Send text
         await ws.send("Hello, World!")
-        
+
         assert len(sent_messages) == 1
         assert sent_messages[0] == {
             "type": "websocket.send",
@@ -147,25 +146,25 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         sent_messages = []
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             sent_messages.append(message)
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         # Must accept first
         await ws.accept()
         sent_messages.clear()
-        
+
         # Send bytes
         data = b"Binary data"
         await ws.send(data)
-        
+
         assert len(sent_messages) == 1
         assert sent_messages[0] == {
             "type": "websocket.send",
@@ -179,15 +178,15 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             pass
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         # Should raise error if not accepted
         with pytest.raises(RuntimeError, match="WebSocket not accepted"):
             await ws.send("Hello")
@@ -199,29 +198,29 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         messages = [
             {"type": "websocket.receive", "text": "Hello"},
             {"type": "websocket.receive", "text": "World"},
         ]
         message_index = 0
-        
+
         async def receive():
             nonlocal message_index
             msg = messages[message_index]
             message_index += 1
             return msg
-        
+
         async def send(message):
             pass
-        
+
         ws = WebSocket(scope, receive, send)
         await ws.accept()
-        
+
         # Receive messages
         msg1 = await ws.receive()
         assert msg1 == "Hello"
-        
+
         msg2 = await ws.receive()
         assert msg2 == "World"
 
@@ -232,18 +231,18 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         data = b"Binary message"
-        
+
         async def receive():
             return {"type": "websocket.receive", "bytes": data}
-        
+
         async def send(message):
             pass
-        
+
         ws = WebSocket(scope, receive, send)
         await ws.accept()
-        
+
         msg = await ws.receive()
         assert msg == data
 
@@ -254,16 +253,16 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         async def receive():
             return {"type": "websocket.disconnect", "code": 1001}
-        
+
         async def send(message):
             pass
-        
+
         ws = WebSocket(scope, receive, send)
         await ws.accept()
-        
+
         # Should raise ConnectionError on disconnect
         with pytest.raises(ConnectionError, match="WebSocket disconnected"):
             await ws.receive()
@@ -275,15 +274,15 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         async def receive():
             return {"type": "websocket.receive", "text": "Hello"}
-        
+
         async def send(message):
             pass
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         # Should raise error if not accepted
         with pytest.raises(RuntimeError, match="WebSocket not accepted"):
             await ws.receive()
@@ -295,20 +294,20 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         sent_messages = []
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             sent_messages.append(message)
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         # Close with default code
         await ws.close()
-        
+
         assert len(sent_messages) == 1
         assert sent_messages[0] == {
             "type": "websocket.close",
@@ -323,20 +322,20 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         sent_messages = []
-        
+
         async def receive():
             pass
-        
+
         async def send(message):
             sent_messages.append(message)
-        
+
         ws = WebSocket(scope, receive, send)
-        
+
         # Close with custom code and reason
         await ws.close(1001, "Going away")
-        
+
         assert sent_messages[0] == {
             "type": "websocket.close",
             "code": 1001,
@@ -350,7 +349,7 @@ class TestWebSocket:
             "type": "websocket",
             "path": "/ws",
         }
-        
+
         messages = [
             {"type": "websocket.receive", "text": "msg1"},
             {"type": "websocket.receive", "text": "msg2"},
@@ -358,22 +357,22 @@ class TestWebSocket:
             {"type": "websocket.disconnect", "code": 1000},
         ]
         message_index = 0
-        
+
         async def receive():
             nonlocal message_index
             msg = messages[message_index]
             message_index += 1
             return msg
-        
+
         async def send(message):
             pass
-        
+
         ws = WebSocket(scope, receive, send)
         await ws.accept()
-        
+
         # Collect messages via async iteration
         received = []
         async for msg in ws:
             received.append(msg)
-        
+
         assert received == ["msg1", "msg2", b"msg3"]

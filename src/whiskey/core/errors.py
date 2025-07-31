@@ -28,7 +28,7 @@ Example:
     ...     print(f"Failed to resolve: {e.service_key}")
     ...     if e.cause:
     ...         print(f"Underlying cause: {e.cause}")
-    >>> 
+    >>>
     >>> try:
     ...     container.register(Component, invalid_provider)
     ... except RegistrationError as e:
@@ -42,6 +42,8 @@ Best Practices:
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 
 class WhiskeyError(Exception):
@@ -59,7 +61,9 @@ class ResolutionError(WhiskeyError):
     - A condition for component registration is not met
     """
 
-    def __init__(self, message: str, service_key: str | None = None, cause: Exception | None = None):
+    def __init__(
+        self, message: str, service_key: str | None = None, cause: Exception | None = None
+    ):
         super().__init__(message)
         self.service_key = service_key
         self.cause = cause
@@ -150,37 +154,39 @@ class TypeAnalysisError(WhiskeyError):
 
 class ParameterResolutionError(ResolutionError):
     """Raised when a specific parameter cannot be resolved during injection.
-    
+
     This provides detailed information about which parameter failed and why,
     making debugging much easier.
     """
-    
-    def __init__(self, 
-                 class_name: str,
-                 parameter_name: str,
-                 parameter_type: Any,
-                 reason: str,
-                 missing_dependencies: list[str] | None = None):
+
+    def __init__(
+        self,
+        class_name: str,
+        parameter_name: str,
+        parameter_type: Any,
+        reason: str,
+        missing_dependencies: list[str] | None = None,
+    ):
         self.class_name = class_name
         self.parameter_name = parameter_name
         self.parameter_type = parameter_type
         self.reason = reason
         self.missing_dependencies = missing_dependencies or []
-        
+
         # Build detailed error message
-        type_name = getattr(parameter_type, '__name__', str(parameter_type))
+        type_name = getattr(parameter_type, "__name__", str(parameter_type))
         message = f"Cannot resolve parameter '{parameter_name}: {type_name}' for {class_name}"
-        
+
         if reason:
             message += f"\nReason: {reason}"
-            
+
         if self.missing_dependencies:
             message += f"\nMissing dependencies: {', '.join(self.missing_dependencies)}"
-            
+
         # Add helpful suggestions
         if "not registered" in reason.lower():
             message += f"\n\nHint: Register {type_name} using @component, @singleton, or container.register()"
         elif "built-in type" in reason.lower():
             message += f"\n\nHint: Built-in types like {type_name} cannot be auto-injected. Provide a value when calling."
-        
+
         super().__init__(message, service_key=class_name)

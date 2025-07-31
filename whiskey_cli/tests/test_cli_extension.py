@@ -203,8 +203,9 @@ class TestCLIExtension:
         def greet():
             """Greet with options."""
             import click
-            count = click.get_current_context().params['count']
-            name = click.get_current_context().params['name']
+
+            count = click.get_current_context().params["count"]
+            name = click.get_current_context().params["name"]
             for _ in range(count):
                 print(f"Hello, {name}!")
 
@@ -225,14 +226,15 @@ class TestCLIExtension:
         def test_cmd():
             """Test command with shorthand option."""
             import click
-            verbose = click.get_current_context().params['verbose']
+
+            verbose = click.get_current_context().params["verbose"]
             if verbose:
                 print("Verbose mode enabled")
             else:
                 print("Normal mode")
 
         runner = CliRunner()
-        
+
         # Test short form
         result = runner.invoke(app.cli, ["test-cmd", "-v"])
         assert result.exit_code == 0
@@ -259,9 +261,10 @@ class TestCLIExtension:
         def echo():
             """Echo a message."""
             import click
+
             ctx = click.get_current_context()
-            message = ctx.params['message']
-            repeat = ctx.params['repeat']
+            message = ctx.params["message"]
+            repeat = ctx.params["repeat"]
             for _ in range(repeat):
                 print(message)
 
@@ -308,7 +311,7 @@ class TestCLIExtension:
 
         # Verify command is in pending
         assert "test-lazy" in app.cli_manager.pending_commands
-        
+
         # Invoke should trigger finalization
         runner = CliRunner()
         result = runner.invoke(app.cli, ["test-lazy"])
@@ -379,9 +382,10 @@ class TestCLIExtension:
         # Test run_cli with explicit args
         import sys
         from io import StringIO
+
         old_stdout = sys.stdout
         sys.stdout = captured_output = StringIO()
-        
+
         try:
             app.run_cli(["test-args"])
             output = captured_output.getvalue()
@@ -408,6 +412,7 @@ class TestCLIExtension:
 
         # Run the test
         import asyncio
+
         try:
             asyncio.run(test_in_loop())
         except Exception:
@@ -445,9 +450,10 @@ class TestCLIExtension:
         def test_options():
             """Test multiple option formats."""
             import click
+
             ctx = click.get_current_context()
-            verbose = ctx.params['verbose']
-            output_format = ctx.params['output_format']
+            verbose = ctx.params["verbose"]
+            output_format = ctx.params["output_format"]
             if verbose:
                 print(f"Output format: {output_format}")
             else:
@@ -486,7 +492,7 @@ class TestCLIExtension:
             print(f"{greeting}, {name}!")
 
         runner = CliRunner()
-        
+
         # Test with default
         result = runner.invoke(app.cli, ["greet-with-defaults", "Alice"])
         assert result.exit_code == 0
@@ -569,7 +575,7 @@ class TestCLIExtension:
         # Manually wrap the function to simulate a decorator
         def wrapper(*args, **kwargs):
             return original_func(*args, **kwargs)
-        
+
         wrapper.__wrapped__ = original_func
         wrapper.__name__ = "wrapped_greet"
 
@@ -594,6 +600,7 @@ class TestCLIExtension:
         def failing_exit():
             """Command that exits with code 1."""
             import sys
+
             sys.exit(1)
 
         runner = CliRunner()
@@ -610,6 +617,7 @@ class TestCLIExtension:
         def exit_zero():
             """Command that exits with 0."""
             import sys
+
             sys.exit(0)
 
         # Test that SystemExit(0) is handled properly
@@ -631,9 +639,10 @@ class TestCLIExtension:
         # Test that exceptions are handled
         import sys
         from io import StringIO
+
         old_stdout = sys.stdout
-        sys.stdout = captured_output = StringIO()
-        
+        sys.stdout = StringIO()
+
         try:
             app.run_cli(["error-cmd"])
         except SystemExit:
@@ -651,7 +660,8 @@ class TestCLIExtension:
         def list_option_cmd():
             """Command with list-format option."""
             import click
-            verbose = click.get_current_context().params.get('verbose', False)
+
+            verbose = click.get_current_context().params.get("verbose", False)
             print(f"Verbose: {verbose}")
 
         runner = CliRunner()
@@ -670,14 +680,15 @@ class TestCLIExtension:
             pass
 
         mock_manager = MockManager()
-        
+
         # This should not crash when calling main
         from whiskey_cli.extension import LazyClickGroup
+
         group = LazyClickGroup(mock_manager)
-        
+
         # Test main with help args (should not crash)
         try:
-            result = group.main(["--help"], standalone_mode=False)
+            group.main(["--help"], standalone_mode=False)
             # Should handle gracefully even without finalize_pending
         except SystemExit:
             pass  # Expected for help
@@ -689,8 +700,10 @@ class TestCLIExtension:
 
         # Register many services to test the truncation
         for i in range(15):
+
             class TestService:
                 pass
+
             TestService.__name__ = f"TestService{i}"
             app.container[TestService] = TestService()
 

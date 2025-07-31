@@ -10,20 +10,20 @@ Key Components:
     Decorators: @component, @singleton, @inject for component registration
     TypeAnalyzer: Smart type analysis for automatic injection decisions
     Scopes: Lifecycle management (singleton, transient, scoped)
-    
+
 Usage Example:
     >>> from whiskey.core import Container, component, inject, singleton
-    >>> 
+    >>>
     >>> # Register components
     >>> @singleton
     ... class Database:
     ...     def query(self, sql: str): ...
-    >>> 
+    >>>
     >>> @component
     ... class UserService:
     ...     def __init__(self, db: Database):
     ...         self.db = db  # Automatically injected!
-    >>> 
+    >>>
     >>> # Use injection in functions
     >>> @inject
     ... async def process_user(user_id: int, user_service: UserService):
@@ -70,6 +70,9 @@ from whiskey.core.types import Disposable, Initializable
 
 __all__ = [
     "CircularDependencyError",
+    "ComponentDescriptor",
+    # Registry
+    "ComponentRegistry",
     "ConfigurationError",
     # Container
     "Container",
@@ -88,9 +91,6 @@ __all__ = [
     "Scope",
     "ScopeError",
     "ScopeType",
-    "ComponentDescriptor",
-    # Registry  
-    "ComponentRegistry",
     "TypeAnalysisError",
     # Analysis
     "TypeAnalyzer",

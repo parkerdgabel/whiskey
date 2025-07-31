@@ -8,7 +8,7 @@ import pytest
 from whiskey import Container, Scope, Whiskey
 
 # Builder imports removed - using direct instantiation
-from whiskey.core.errors import ResolutionError
+from whiskey.core.errors import CircularDependencyError, ResolutionError
 from whiskey.core.types import Disposable, Initializable
 
 
@@ -138,15 +138,15 @@ class TestComponentRegistration:
         """Test that provider alias has been removed."""
         app = Whiskey()
         # Provider alias removed for cleaner API
-        assert not hasattr(app, 'provider')
+        assert not hasattr(app, "provider")
 
     def test_managed_decorator(self):
         """Test @app.managed decorator for transient scope."""
         app = Whiskey()
 
         # Managed alias removed - use @app.component instead
-        assert not hasattr(app, 'managed')
-        
+        assert not hasattr(app, "managed")
+
         @app.component
         class ManagedService:
             def __init__(self):
@@ -163,8 +163,8 @@ class TestComponentRegistration:
         app = Whiskey()
 
         # System alias removed - use @app.singleton instead
-        assert not hasattr(app, 'system')
-        
+        assert not hasattr(app, "system")
+
         @app.singleton
         class SystemService:
             def __init__(self):
@@ -467,15 +467,17 @@ class TestExtensions:
 
         def auth_extension(app: Whiskey, **kwargs):
             """Add authentication functionality."""
+
             # Add new decorator
             def require_auth(func):
                 def wrapper(*args, **kwargs):
                     # Check auth here
                     return func(*args, **kwargs)
+
                 return wrapper
-            
+
             app.add_decorator("require_auth", require_auth)
-            
+
             # Add new method
             app.authenticate = lambda user, password: user == "admin" and password == "secret"
 
@@ -483,33 +485,31 @@ class TestExtensions:
 
         # Test new functionality
         assert hasattr(app, "require_auth")
-        assert hasattr(app, "authenticate") 
+        assert hasattr(app, "authenticate")
         assert app.authenticate("admin", "secret")
         assert not app.authenticate("user", "wrong")
-    
+
     def test_extension_with_kwargs(self):
         """Test extension with configuration kwargs."""
         app = Whiskey()
-        
-        def configurable_extension(app: Whiskey, prefix: str = "default_", 
-                                   enable_logging: bool = False, **kwargs):
+
+        def configurable_extension(
+            app: Whiskey, prefix: str = "default_", enable_logging: bool = False, **kwargs
+        ):
             """Extension that accepts configuration."""
-            app.config = {
-                "prefix": prefix,
-                "enable_logging": enable_logging,
-                "extra": kwargs
-            }
-            
+            app.config = {"prefix": prefix, "enable_logging": enable_logging, "extra": kwargs}
+
             # Add method using config
             def get_prefixed(name: str) -> str:
                 return f"{prefix}{name}"
-            
+
             app.get_prefixed = get_prefixed
-        
+
         # Use extension with custom config
-        app.use(configurable_extension, prefix="custom_", enable_logging=True, 
-                custom_option="value")
-        
+        app.use(
+            configurable_extension, prefix="custom_", enable_logging=True, custom_option="value"
+        )
+
         # Test configuration was applied
         assert app.config["prefix"] == "custom_"
         assert app.config["enable_logging"] is True
@@ -542,7 +542,7 @@ class TestBuilderIntegration:
         app = Whiskey()
 
         # Builder pattern completely removed
-        assert not hasattr(Whiskey, 'builder')
+        assert not hasattr(Whiskey, "builder")
         # Use direct instantiation or Whiskey.create()
         app = Whiskey.create()
         assert isinstance(app, Whiskey)
@@ -711,7 +711,7 @@ class TestErrorHandling:
         app.transient(ServiceA)
         app.transient(ServiceB)
 
-        with pytest.raises(Exception):  # Would be CircularDependencyError
+        with pytest.raises(CircularDependencyError):
             app.resolve(ServiceA)
 
     async def test_startup_error_handling(self):

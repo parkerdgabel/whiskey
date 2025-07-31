@@ -13,7 +13,7 @@ from .types import JobMetadata, JobPriority, JobResult, JobStatus
 
 class Job:
     """Represent a job to be executed in the background.
-    
+
     A Job encapsulates a function call with its arguments and metadata,
     tracking execution state and supporting features like retries,
     timeouts, and job chaining.
@@ -69,7 +69,7 @@ class Job:
     @property
     def duration(self) -> float | None:
         """Return the job execution duration in seconds.
-        
+
         Returns:
             Duration in seconds if job has completed, None otherwise.
         """
@@ -80,7 +80,7 @@ class Job:
 
     def to_result(self) -> JobResult:
         """Convert the job to a JobResult object.
-        
+
         Returns:
             JobResult containing the current job state.
         """
@@ -156,7 +156,7 @@ class Job:
 
     def should_retry(self) -> bool:
         """Check if the job should be retried.
-        
+
         Returns:
             True if job failed and hasn't exceeded max retries, False otherwise.
         """

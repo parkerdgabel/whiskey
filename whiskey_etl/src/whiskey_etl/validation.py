@@ -43,22 +43,16 @@ class ValidationResult:
 
     def add_error(self, field: str, message: str, value: Any = None) -> None:
         """Add validation error."""
-        self.errors.append(ValidationError(
-            field=field,
-            message=message,
-            value=value,
-            severity=Severity.ERROR
-        ))
+        self.errors.append(
+            ValidationError(field=field, message=message, value=value, severity=Severity.ERROR)
+        )
         self.valid = False
 
     def add_warning(self, field: str, message: str, value: Any = None) -> None:
         """Add validation warning."""
-        self.warnings.append(ValidationError(
-            field=field,
-            message=message,
-            value=value,
-            severity=Severity.WARNING
-        ))
+        self.warnings.append(
+            ValidationError(field=field, message=message, value=value, severity=Severity.WARNING)
+        )
 
     def merge(self, other: ValidationResult) -> None:
         """Merge another validation result."""
@@ -89,7 +83,7 @@ class Validator(ABC):
 
     def __init__(self, field: str | None = None, message: str | None = None):
         """Initialize validator.
-        
+
         Args:
             field: Field to validate (None for record-level)
             message: Custom error message
@@ -100,11 +94,11 @@ class Validator(ABC):
     @abstractmethod
     async def validate(self, value: Any, record: dict[str, Any] | None = None) -> ValidationResult:
         """Validate a value.
-        
+
         Args:
             value: Value to validate
             record: Full record (for cross-field validation)
-            
+
         Returns:
             ValidationResult
         """
@@ -117,6 +111,7 @@ class Validator(ABC):
 
 # Built-in validators
 
+
 class RequiredValidator(Validator):
     """Validate field is present and not null."""
 
@@ -125,9 +120,7 @@ class RequiredValidator(Validator):
 
         if value is None or (isinstance(value, str) and not value.strip()):
             result.add_error(
-                self.field or "value",
-                self.get_error_message("Field is required"),
-                value
+                self.field or "value", self.get_error_message("Field is required"), value
             )
 
         return result
@@ -146,13 +139,13 @@ class TypeValidator(Validator):
         if value is not None and not isinstance(value, self.expected_type):
             type_name = (
                 self.expected_type.__name__
-                if hasattr(self.expected_type, '__name__')
+                if hasattr(self.expected_type, "__name__")
                 else str(self.expected_type)
             )
             result.add_error(
                 self.field or "value",
                 self.get_error_message(f"Expected type {type_name}, got {type(value).__name__}"),
-                value
+                value,
             )
 
         return result
@@ -161,12 +154,7 @@ class TypeValidator(Validator):
 class RangeValidator(Validator):
     """Validate numeric value is within range."""
 
-    def __init__(
-        self,
-        min_value: float | None = None,
-        max_value: float | None = None,
-        **kwargs
-    ):
+    def __init__(self, min_value: float | None = None, max_value: float | None = None, **kwargs):
         super().__init__(**kwargs)
         self.min_value = min_value
         self.max_value = max_value
@@ -184,21 +172,19 @@ class RangeValidator(Validator):
                 result.add_error(
                     self.field or "value",
                     self.get_error_message(f"Value must be >= {self.min_value}"),
-                    value
+                    value,
                 )
 
             if self.max_value is not None and num_value > self.max_value:
                 result.add_error(
                     self.field or "value",
                     self.get_error_message(f"Value must be <= {self.max_value}"),
-                    value
+                    value,
                 )
 
         except (ValueError, TypeError):
             result.add_error(
-                self.field or "value",
-                self.get_error_message("Value must be numeric"),
-                value
+                self.field or "value", self.get_error_message("Value must be numeric"), value
             )
 
         return result
@@ -207,12 +193,7 @@ class RangeValidator(Validator):
 class LengthValidator(Validator):
     """Validate string/collection length."""
 
-    def __init__(
-        self,
-        min_length: int | None = None,
-        max_length: int | None = None,
-        **kwargs
-    ):
+    def __init__(self, min_length: int | None = None, max_length: int | None = None, **kwargs):
         super().__init__(**kwargs)
         self.min_length = min_length
         self.max_length = max_length
@@ -230,21 +211,19 @@ class LengthValidator(Validator):
                 result.add_error(
                     self.field or "value",
                     self.get_error_message(f"Length must be >= {self.min_length}"),
-                    value
+                    value,
                 )
 
             if self.max_length is not None and length > self.max_length:
                 result.add_error(
                     self.field or "value",
                     self.get_error_message(f"Length must be <= {self.max_length}"),
-                    value
+                    value,
                 )
 
         except TypeError:
             result.add_error(
-                self.field or "value",
-                self.get_error_message("Value must have length"),
-                value
+                self.field or "value", self.get_error_message("Value must have length"), value
             )
 
         return result
@@ -267,7 +246,7 @@ class PatternValidator(Validator):
             result.add_error(
                 self.field or "value",
                 self.get_error_message("Value must be string for pattern matching"),
-                value
+                value,
             )
             return result
 
@@ -275,7 +254,7 @@ class PatternValidator(Validator):
             result.add_error(
                 self.field or "value",
                 self.get_error_message(f"Value does not match pattern {self.pattern.pattern}"),
-                value
+                value,
             )
 
         return result
@@ -295,7 +274,7 @@ class ChoiceValidator(Validator):
             result.add_error(
                 self.field or "value",
                 self.get_error_message(f"Value must be one of {sorted(self.choices)}"),
-                value
+                value,
             )
 
         return result
@@ -314,17 +293,13 @@ class EmailValidator(Validator):
 
         if not isinstance(value, str):
             result.add_error(
-                self.field or "value",
-                self.get_error_message("Email must be string"),
-                value
+                self.field or "value", self.get_error_message("Email must be string"), value
             )
             return result
 
         if not self.EMAIL_PATTERN.match(value):
             result.add_error(
-                self.field or "value",
-                self.get_error_message("Invalid email format"),
-                value
+                self.field or "value", self.get_error_message("Invalid email format"), value
             )
 
         return result
@@ -338,7 +313,7 @@ class DateValidator(Validator):
         date_format: str | None = None,
         min_date: datetime | None = None,
         max_date: datetime | None = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.date_format = date_format
@@ -360,7 +335,7 @@ class DateValidator(Validator):
                     result.add_error(
                         self.field or "value",
                         self.get_error_message(f"Invalid date format, expected {self.date_format}"),
-                        value
+                        value,
                     )
                     return result
             else:
@@ -373,17 +348,13 @@ class DateValidator(Validator):
                         continue
                 else:
                     result.add_error(
-                        self.field or "value",
-                        self.get_error_message("Invalid date format"),
-                        value
+                        self.field or "value", self.get_error_message("Invalid date format"), value
                     )
                     return result
 
         if not isinstance(value, datetime):
             result.add_error(
-                self.field or "value",
-                self.get_error_message("Value must be datetime"),
-                value
+                self.field or "value", self.get_error_message("Value must be datetime"), value
             )
             return result
 
@@ -392,14 +363,14 @@ class DateValidator(Validator):
             result.add_error(
                 self.field or "value",
                 self.get_error_message(f"Date must be >= {self.min_date}"),
-                value
+                value,
             )
 
         if self.max_date and value > self.max_date:
             result.add_error(
                 self.field or "value",
                 self.get_error_message(f"Date must be <= {self.max_date}"),
-                value
+                value,
             )
 
         return result
@@ -420,9 +391,7 @@ class UniqueValidator(Validator):
 
         if value in self.seen_values:
             result.add_error(
-                self.field or "value",
-                self.get_error_message(f"Duplicate value: {value}"),
-                value
+                self.field or "value", self.get_error_message(f"Duplicate value: {value}"), value
             )
         else:
             self.seen_values.add(value)
@@ -436,7 +405,7 @@ class CustomValidator(Validator):
     def __init__(
         self,
         validate_func: Callable[[Any, dict[str, Any] | None], bool | ValidationResult],
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.validate_func = validate_func
@@ -453,9 +422,7 @@ class CustomValidator(Validator):
             validation_result = ValidationResult(valid=result)
             if not result:
                 validation_result.add_error(
-                    self.field or "value",
-                    self.get_error_message("Custom validation failed"),
-                    value
+                    self.field or "value", self.get_error_message("Custom validation failed"), value
                 )
             return validation_result
 
@@ -499,10 +466,10 @@ class RecordValidator:
         field_validators: dict[str, Validator | list[Validator]] | None = None,
         record_validators: list[Validator] | None = None,
         mode: ValidationMode = ValidationMode.FAIL,
-        collect_stats: bool = False
+        collect_stats: bool = False,
     ):
         """Initialize record validator.
-        
+
         Args:
             field_validators: Validators per field
             record_validators: Validators for entire record
@@ -575,7 +542,7 @@ class RecordValidator:
                     "RecordValidator",
                     f"Validation failed: {errors_str}",
                     record=record,
-                    errors=result.errors
+                    errors=result.errors,
                 )
             return record
 
@@ -651,7 +618,7 @@ class ValidationBuilder:
         return RecordValidator(
             field_validators=dict(self.field_validators),
             record_validators=self.record_validators,
-            mode=self.mode
+            mode=self.mode,
         )
 
 
@@ -680,7 +647,7 @@ class FieldValidationBuilder:
         self,
         min_value: float | None = None,
         max_value: float | None = None,
-        message: str | None = None
+        message: str | None = None,
     ) -> FieldValidationBuilder:
         """Numeric range validation."""
         self.parent.field_validators[self.field].append(
@@ -692,7 +659,7 @@ class FieldValidationBuilder:
         self,
         min_length: int | None = None,
         max_length: int | None = None,
-        message: str | None = None
+        message: str | None = None,
     ) -> FieldValidationBuilder:
         """Length validation."""
         self.parent.field_validators[self.field].append(
@@ -726,7 +693,7 @@ class FieldValidationBuilder:
         date_format: str | None = None,
         min_date: datetime | None = None,
         max_date: datetime | None = None,
-        message: str | None = None
+        message: str | None = None,
     ) -> FieldValidationBuilder:
         """Date validation."""
         self.parent.field_validators[self.field].append(
@@ -759,20 +726,21 @@ class FieldValidationBuilder:
 
 # Helper functions for creating validation transforms
 
+
 def create_validation_transform(
     validators: dict[str, Validator | list[Validator]] | None = None,
     record_validators: list[Validator] | None = None,
     mode: ValidationMode = ValidationMode.FAIL,
-    collect_stats: bool = False
+    collect_stats: bool = False,
 ) -> Transform[dict[str, Any]]:
     """Create a validation transform function.
-    
+
     Args:
         validators: Field validators
         record_validators: Record-level validators
         mode: Validation mode
         collect_stats: Whether to collect statistics
-        
+
     Returns:
         Transform function
     """
@@ -782,7 +750,7 @@ def create_validation_transform(
 
 def validation_transform(mode: ValidationMode = ValidationMode.FAIL) -> ValidationBuilder:
     """Start building a validation transform.
-    
+
     Example:
         transform = validation_transform(ValidationMode.DROP) \\
             .field("email").required().email() \\

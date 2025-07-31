@@ -11,7 +11,7 @@ from typing import Any
 
 class JobStatus(Enum):
     """Represent the execution status of a job.
-    
+
     Tracks the lifecycle of a job from pending through
     completion or failure.
     """
@@ -26,7 +26,7 @@ class JobStatus(Enum):
 
 class JobPriority(Enum):
     """Define priority levels for job execution.
-    
+
     Higher numeric values indicate higher priority, with
     CRITICAL being the highest priority.
     """
@@ -40,7 +40,7 @@ class JobPriority(Enum):
 @dataclass
 class JobMetadata:
     """Store metadata for a job definition.
-    
+
     Contains all configuration needed to execute a job,
     including the function, queue assignment, retry policy,
     and other execution parameters.
@@ -60,7 +60,7 @@ class JobMetadata:
 @dataclass
 class ScheduledJobMetadata(JobMetadata):
     """Store metadata for scheduled job definitions.
-    
+
     Extends JobMetadata with scheduling-specific configuration,
     supporting both cron expressions and interval-based scheduling.
     """
@@ -73,7 +73,7 @@ class ScheduledJobMetadata(JobMetadata):
 
     def __post_init__(self):
         """Validate that scheduling configuration is properly specified.
-        
+
         Raises:
             ValueError: If scheduling configuration is invalid.
         """
@@ -86,7 +86,7 @@ class ScheduledJobMetadata(JobMetadata):
 @dataclass
 class JobResult:
     """Store the result of a job execution.
-    
+
     Contains execution status, timing information, results or errors,
     and retry count for a completed job execution.
     """
@@ -109,7 +109,7 @@ class JobResult:
     @property
     def is_success(self) -> bool:
         """Check if the job completed successfully.
-        
+
         Returns:
             True if status is COMPLETED, False otherwise.
         """
@@ -118,7 +118,7 @@ class JobResult:
     @property
     def is_failure(self) -> bool:
         """Check if the job failed or was cancelled.
-        
+
         Returns:
             True if status is FAILED or CANCELLED, False otherwise.
         """

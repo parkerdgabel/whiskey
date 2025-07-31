@@ -199,41 +199,45 @@ class TestComponentDecorators:
         # Should be registered with scope
         # Note: trying to resolve scoped service without active scope should fail
         from whiskey.core.errors import ScopeError
+
         with pytest.raises(ScopeError):
             app.resolve(RequestScopedService)
 
     def test_provide_alias(self):
         """Test that provide is an alias for component."""
         assert provide is component
-        
+
     def test_factory_with_class_key(self):
         """Test factory decorator with class as key."""
+
         class DatabaseService:
             pass
-            
+
         # Test factory with class key (positional argument)
         @factory(DatabaseService)
         def create_db():
             return DatabaseService()
-            
+
         app = get_app()
         assert DatabaseService in app.container
         instance = app.container.resolve_sync(DatabaseService)
         assert isinstance(instance, DatabaseService)
-        
+
     def test_factory_error_without_key(self):
         """Test factory decorator raises helpful error without key or return type hint."""
         with pytest.raises(ValueError, match="Cannot determine factory key"):
+
             @factory
             def create_something():
                 return "something"
-                
+
     def test_factory_with_key_param(self):
         """Test factory decorator with key parameter."""
+
         @factory(key="my_factory")
         def create_service():
             return "service"
-            
+
         app = get_app()
         assert "my_factory" in app.container
 

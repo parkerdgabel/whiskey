@@ -1,9 +1,9 @@
 """Example of using DuckDB with Whiskey SQL for analytics."""
 
 import asyncio
+import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import random
 
 from whiskey import Whiskey
 from whiskey_sql import SQL, sql_extension
@@ -12,6 +12,7 @@ from whiskey_sql import SQL, sql_extension
 @dataclass
 class SalesData:
     """Sales data model."""
+
     id: int
     product_name: str
     category: str
@@ -24,6 +25,7 @@ class SalesData:
 @dataclass
 class ProductAnalytics:
     """Product analytics results."""
+
     product_name: str
     total_quantity: int
     total_revenue: float
@@ -35,20 +37,23 @@ async def main():
     """Demonstrate DuckDB analytics capabilities."""
     # Create application
     app = Whiskey()
-    
+
     # Add SQL support with DuckDB
-    app.use(sql_extension, 
+    app.use(
+        sql_extension,
         dialect="duckdb",
         url=":memory:",  # In-memory for demo
     )
-    
+
     async with app.lifespan:
         # Get database
         from whiskey_sql import Database
+
         db = await app.container.resolve(Database)
-        
+
         # Create sales table
-        await db.execute(SQL("""
+        await db.execute(
+            SQL("""
             CREATE TABLE sales (
                 id INTEGER PRIMARY KEY,
                 product_name VARCHAR NOT NULL,
@@ -58,10 +63,11 @@ async def main():
                 sale_date DATE NOT NULL,
                 region VARCHAR NOT NULL
             )
-        """))
-        
+        """)
+        )
+
         print("📊 DuckDB Analytics Example\n")
-        
+
         # Generate sample data
         print("1️⃣ Generating sample sales data...")
         products = [
@@ -75,40 +81,44 @@ async def main():
             ("Pen", "Stationery", 2.00),
         ]
         regions = ["North", "South", "East", "West"]
-        
+
         # Insert sample data
         sales_data = []
         for i in range(1000):
             product = random.choice(products)
-            sales_data.append({
-                "id": i + 1,
-                "product_name": product[0],
-                "category": product[1],
-                "quantity": random.randint(1, 10),
-                "unit_price": product[2] * random.uniform(0.9, 1.1),  # ±10% price variation
-                "sale_date": (datetime.now() - timedelta(days=random.randint(0, 365))).date(),
-                "region": random.choice(regions),
-            })
-        
+            sales_data.append(
+                {
+                    "id": i + 1,
+                    "product_name": product[0],
+                    "category": product[1],
+                    "quantity": random.randint(1, 10),
+                    "unit_price": product[2] * random.uniform(0.9, 1.1),  # ±10% price variation
+                    "sale_date": (datetime.now() - timedelta(days=random.randint(0, 365))).date(),
+                    "region": random.choice(regions),
+                }
+            )
+
         await db.execute_many(
             SQL("""
                 INSERT INTO sales (id, product_name, category, quantity, unit_price, sale_date, region)
                 VALUES (:id, :product_name, :category, :quantity, :unit_price, :sale_date, :region)
             """),
-            sales_data
+            sales_data,
         )
         print(f"✅ Inserted {len(sales_data)} sales records\n")
-        
+
         # 2. Basic Analytics
         print("2️⃣ Basic Analytics:")
-        
+
         # Total sales
-        total_revenue = await db.fetch_val(SQL("""
+        total_revenue = await db.fetch_val(
+            SQL("""
             SELECT SUM(quantity * unit_price) as total_revenue
             FROM sales
-        """))
+        """)
+        )
         print(f"   Total Revenue: ${total_revenue:,.2f}")
-        
+
         # Top products by revenue
         print("\n   Top 5 Products by Revenue:")
         top_products = await db.fetch_all(
@@ -124,15 +134,16 @@ async def main():
                 ORDER BY total_revenue DESC
                 LIMIT 5
             """),
-            result_type=ProductAnalytics
+            result_type=ProductAnalytics,
         )
-        
+
         for p in top_products:
             print(f"   - {p.product_name}: ${p.total_revenue:,.2f} ({p.sale_count} sales)")
-        
+
         # 3. Time Series Analysis
         print("\n3️⃣ Monthly Sales Trend:")
-        monthly_sales = await db.fetch_all(SQL("""
+        monthly_sales = await db.fetch_all(
+            SQL("""
             SELECT 
                 DATE_TRUNC('month', sale_date) as month,
                 SUM(quantity * unit_price) as revenue,
@@ -141,15 +152,17 @@ async def main():
             GROUP BY DATE_TRUNC('month', sale_date)
             ORDER BY month DESC
             LIMIT 6
-        """))
-        
+        """)
+        )
+
         for row in monthly_sales:
             month = row["month"].strftime("%B %Y")
             print(f"   {month}: ${row['revenue']:,.2f} ({row['transactions']} transactions)")
-        
+
         # 4. Window Functions
         print("\n4️⃣ Category Rankings (Window Functions):")
-        category_rankings = await db.fetch_all(SQL("""
+        category_rankings = await db.fetch_all(
+            SQL("""
             WITH category_sales AS (
                 SELECT 
                     category,
@@ -169,19 +182,23 @@ async def main():
             FROM category_sales
             WHERE rank_in_category <= 2
             ORDER BY category, rank_in_category
-        """))
-        
+        """)
+        )
+
         current_category = None
         for row in category_rankings:
             if row["category"] != current_category:
                 current_category = row["category"]
                 print(f"\n   {current_category}:")
-            print(f"     #{row['rank_in_category']} {row['product_name']}: "
-                  f"${row['product_revenue']:,.2f} ({row['pct_of_category']}%)")
-        
+            print(
+                f"     #{row['rank_in_category']} {row['product_name']}: "
+                f"${row['product_revenue']:,.2f} ({row['pct_of_category']}%)"
+            )
+
         # 5. Regional Analysis
         print("\n5️⃣ Regional Performance:")
-        regional_stats = await db.fetch_all(SQL("""
+        regional_stats = await db.fetch_all(
+            SQL("""
             SELECT 
                 region,
                 COUNT(DISTINCT product_name) as products_sold,
@@ -191,15 +208,18 @@ async def main():
             FROM sales
             GROUP BY region
             ORDER BY revenue DESC
-        """))
-        
+        """)
+        )
+
         for row in regional_stats:
-            print(f"   {row['region']}: ${row['revenue']:,.2f} "
-                  f"({row['units_sold']} units, {row['products_sold']} products)")
-        
+            print(
+                f"   {row['region']}: ${row['revenue']:,.2f} "
+                f"({row['units_sold']} units, {row['products_sold']} products)"
+            )
+
         # 6. Export to Parquet
         print("\n6️⃣ Exporting Data:")
-        
+
         # Export aggregated data to Parquet
         await db.export_parquet(
             SQL("""
@@ -212,20 +232,20 @@ async def main():
                 GROUP BY week, category
                 ORDER BY week, category
             """),
-            "weekly_sales.parquet"
+            "weekly_sales.parquet",
         )
         print("   ✅ Exported weekly sales to weekly_sales.parquet")
-        
+
         # Export to CSV
         await db.export_csv(
-            SQL("SELECT * FROM sales ORDER BY sale_date DESC LIMIT 100"),
-            "recent_sales.csv"
+            SQL("SELECT * FROM sales ORDER BY sale_date DESC LIMIT 100"), "recent_sales.csv"
         )
         print("   ✅ Exported recent sales to recent_sales.csv")
-        
+
         # 7. Complex Analytics Query
         print("\n7️⃣ Advanced Analytics - Moving Averages:")
-        moving_avg = await db.fetch_all(SQL("""
+        moving_avg = await db.fetch_all(
+            SQL("""
             WITH daily_sales AS (
                 SELECT 
                     sale_date,
@@ -244,17 +264,20 @@ async def main():
             FROM daily_sales
             ORDER BY sale_date DESC
             LIMIT 10
-        """))
-        
+        """)
+        )
+
         print("   Date         Revenue    7-Day Avg   Change")
         print("   " + "-" * 45)
         for row in moving_avg:
             date_str = row["sale_date"].strftime("%Y-%m-%d")
             change = row["daily_change"] or 0
             change_str = f"+${change:,.2f}" if change >= 0 else f"-${abs(change):,.2f}"
-            print(f"   {date_str}  ${row['daily_revenue']:>8,.2f}  "
-                  f"${row['moving_avg_7d']:>8,.2f}  {change_str:>10}")
-        
+            print(
+                f"   {date_str}  ${row['daily_revenue']:>8,.2f}  "
+                f"${row['moving_avg_7d']:>8,.2f}  {change_str:>10}"
+            )
+
         print("\n✨ DuckDB provides powerful analytics capabilities with SQL!")
         print("   - Window functions for rankings and moving averages")
         print("   - Efficient columnar storage for analytical queries")

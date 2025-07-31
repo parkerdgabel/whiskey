@@ -1,7 +1,7 @@
 """Performance monitoring and optimization for dependency injection.
 
 This module provides comprehensive performance monitoring and analysis tools
-for Whiskey's dependency injection system. It tracks resolution times, 
+for Whiskey's dependency injection system. It tracks resolution times,
 identifies bottlenecks, detects resolution patterns, and provides actionable
 insights for optimization.
 
@@ -32,20 +32,20 @@ Features:
 Example:
     >>> from whiskey.core.performance import PerformanceMonitor
     >>> from whiskey import Container
-    >>> 
+    >>>
     >>> container = Container()
     >>> # ... register components ...
-    >>> 
+    >>>
     >>> # Monitor performance
     >>> with PerformanceMonitor() as monitor:
     ...     for _ in range(100):
     ...         component = await container.resolve(UserService)
     ...         await component.process()
-    >>> 
+    >>>
     >>> # Analyze results
     >>> print(monitor.generate_report())
     >>> # Shows resolution times, cache hits, hot paths, etc.
-    >>> 
+    >>>
     >>> # Get specific metrics
     >>> metrics = monitor.metrics
     >>> print(f"Cache hit rate: {metrics.cache_hit_rate:.1%}")
@@ -223,7 +223,9 @@ class PerformanceMetrics:
         # Error rate recommendations
         if self.resolution_errors > 0:
             error_rate = (self.resolution_errors / self.resolution_count) * 100
-            recommendations.append(f"• {error_rate:.1f}% error rate - review component registrations")
+            recommendations.append(
+                f"• {error_rate:.1f}% error rate - review component registrations"
+            )
 
         if len(recommendations) == 1:  # Only the header
             recommendations.append("• Performance looks good!")

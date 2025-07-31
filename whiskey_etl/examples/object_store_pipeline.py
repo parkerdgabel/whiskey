@@ -17,6 +17,7 @@ async def main():
     @app.pipeline("s3_data_processing")
     class S3ProcessingPipeline:
         """Process JSON files from S3 and write results back."""
+
         source = "s3"
         transforms = ["validate_record", "enrich_data", "anonymize_pii"]
         sink = "s3"
@@ -101,6 +102,7 @@ async def main():
     @app.pipeline("cloud_migration")
     class CloudMigrationPipeline:
         """Migrate data from Azure Blob to GCS."""
+
         source = "azure_blob"
         transforms = ["convert_format", "add_metadata"]
         sink = "gcs"
@@ -110,7 +112,7 @@ async def main():
             "bucket": "source-container",  # Azure container
             "prefix": "data/exports/",
             "suffix": ".csv",
-            "processor": csv_processor,
+            "processor": "csv_processor",  # Placeholder - define your csv_processor
         }
 
         sink_config = {
@@ -153,6 +155,7 @@ async def main():
     @app.pipeline("stream_to_s3")
     class StreamToS3Pipeline:
         """Stream data from API to S3 with time-based partitioning."""
+
         source = "api_stream"  # Custom streaming source
         transforms = ["parse_event", "aggregate_metrics"]
         sink = "s3"
@@ -168,6 +171,7 @@ async def main():
     @app.pipeline("data_lake_ingestion")
     class DataLakeIngestionPipeline:
         """Ingest various file formats into data lake."""
+
         source = "s3"
         transforms = ["detect_schema", "standardize_fields", "add_lineage"]
         sink = "s3"
@@ -235,6 +239,7 @@ async def main():
     @app.pipeline("cross_region_replication")
     class CrossRegionReplicationPipeline:
         """Replicate data across regions with filtering."""
+
         source = "s3"
         transforms = ["filter_by_region", "compress_large_fields"]
         sink = "s3"
@@ -268,7 +273,7 @@ async def main():
     async def filter_by_region(record: dict) -> dict | None:
         """Filter records based on compliance rules."""
         # Example: GDPR compliance
-        if record.get("region") == "EU" and record.get("consent") != True:
+        if record.get("region") == "EU" and not record.get("consent"):
             return None  # Don't replicate without consent
 
         return record

@@ -1,23 +1,24 @@
 """Example demonstrating dependency injection at all framework boundaries."""
 
 import asyncio
+
 from whiskey import Whiskey, inject
 
 
 # Sample services
 class Database:
     """Mock database service."""
-    
+
     def __init__(self):
         self.connected = False
         self.queries = []
-        
+
     async def connect(self):
         print("📦 Database: Connecting...")
         await asyncio.sleep(0.1)
         self.connected = True
         print("✅ Database: Connected")
-        
+
     async def query(self, sql: str):
         self.queries.append(sql)
         return f"Result of: {sql}"
@@ -25,10 +26,10 @@ class Database:
 
 class EmailService:
     """Mock email service."""
-    
+
     def __init__(self):
         self.sent_emails = []
-        
+
     async def send(self, to: str, subject: str, body: str):
         email = {"to": to, "subject": subject, "body": body}
         self.sent_emails.append(email)
@@ -37,13 +38,13 @@ class EmailService:
 
 class MetricsService:
     """Mock metrics collection service."""
-    
+
     def __init__(self):
         self.metrics = {"events": 0, "tasks": 0, "requests": 0}
-        
+
     def increment(self, metric: str):
         self.metrics[metric] = self.metrics.get(metric, 0) + 1
-        
+
     def report(self):
         print(f"📊 Metrics: {self.metrics}")
 
@@ -53,7 +54,7 @@ app = Whiskey()
 
 # Register services as singletons so they share state
 app.container.register(Database, scope="singleton")
-app.container.register(EmailService, scope="singleton") 
+app.container.register(EmailService, scope="singleton")
 app.container.register(MetricsService, scope="singleton")
 
 
@@ -65,11 +66,11 @@ async def main(db: Database, metrics: MetricsService):
     print("\n🚀 Main function (with DI)")
     await db.connect()
     metrics.increment("requests")
-    
+
     # Emit some events
     await app.emit("user.created", {"id": 1, "email": "user@example.com"})
     await asyncio.sleep(0.5)  # Let background tasks run
-    
+
     metrics.report()
 
 
@@ -78,12 +79,8 @@ async def main(db: Database, metrics: MetricsService):
 @inject
 async def handle_user_created(data: dict, email: EmailService, metrics: MetricsService):
     """Event handler with dependency injection."""
-    print(f"\n📬 Event handler: user.created")
-    await email.send(
-        to=data["email"],
-        subject="Welcome!",
-        body="Thanks for signing up!"
-    )
+    print("\n📬 Event handler: user.created")
+    await email.send(to=data["email"], subject="Welcome!", body="Thanks for signing up!")
     metrics.increment("events")
 
 
@@ -100,7 +97,7 @@ async def log_user_events(data: dict, db: Database):
 async def periodic_cleanup(db: Database, metrics: MetricsService):
     """Background task with dependency injection."""
     for i in range(3):
-        print(f"\n🧹 Background task: Cleanup run {i+1}")
+        print(f"\n🧹 Background task: Cleanup run {i + 1}")
         await db.query("DELETE FROM temp_data WHERE expired = true")
         metrics.increment("tasks")
         await asyncio.sleep(0.2)
@@ -116,7 +113,7 @@ async def initialize_services(db: Database):
 
 
 @app.on_ready
-@inject  
+@inject
 async def log_ready(metrics: MetricsService):
     """Ready hook with dependency injection."""
     print("\n✨ Ready hook: Application is ready!")
@@ -149,8 +146,8 @@ async def alt_main(app: Whiskey):
     # Manual resolution needed
     db = await app.container.resolve(Database)
     await db.connect()
-    
-    
+
+
 # Function that doesn't use @inject
 async def regular_function(db: Database, email: EmailService):
     """Regular function - no automatic injection."""
@@ -163,12 +160,12 @@ if __name__ == "__main__":
     print("=" * 50)
     print("Whiskey DI Boundaries Example")
     print("=" * 50)
-    
+
     # Run with decorated main
     app.run()
-    
+
     # Could also run with explicit main
     # app.run(alt_main)
-    
+
     # Or with a lambda
     # app.run(lambda app: print("Lambda main!"))

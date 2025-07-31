@@ -94,6 +94,7 @@ class TestContainerBasics:
     def container(self):
         """Create a test container with compatibility methods."""
         from whiskey.core.testing import add_test_compatibility_methods
+
         container = Container()
         add_test_compatibility_methods(container)
         return container
@@ -114,11 +115,11 @@ class TestContainerBasics:
         # Check contains
         assert SimpleService in container
         assert DependentService not in container
-        
+
         # Check contains with type key
         container[str] = "test"
         assert str in container
-        
+
         # Check contains with unregistered string key
         assert "nonexistent" not in container
 
@@ -164,6 +165,7 @@ class TestRegistration:
     def container(self):
         """Create a test container with compatibility methods."""
         from whiskey.core.testing import add_test_compatibility_methods
+
         container = Container()
         add_test_compatibility_methods(container)
         return container
@@ -287,6 +289,7 @@ class TestResolution:
     def container(self):
         """Create a test container with compatibility methods."""
         from whiskey.core.testing import add_test_compatibility_methods
+
         container = Container()
         add_test_compatibility_methods(container)
         return container
@@ -392,6 +395,7 @@ class TestScopes:
     def container(self):
         """Create a test container with compatibility methods."""
         from whiskey.core.testing import add_test_compatibility_methods
+
         container = Container()
         add_test_compatibility_methods(container)
         return container
@@ -423,7 +427,7 @@ class TestScopes:
         """Test using scope as context manager."""
         container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name="request")
 
-        with container.scope("request") as scope:
+        with container.scope("request"):
             # Should be able to resolve in scope
             instance = container.resolve_sync(SimpleService)
             assert instance is not None
@@ -436,7 +440,7 @@ class TestScopes:
         """Test using scope as async context manager."""
         container.register(SimpleService, SimpleService, scope=Scope.SCOPED, scope_name="session")
 
-        async with container.scope("session") as scope:
+        async with container.scope("session"):
             # Should be able to resolve in scope
             instance = await container.resolve(SimpleService)
             assert instance is not None
@@ -452,6 +456,7 @@ class TestLifecycle:
     def container(self):
         """Create a test container with compatibility methods."""
         from whiskey.core.testing import add_test_compatibility_methods
+
         container = Container()
         add_test_compatibility_methods(container)
         return container
@@ -552,6 +557,7 @@ class TestCallMethods:
     def container(self):
         """Create a test container with compatibility methods."""
         from whiskey.core.testing import add_test_compatibility_methods
+
         container = Container()
         add_test_compatibility_methods(container)
         return container
@@ -669,6 +675,7 @@ class TestEdgeCases:
     def container(self):
         """Create a test container with compatibility methods."""
         from whiskey.core.testing import add_test_compatibility_methods
+
         container = Container()
         add_test_compatibility_methods(container)
         return container
@@ -697,13 +704,13 @@ class TestEdgeCases:
         """Test error on invalid dict key."""
         with pytest.raises(ValueError, match="Invalid key type"):
             container[123] = "invalid"
-            
-    @pytest.mark.unit 
+
+    @pytest.mark.unit
     def test_invalid_tuple_key_length(self, container):
         """Test tuple key with wrong length raises error."""
         with pytest.raises(ValueError, match="Tuple key must have exactly 2 elements"):
             container[("type", "name", "extra")] = "value"
-            
+
     @pytest.mark.unit
     def test_invalid_tuple_key_types(self, container):
         """Test tuple key with wrong types raises error."""
@@ -721,18 +728,18 @@ class TestEdgeCases:
         """Test deleting unregistered key."""
         with pytest.raises(KeyError):
             del container[SimpleService]
-            
+
     @pytest.mark.unit
     def test_del_service_clears_scope_caches(self, container):
         """Test deleting service clears scope caches."""
         # Register a service
         container.register("test_key", lambda: "value")
-        
+
         # Populate scoped cache
         container._scoped_caches["test_scope"] = {"test_key": "cached"}
-        
+
         # Delete the service
         del container["test_key"]
-        
+
         # Should be removed from scope cache
         assert "test_key" not in container._scoped_caches.get("test_scope", {})

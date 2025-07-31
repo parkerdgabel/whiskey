@@ -215,7 +215,7 @@ class JobManager:
 
         Returns:
             Created Job instance.
-            
+
         Raises:
             ValueError: If job_name is not registered.
         """
@@ -307,7 +307,7 @@ class JobManager:
 
     def list_scheduled_jobs(self) -> list[dict[str, Any]]:
         """Return information about all scheduled jobs.
-        
+
         Returns:
             List of dictionaries containing scheduled job information.
         """
@@ -351,7 +351,7 @@ class JobManager:
 
 class JobChainBuilder:
     """Build chains of jobs for sequential execution.
-    
+
     The JobChainBuilder provides a fluent interface for creating
     sequences of jobs where each job executes after the previous
     one completes successfully.

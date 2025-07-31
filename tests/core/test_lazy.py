@@ -330,7 +330,9 @@ class TestLazyEdgeCases:
 
         lazy = Lazy(FailingService, container=container)
 
-        with pytest.raises(ResolutionError, match="Failed to instantiate FailingService: Initialization failed"):
+        with pytest.raises(
+            ResolutionError, match="Failed to instantiate FailingService: Initialization failed"
+        ):
             _ = lazy.value
 
         # Should not be marked as resolved

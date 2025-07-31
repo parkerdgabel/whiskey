@@ -30,18 +30,18 @@ Custom Scopes:
 Example:
     >>> from whiskey.core.scopes import Scope, ScopeManager
     >>> from whiskey import Container
-    >>> 
+    >>>
     >>> # Built-in scope usage
     >>> container = Container()
     >>> container.scoped(RequestContext, scope_name='request')
-    >>> 
+    >>>
     >>> # Activate scope
     >>> with container.scope('request') as scope:
     ...     ctx1 = await container.resolve(RequestContext)
     ...     ctx2 = await container.resolve(RequestContext)
     ...     assert ctx1 is ctx2  # Same instance within scope
     >>> # ctx1 and ctx2 are disposed here
-    >>> 
+    >>>
     >>> # Custom scope implementation
     >>> class TenantScope(Scope):
     ...     def __init__(self, tenant_id: str):
@@ -170,7 +170,9 @@ class ContextVarScope(Scope):
 
     def __init__(self, name: str):
         super().__init__(name)
-        self._context_var: ContextVar[dict[type, Any] | None] = ContextVar(f"scope_{name}", default=None)
+        self._context_var: ContextVar[dict[type, Any] | None] = ContextVar(
+            f"scope_{name}", default=None
+        )
 
     def get(self, component_type: type[T]) -> T | None:
         """Get from context."""

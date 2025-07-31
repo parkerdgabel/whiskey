@@ -6,7 +6,7 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 from .validation import ValidationError, ValidationResult
 
@@ -44,23 +44,27 @@ class ValidationReport:
 
                 # Store sample errors (up to 10)
                 if len(self.sample_errors) < 10:
-                    self.sample_errors.append({
-                        "record": record,
-                        "error": str(error),
-                        "field": error.field,
-                        "value": error.value,
-                    })
+                    self.sample_errors.append(
+                        {
+                            "record": record,
+                            "error": str(error),
+                            "field": error.field,
+                            "value": error.value,
+                        }
+                    )
 
         if result.warnings:
             self.warnings_count += len(result.warnings)
 
     def add_quarantined_record(self, record: dict[str, Any], errors: list[ValidationError]) -> None:
         """Add a quarantined record."""
-        self.quarantined_records.append({
-            "record": record,
-            "errors": [str(e) for e in errors],
-            "timestamp": datetime.now().isoformat(),
-        })
+        self.quarantined_records.append(
+            {
+                "record": record,
+                "errors": [str(e) for e in errors],
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
     def finalize(self) -> None:
         """Finalize the report."""
@@ -81,23 +85,14 @@ class ValidationReport:
             "valid_records": self.valid_records,
             "invalid_records": self.invalid_records,
             "validation_rate": (
-                self.valid_records / self.total_records * 100
-                if self.total_records > 0 else 0
+                self.valid_records / self.total_records * 100 if self.total_records > 0 else 0
             ),
             "warnings_count": self.warnings_count,
             "top_field_errors": dict(
-                sorted(
-                    self.errors_by_field.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:5]
+                sorted(self.errors_by_field.items(), key=lambda x: x[1], reverse=True)[:5]
             ),
             "top_error_types": dict(
-                sorted(
-                    self.errors_by_type.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:5]
+                sorted(self.errors_by_type.items(), key=lambda x: x[1], reverse=True)[:5]
             ),
             "sample_errors": self.sample_errors[:5],
             "quarantined_count": len(self.quarantined_records),
@@ -129,48 +124,48 @@ class ValidationReport:
         </head>
         <body>
             <h1>Validation Report: {self.pipeline_name}</h1>
-            
+
             <div class="summary">
                 <h2>Summary</h2>
                 <div class="metric">
-                    <strong>Total Records:</strong> {summary['total_records']}
+                    <strong>Total Records:</strong> {summary["total_records"]}
                 </div>
                 <div class="metric">
-                    <strong>Valid:</strong> <span class="success">{summary['valid_records']}</span>
+                    <strong>Valid:</strong> <span class="success">{summary["valid_records"]}</span>
                 </div>
                 <div class="metric">
-                    <strong>Invalid:</strong> <span class="error">{summary['invalid_records']}</span>
+                    <strong>Invalid:</strong> <span class="error">{summary["invalid_records"]}</span>
                 </div>
                 <div class="metric">
-                    <strong>Validation Rate:</strong> {summary['validation_rate']:.1f}%
+                    <strong>Validation Rate:</strong> {summary["validation_rate"]:.1f}%
                 </div>
                 <div class="metric">
-                    <strong>Warnings:</strong> <span class="warning">{summary['warnings_count']}</span>
+                    <strong>Warnings:</strong> <span class="warning">{summary["warnings_count"]}</span>
                 </div>
             </div>
-            
+
             <h2>Top Field Errors</h2>
             <table>
                 <tr><th>Field</th><th>Error Count</th></tr>
         """
 
-        for field, count in summary['top_field_errors'].items():
+        for field, count in summary["top_field_errors"].items():
             html += f"<tr><td>{field}</td><td>{count}</td></tr>"
 
         html += """
             </table>
-            
+
             <h2>Sample Errors</h2>
             <table>
                 <tr><th>Field</th><th>Error</th><th>Value</th></tr>
         """
 
-        for error in summary['sample_errors']:
+        for error in summary["sample_errors"]:
             html += f"""
                 <tr>
-                    <td>{error['field']}</td>
-                    <td>{error['error']}</td>
-                    <td>{error.get('value', 'N/A')}</td>
+                    <td>{error["field"]}</td>
+                    <td>{error["error"]}</td>
+                    <td>{error.get("value", "N/A")}</td>
                 </tr>
             """
 
@@ -192,10 +187,7 @@ class ValidationReporter:
 
     def start_report(self, pipeline_name: str) -> ValidationReport:
         """Start a new validation report."""
-        report = ValidationReport(
-            pipeline_name=pipeline_name,
-            start_time=datetime.now()
-        )
+        report = ValidationReport(pipeline_name=pipeline_name, start_time=datetime.now())
         self.active_reports[pipeline_name] = report
         return report
 
@@ -215,12 +207,12 @@ class ValidationReporter:
         self,
         pipeline_name: str | None = None,
         start_date: datetime | None = None,
-        end_date: datetime | None = None
+        end_date: datetime | None = None,
     ) -> list[ValidationReport]:
         """Get historical reports."""
         reports = []
 
-        for key, report in self.reports.items():
+        for _key, report in self.reports.items():
             # Filter by pipeline name
             if pipeline_name and report.pipeline_name != pipeline_name:
                 continue
@@ -236,9 +228,7 @@ class ValidationReporter:
         return sorted(reports, key=lambda r: r.start_time, reverse=True)
 
     def get_aggregate_stats(
-        self,
-        pipeline_name: str | None = None,
-        last_n_runs: int | None = None
+        self, pipeline_name: str | None = None, last_n_runs: int | None = None
     ) -> dict[str, Any]:
         """Get aggregate statistics across multiple runs."""
         reports = self.get_reports(pipeline_name)
@@ -268,8 +258,8 @@ class ValidationReporter:
                 total_valid / total_records * 100 if total_records > 0 else 0
             ),
             "avg_validation_rate": (
-                sum(r.valid_records / r.total_records * 100
-                    for r in reports if r.total_records > 0) / len(reports)
+                sum(r.valid_records / r.total_records * 100 for r in reports if r.total_records > 0)
+                / len(reports)
             ),
             "top_field_errors": dict(
                 sorted(field_errors.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -289,24 +279,24 @@ class ValidationQuarantine:
         record: dict[str, Any],
         errors: list[ValidationError],
         pipeline: str,
-        timestamp: datetime | None = None
+        timestamp: datetime | None = None,
     ) -> None:
         """Add record to quarantine."""
         if len(self.quarantine) >= self.max_size:
             # Remove oldest entries
-            self.quarantine = self.quarantine[-(self.max_size - 1):]
+            self.quarantine = self.quarantine[-(self.max_size - 1) :]
 
-        self.quarantine.append({
-            "record": record,
-            "errors": [str(e) for e in errors],
-            "pipeline": pipeline,
-            "timestamp": (timestamp or datetime.now()).isoformat(),
-        })
+        self.quarantine.append(
+            {
+                "record": record,
+                "errors": [str(e) for e in errors],
+                "pipeline": pipeline,
+                "timestamp": (timestamp or datetime.now()).isoformat(),
+            }
+        )
 
     def get_records(
-        self,
-        pipeline: str | None = None,
-        limit: int | None = None
+        self, pipeline: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:
         """Get quarantined records."""
         records = self.quarantine
@@ -331,9 +321,7 @@ class ValidationQuarantine:
             return count
 
     def reprocess(
-        self,
-        pipeline: str | None = None,
-        processor: Callable[[dict[str, Any]], Any] | None = None
+        self, pipeline: str | None = None, processor: Callable[[dict[str, Any]], Any] | None = None
     ) -> list[dict[str, Any]]:
         """Get records for reprocessing."""
         records = self.get_records(pipeline)

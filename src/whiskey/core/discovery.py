@@ -33,20 +33,20 @@ Features:
 Example:
     >>> from whiskey import Whiskey
     >>> from whiskey.core.discovery import discover_components
-    >>> 
+    >>>
     >>> app = Whiskey()
-    >>> 
+    >>>
     >>> # Discover by decorator
     >>> components = discover_components(
     ...     'myapp.components',
     ...     predicate=lambda obj: hasattr(obj, '_whiskey_component'),
     ...     recursive=True
     ... )
-    >>> 
+    >>>
     >>> # Auto-register discovered components
     >>> for component in components:
     ...     app.container.register(component.cls, scope=component.scope)
-    >>> 
+    >>>
     >>> # Using application's discover method
     >>> app.discover(
     ...     'myapp',
@@ -54,15 +54,15 @@ Example:
     ...     auto_register=True,
     ...     exclude=['tests', '__pycache__']
     ... )
-    >>> 
+    >>>
     >>> # Custom discovery predicate
     >>> def is_repository(cls):
     ...     return (
-    ...         inspect.isclass(cls) and 
+    ...         inspect.isclass(cls) and
     ...         cls.__name__.endswith('Repository') and
     ...         hasattr(cls, 'find_by_id')
     ...     )
-    >>> 
+    >>>
     >>> app.discover('myapp.data', predicate=is_repository)
 
 Best Practices:
@@ -267,7 +267,7 @@ class ComponentDiscoverer:
             components: Components to register
             scope: Default scope for registration (string or Scope enum)
             condition: Optional condition to check before registering
-        
+
         Returns:
             Set of components that were actually registered
         """
@@ -282,6 +282,7 @@ class ComponentDiscoverer:
 
             # Auto-register with default scope - container.register expects (key, provider)
             from .registry import Scope
+
             if isinstance(scope, Scope):
                 scope_enum = scope
             elif scope == "singleton":
@@ -290,10 +291,10 @@ class ComponentDiscoverer:
                 scope_enum = Scope.SCOPED
             else:
                 scope_enum = Scope.TRANSIENT
-                
+
             self.container.register(component, component, scope=scope_enum)
             registered.add(component)
-        
+
         return registered
 
 
@@ -372,9 +373,13 @@ class ContainerInspector:
 
         for descriptor in self.container.registry.list_all():
             component_type = descriptor.component_type
-            
+
             # Filter by interface
-            if interface and inspect.isclass(component_type) and not issubclass(component_type, interface):
+            if (
+                interface
+                and inspect.isclass(component_type)
+                and not issubclass(component_type, interface)
+            ):
                 continue
 
             # Filter by scope
@@ -389,7 +394,7 @@ class ContainerInspector:
                 "type": component_type,
                 "scope": descriptor.scope.value,
                 "tags": list(descriptor.tags),
-                "registered": True
+                "registered": True,
             }
 
         return components
@@ -448,7 +453,7 @@ class ContainerInspector:
             scope = descriptor.scope.value
         except KeyError:
             pass
-            
+
         report = {
             "type": component_type,
             "registered": component_type in self.container,
@@ -477,8 +482,10 @@ class ContainerInspector:
                 except ImportError:
                     pass
 
-            can_resolve_dep = self.can_resolve(actual_type) if isinstance(actual_type, type) else False
-            
+            can_resolve_dep = (
+                self.can_resolve(actual_type) if isinstance(actual_type, type) else False
+            )
+
             report["dependencies"][param_name] = {
                 "type": dep_type,
                 "actual_type": actual_type,
@@ -487,7 +494,7 @@ class ContainerInspector:
                 else False,
                 "can_resolve": can_resolve_dep,
             }
-            
+
             if not can_resolve_dep:
                 report["missing_dependencies"].append(param_name)
 

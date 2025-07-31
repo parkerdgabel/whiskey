@@ -13,9 +13,9 @@ Run this example:
 """
 
 import asyncio
-from typing import Annotated
+from typing import Annotated, Optional
 
-from whiskey import WhiskeyConfig, Inject, inject, Whiskey
+from whiskey import Inject, Whiskey, WhiskeyConfig, inject
 
 # Step 1: Core Services for Event-Driven Architecture
 # ====================================================
@@ -34,7 +34,7 @@ class EventStore:
         self.events.append(event)
         print(f"📝 Event recorded: {event_type}")
 
-    def get_events(self, event_type: str = None) -> list:
+    def get_events(self, event_type: Optional[str] = None) -> list:
         """Get events, optionally filtered by type."""
         if event_type:
             return [e for e in self.events if e["type"] == event_type]
@@ -549,9 +549,9 @@ async def main():
             )
 
             # Create some orders (triggers events)
-            order1 = await order_service.create_order(alice["id"], ["Widget", "Gadget"], 49.99)
-            order2 = await order_service.create_order(bob["id"], ["Book", "Pen"], 29.99)
-            order3 = await order_service.create_order(charlie["id"], ["Laptop"], 999.99)
+            await order_service.create_order(alice["id"], ["Widget", "Gadget"], 49.99)
+            await order_service.create_order(bob["id"], ["Book", "Pen"], 29.99)
+            await order_service.create_order(charlie["id"], ["Laptop"], 999.99)
 
             # Wait for event processing
             await asyncio.sleep(2)

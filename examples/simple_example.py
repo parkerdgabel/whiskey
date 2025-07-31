@@ -10,8 +10,6 @@ Run this example:
     python examples/simple_example.py
 """
 
-import asyncio
 
-from whiskey import Container, inject, provide, singleton
 
 # Step 1: Define your services

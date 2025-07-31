@@ -8,7 +8,7 @@ import os
 import pytest
 
 from whiskey.core.errors import RegistrationError
-from whiskey.core.registry import Scope, ComponentDescriptor, ComponentRegistry
+from whiskey.core.registry import ComponentDescriptor, ComponentRegistry, Scope
 
 
 # Test classes
@@ -323,7 +323,8 @@ class TestComponentRegistry:
 
     def test_register_with_condition(self, registry):
         """Test service registration with condition."""
-        condition = lambda: os.getenv("TESTING") == "true"
+        def condition():
+            return os.getenv("TESTING") == "true"
 
         descriptor = registry.register(key=TestService, provider=TestService, condition=condition)
 

@@ -1017,7 +1017,7 @@ class TestPerformanceEdgeCases:
         try:
             cache.set("int_key", 42)
             # If it doesn't raise an error, it should return None on get
-            result = cache.get("int_key")
+            cache.get("int_key")
             # Result could be None or 42 depending on implementation
         except TypeError:
             # This is expected for non-weakreferenceable objects

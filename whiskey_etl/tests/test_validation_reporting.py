@@ -15,10 +15,7 @@ class TestValidationReport:
 
     def test_report_initialization(self):
         """Test report initialization."""
-        report = ValidationReport(
-            pipeline_name="test_pipeline",
-            start_time=datetime.now()
-        )
+        report = ValidationReport(pipeline_name="test_pipeline", start_time=datetime.now())
 
         assert report.pipeline_name == "test_pipeline"
         assert report.start_time is not None
@@ -29,10 +26,7 @@ class TestValidationReport:
 
     def test_add_validation_results(self):
         """Test adding validation results to report."""
-        report = ValidationReport(
-            pipeline_name="test_pipeline",
-            start_time=datetime.now()
-        )
+        report = ValidationReport(pipeline_name="test_pipeline", start_time=datetime.now())
 
         # Add valid record
         valid_result = ValidationResult(valid=True)
@@ -58,23 +52,11 @@ class TestValidationReport:
 
     def test_quarantine_records(self):
         """Test adding quarantined records."""
-        report = ValidationReport(
-            pipeline_name="test_pipeline",
-            start_time=datetime.now()
-        )
+        report = ValidationReport(pipeline_name="test_pipeline", start_time=datetime.now())
 
-        errors = [
-            ValidationError(
-                field="email",
-                message="Invalid format",
-                value="not-an-email"
-            )
-        ]
+        errors = [ValidationError(field="email", message="Invalid format", value="not-an-email")]
 
-        report.add_quarantined_record(
-            {"id": 1, "email": "not-an-email"},
-            errors
-        )
+        report.add_quarantined_record({"id": 1, "email": "not-an-email"}, errors)
 
         assert len(report.quarantined_records) == 1
         assert report.quarantined_records[0]["record"]["id"] == 1
@@ -82,10 +64,7 @@ class TestValidationReport:
 
     def test_report_summary(self):
         """Test report summary generation."""
-        report = ValidationReport(
-            pipeline_name="test_pipeline",
-            start_time=datetime.now()
-        )
+        report = ValidationReport(pipeline_name="test_pipeline", start_time=datetime.now())
 
         # Add some data
         for i in range(10):
@@ -109,10 +88,7 @@ class TestValidationReport:
 
     def test_report_json_export(self):
         """Test JSON export of report."""
-        report = ValidationReport(
-            pipeline_name="test_pipeline",
-            start_time=datetime.now()
-        )
+        report = ValidationReport(pipeline_name="test_pipeline", start_time=datetime.now())
 
         report.add_validation_result({"id": 1}, ValidationResult(valid=True))
         report.finalize()
@@ -123,10 +99,7 @@ class TestValidationReport:
 
     def test_report_html_export(self):
         """Test HTML export of report."""
-        report = ValidationReport(
-            pipeline_name="test_pipeline",
-            start_time=datetime.now()
-        )
+        report = ValidationReport(pipeline_name="test_pipeline", start_time=datetime.now())
 
         # Add sample data
         result = ValidationResult(valid=False)
@@ -225,7 +198,7 @@ class TestValidationReporter:
         reporter = ValidationReporter()
 
         # Create 10 reports
-        for i in range(10):
+        for _i in range(10):
             report = reporter.start_report("pipeline1")
             report.add_validation_result({}, ValidationResult(valid=True))
             reporter.finalize_report("pipeline1")
@@ -245,14 +218,10 @@ class TestValidationQuarantine:
         # Add record
         errors = [
             ValidationError("email", "Invalid format"),
-            ValidationError("age", "Out of range")
+            ValidationError("age", "Out of range"),
         ]
 
-        quarantine.add(
-            {"id": 1, "email": "bad"},
-            errors,
-            "pipeline1"
-        )
+        quarantine.add({"id": 1, "email": "bad"}, errors, "pipeline1")
 
         # Get records
         records = quarantine.get_records()
@@ -268,11 +237,7 @@ class TestValidationQuarantine:
         # Add records from different pipelines
         for i in range(5):
             pipeline = f"pipeline{i % 2}"
-            quarantine.add(
-                {"id": i},
-                [ValidationError("field", "error")],
-                pipeline
-            )
+            quarantine.add({"id": i}, [ValidationError("field", "error")], pipeline)
 
         # Get all records
         all_records = quarantine.get_records()
@@ -292,11 +257,7 @@ class TestValidationQuarantine:
 
         # Add more records than max size
         for i in range(5):
-            quarantine.add(
-                {"id": i},
-                [ValidationError("field", "error")],
-                "pipeline1"
-            )
+            quarantine.add({"id": i}, [ValidationError("field", "error")], "pipeline1")
 
         records = quarantine.get_records()
         assert len(records) == 3
@@ -311,11 +272,7 @@ class TestValidationQuarantine:
         # Add records from multiple pipelines
         for i in range(6):
             pipeline = f"pipeline{i % 3}"
-            quarantine.add(
-                {"id": i},
-                [ValidationError("field", "error")],
-                pipeline
-            )
+            quarantine.add({"id": i}, [ValidationError("field", "error")], pipeline)
 
         # Clear specific pipeline
         cleared = quarantine.clear("pipeline0")
@@ -334,9 +291,7 @@ class TestValidationQuarantine:
         # Add records
         for i in range(3):
             quarantine.add(
-                {"id": i, "value": i * 10},
-                [ValidationError("value", "Too small")],
-                "pipeline1"
+                {"id": i, "value": i * 10}, [ValidationError("value", "Too small")], "pipeline1"
             )
 
         # Reprocess without processor
@@ -371,11 +326,9 @@ class TestValidationIntegrationReporting:
         from whiskey_etl.validation import EmailValidator, RequiredValidator
 
         validator = RecordValidator(
-            field_validators={
-                "email": [RequiredValidator(), EmailValidator()]
-            },
+            field_validators={"email": [RequiredValidator(), EmailValidator()]},
             mode=ValidationMode.MARK,
-            collect_stats=True
+            collect_stats=True,
         )
 
         # Process records

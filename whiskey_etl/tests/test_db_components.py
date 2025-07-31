@@ -39,10 +39,12 @@ def mock_database():
     db.stream = mock_stream
 
     # Mock fetch methods
-    db.fetch_all = AsyncMock(return_value=[
-        {"id": 1, "name": "Record 1"},
-        {"id": 2, "name": "Record 2"},
-    ])
+    db.fetch_all = AsyncMock(
+        return_value=[
+            {"id": 1, "name": "Record 1"},
+            {"id": 2, "name": "Record 2"},
+        ]
+    )
     db.fetch_one = AsyncMock(return_value={"id": 1, "name": "Record 1"})
     db.fetch_val = AsyncMock(return_value=True)
     db.execute_many = AsyncMock()
@@ -88,7 +90,7 @@ class TestDatabaseSource:
             columns=["id", "name"],
             where="active = true",
             order_by="created_at DESC",
-            limit=10
+            limit=10,
         ):
             records.append(record)
 
@@ -99,10 +101,7 @@ class TestDatabaseSource:
         source = DatabaseSource(mock_database, fetch_size=100)
 
         records = []
-        async for record in source.extract(
-            query="SELECT * FROM users",
-            stream=False
-        ):
+        async for record in source.extract(query="SELECT * FROM users", stream=False):
             records.append(record)
 
         assert len(records) == 2  # fetch_all returns 2 records
@@ -114,9 +113,7 @@ class TestDatabaseSource:
 
         records = []
         async for record in source.extract(
-            start_key="A100",
-            end_key="Z999",
-            columns=["sku", "name", "price"]
+            start_key="A100", end_key="Z999", columns=["sku", "name", "price"]
         ):
             records.append(record)
 
@@ -125,8 +122,7 @@ class TestDatabaseSource:
     async def test_query_source(self, mock_database):
         """Test QuerySource with parameters."""
         source = QuerySource(
-            mock_database,
-            "SELECT * FROM orders WHERE status = :status AND date >= :start_date"
+            mock_database, "SELECT * FROM orders WHERE status = :status AND date >= :start_date"
         )
 
         records = []
@@ -181,7 +177,7 @@ class TestDatabaseSink:
             "products",
             key_columns=["sku"],
             update_columns=["name", "price"],
-            columns=["sku", "name", "price", "category"]
+            columns=["sku", "name", "price", "category"],
         )
 
         records = [
@@ -204,7 +200,7 @@ class TestDatabaseSink:
             mock_database,
             "inventory",
             key_columns=["warehouse_id", "sku"],
-            update_columns=["quantity", "last_updated"]
+            update_columns=["quantity", "last_updated"],
         )
 
         records = [
@@ -223,10 +219,7 @@ class TestDatabaseSink:
 
     async def test_sql_execute_sink(self, mock_database):
         """Test SQLExecuteSink with custom query."""
-        sink = SQLExecuteSink(
-            mock_database,
-            "CALL process_order(:order_id, :status)"
-        )
+        sink = SQLExecuteSink(mock_database, "CALL process_order(:order_id, :status)")
 
         records = [
             {"order_id": 123, "status": "shipped"},
@@ -246,14 +239,14 @@ class TestSQLTransforms:
         mock_database.fetch_one.return_value = {
             "name": "John Doe",
             "email": "john@example.com",
-            "department": "Engineering"
+            "department": "Engineering",
         }
 
         transform = LookupTransform(
             mock_database,
             lookup_query="SELECT name, email, department FROM users WHERE id = :user_id",
             input_fields=["user_id"],
-            output_fields=["name", "email"]
+            output_fields=["name", "email"],
         )
 
         record = {"order_id": 123, "user_id": 456, "amount": 99.99}
@@ -274,7 +267,7 @@ class TestSQLTransforms:
             mock_database,
             "SELECT name FROM users WHERE id = :id",
             input_fields=["id"],
-            cache_size=10
+            cache_size=10,
         )
 
         # First call
@@ -293,14 +286,14 @@ class TestSQLTransforms:
         """Test JoinTransform functionality."""
         mock_database.fetch_one.return_value = {
             "category_name": "Electronics",
-            "discount_rate": 0.1
+            "discount_rate": 0.1,
         }
 
         transform = JoinTransform(
             mock_database,
             join_table="categories",
             join_keys={"category_id": "id"},
-            select_fields=["category_name", "discount_rate"]
+            select_fields=["category_name", "discount_rate"],
         )
 
         record = {"product_id": 123, "category_id": 5, "price": 99.99}
@@ -320,7 +313,7 @@ class TestSQLTransforms:
             mock_database,
             validation_query="SELECT 1 FROM products WHERE sku = :sku",
             validation_fields=["sku"],
-            on_invalid="drop"
+            on_invalid="drop",
         )
 
         record = {"sku": "INVALID", "name": "Bad Product"}
@@ -337,7 +330,7 @@ class TestSQLTransforms:
             "SELECT 1 FROM products WHERE sku = :sku",
             validation_fields=["sku"],
             on_invalid="mark",
-            invalid_field="_valid"
+            invalid_field="_valid",
         )
 
         # Invalid record
@@ -355,7 +348,7 @@ class TestSQLTransforms:
         mock_database.fetch_one.return_value = {
             "total_orders": 42,
             "total_revenue": 12345.67,
-            "avg_order_value": 294.18
+            "avg_order_value": 294.18,
         }
 
         transform = AggregateTransform(
@@ -368,7 +361,7 @@ class TestSQLTransforms:
                 WHERE customer_id = :customer_id
             """,
             group_by_fields=["customer_id"],
-            aggregate_fields=["total_orders", "total_revenue"]
+            aggregate_fields=["total_orders", "total_revenue"],
         )
 
         record = {"customer_id": 123, "order_id": 456}
@@ -407,7 +400,7 @@ async def test_lookup_transform_with_all_fields(mock_database):
         "name": "John",
         "email": "john@example.com",
         "department": "Engineering",
-        "level": 5
+        "level": 5,
     }
 
     transform = LookupTransform(

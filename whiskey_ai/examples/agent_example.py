@@ -1,5 +1,7 @@
 """Agent example using Whiskey AI extension."""
 
+from typing import Optional
+
 from whiskey import Whiskey, inject
 from whiskey_ai import LLMClient, MockLLMClient, ai_extension
 from whiskey_ai.agents import AnalysisAgent, CodingAgent, ResearchAgent
@@ -35,7 +37,7 @@ def calculate_expression(expression: str) -> float:
 
 
 @app.tool()
-def current_time(timezone: str = None) -> str:
+def current_time(timezone: Optional[str] = None) -> str:
     """Get the current time."""
     return get_current_time(timezone)
 

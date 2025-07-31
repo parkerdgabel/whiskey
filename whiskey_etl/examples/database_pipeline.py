@@ -29,6 +29,7 @@ async def main():
     @app.pipeline("copy_users")
     class CopyUsersPipeline:
         """Copy users from source to destination with transformations."""
+
         source = "table"
         transforms = ["normalize_email", "add_metadata"]
         sink = "table"
@@ -63,6 +64,7 @@ async def main():
     @app.pipeline("enrich_orders")
     class EnrichOrdersPipeline:
         """Enrich orders with customer and product information."""
+
         source = "query"
         transforms = ["enrich_customer", "enrich_product", "calculate_totals"]
         sink = "upsert"
@@ -83,13 +85,19 @@ async def main():
             "table_name": "enriched_orders",
             "key_columns": ["id"],
             "update_columns": [
-                "customer_name", "customer_email", "customer_tier",
-                "product_name", "product_category",
-                "total_amount", "discount_amount", "final_amount"
+                "customer_name",
+                "customer_email",
+                "customer_tier",
+                "product_name",
+                "product_category",
+                "total_amount",
+                "discount_amount",
+                "final_amount",
             ],
         }
 
-    @app.sql_transform("lookup",
+    @app.sql_transform(
+        "lookup",
         lookup_query="""
             SELECT name, email, tier, discount_rate
             FROM customers
@@ -103,7 +111,8 @@ async def main():
         """Enrich with customer information."""
         return await transform.transform(record)
 
-    @app.sql_transform("lookup",
+    @app.sql_transform(
+        "lookup",
         lookup_query="""
             SELECT name, category, weight
             FROM products
@@ -128,11 +137,13 @@ async def main():
         discount_amount = total_amount * discount_rate
         final_amount = total_amount - discount_amount
 
-        record.update({
-            "total_amount": total_amount,
-            "discount_amount": discount_amount,
-            "final_amount": final_amount,
-        })
+        record.update(
+            {
+                "total_amount": total_amount,
+                "discount_amount": discount_amount,
+                "final_amount": final_amount,
+            }
+        )
 
         return record
 
@@ -140,13 +151,9 @@ async def main():
     @app.pipeline("validate_products")
     class ValidateProductsPipeline:
         """Validate and clean product data."""
+
         source = "table"
-        transforms = [
-            "validate_sku",
-            "validate_price_range",
-            "check_category",
-            "standardize_data"
-        ]
+        transforms = ["validate_sku", "validate_price_range", "check_category", "standardize_data"]
         sink = "sql_execute"
 
         source_config = {
@@ -168,7 +175,8 @@ async def main():
             """,
         }
 
-    @app.sql_transform("validate",
+    @app.sql_transform(
+        "validate",
         validation_query="SELECT 1 FROM products WHERE sku = :sku",
         validation_fields=["sku"],
         on_invalid="mark",
@@ -188,7 +196,8 @@ async def main():
             return None
         return record
 
-    @app.sql_transform("join",
+    @app.sql_transform(
+        "join",
         join_table="categories",
         join_keys={"category_name": "name"},
         select_fields=["id", "active"],
@@ -230,13 +239,14 @@ async def main():
     @app.pipeline("sales_summary")
     class SalesSummaryPipeline:
         """Generate sales summary with aggregations."""
+
         source = "query"
         transforms = ["add_aggregates", "calculate_metrics"]
         sink = "table"
 
         source_config = {
             "query": """
-                SELECT 
+                SELECT
                     DATE_TRUNC('day', created_at) as sale_date,
                     product_id,
                     category_id,
@@ -250,15 +260,16 @@ async def main():
 
         sink_config = {
             "table_name": "daily_sales_summary",
-            "on_conflict": "(sale_date, product_id) DO UPDATE SET " +
-                          "units_sold = EXCLUDED.units_sold, " +
-                          "gross_revenue = EXCLUDED.gross_revenue, " +
-                          "updated_at = CURRENT_TIMESTAMP",
+            "on_conflict": "(sale_date, product_id) DO UPDATE SET "
+            + "units_sold = EXCLUDED.units_sold, "
+            + "gross_revenue = EXCLUDED.gross_revenue, "
+            + "updated_at = CURRENT_TIMESTAMP",
         }
 
-    @app.sql_transform("aggregate",
+    @app.sql_transform(
+        "aggregate",
         aggregate_query="""
-            SELECT 
+            SELECT
                 AVG(units_sold) as avg_daily_units,
                 STDDEV(units_sold) as stddev_daily_units,
                 MAX(gross_revenue) as max_daily_revenue
@@ -307,10 +318,7 @@ async def main():
 
         # Enrich recent orders
         print("\n💰 Enriching orders...")
-        result = await app.pipelines.run(
-            "enrich_orders",
-            start_date=datetime(2024, 1, 1)
-        )
+        result = await app.pipelines.run("enrich_orders", start_date=datetime(2024, 1, 1))
         print(f"✅ Enriched {result.records_processed} orders")
 
         # Validate products
@@ -322,10 +330,7 @@ async def main():
 
         # Generate sales summary
         print("\n📊 Generating sales summary...")
-        result = await app.pipelines.run(
-            "sales_summary",
-            start_date=datetime(2024, 1, 1)
-        )
+        result = await app.pipelines.run("sales_summary", start_date=datetime(2024, 1, 1))
         print(f"✅ Generated summary for {result.records_processed} product-days")
 
         print("\n✨ All pipelines completed!")

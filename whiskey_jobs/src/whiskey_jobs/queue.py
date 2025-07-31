@@ -12,7 +12,7 @@ from .job import Job
 
 class JobQueue(ABC):
     """Abstract base class for job queue implementations.
-    
+
     Defines the interface that all job queues must implement,
     supporting basic queue operations like push, pop, and peek.
     """
@@ -20,7 +20,7 @@ class JobQueue(ABC):
     @abstractmethod
     async def push(self, job: Job) -> None:
         """Add a job to the queue.
-        
+
         Args:
             job: Job instance to add.
         """
@@ -29,7 +29,7 @@ class JobQueue(ABC):
     @abstractmethod
     async def pop(self) -> Job | None:
         """Remove and return a job from the queue.
-        
+
         Returns:
             Next Job from the queue, or None if empty.
         """
@@ -38,7 +38,7 @@ class JobQueue(ABC):
     @abstractmethod
     async def peek(self) -> Job | None:
         """Return the next job without removing it.
-        
+
         Returns:
             Next Job in the queue, or None if empty.
         """
@@ -47,7 +47,7 @@ class JobQueue(ABC):
     @abstractmethod
     def size(self) -> int:
         """Return the number of jobs in the queue.
-        
+
         Returns:
             Number of jobs currently in the queue.
         """
@@ -61,7 +61,7 @@ class JobQueue(ABC):
 
 class MemoryQueue(JobQueue):
     """In-memory FIFO (First-In-First-Out) job queue.
-    
+
     Implements a simple queue where jobs are processed in the
     order they were added, using an efficient deque structure.
     """
@@ -101,7 +101,7 @@ class MemoryQueue(JobQueue):
 
 class PriorityQueue(JobQueue):
     """In-memory priority queue for jobs.
-    
+
     Implements a priority queue where jobs with higher priority
     values are processed first, using a heap-based structure.
     """

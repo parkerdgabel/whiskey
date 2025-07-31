@@ -21,44 +21,44 @@ Key Benefits:
 Usage Patterns:
     1. Automatic Injection:
        Components with Lazy[T] type hints are automatically wrapped
-    
+
     2. Manual Creation:
        Use lazy_inject() for explicit lazy dependencies
-    
+
     3. Class Properties:
        Use LazyDescriptor for lazy class attributes
-    
+
     4. Resolution Control:
        Access .value property to trigger resolution
 
 Example:
     >>> from whiskey import Lazy, singleton, component, inject
-    >>> 
+    >>>
     >>> @singleton
     ... class ExpensiveService:
     ...     def __init__(self):
     ...         print("Expensive initialization!")
     ...         self.data = load_large_dataset()
-    >>> 
+    >>>
     >>> @component
     ... class OptimizedService:
     ...     def __init__(self, lazy_expensive: Lazy[ExpensiveService]):
     ...         self._expensive = lazy_expensive
     ...         print("Component created without loading expensive data")
-    ...     
+    ...
     ...     def process_if_needed(self, condition: bool):
     ...         if condition:
     ...             # Only now is ExpensiveService initialized
     ...             return self._expensive.value.process()
     ...         return "Skipped expensive operation"
-    >>> 
+    >>>
     >>> # Circular dependency example
     >>> @component
     ... class ServiceA:
     ...     def __init__(self, b: Lazy['ServiceB']):
     ...         self.b = b
-    >>> 
-    >>> @component  
+    >>>
+    >>> @component
     ... class ServiceB:
     ...     def __init__(self, a: ServiceA):
     ...         self.a = a
@@ -119,7 +119,7 @@ class Lazy(Generic[T]):
         ...     def __init__(self, lazy_dep: Lazy[Database]):
         ...         self._db = lazy_dep
         ...         # Database is not initialized yet
-        ...     
+        ...
         ...     def query(self):
         ...         # First access to .value triggers Database initialization
         ...         return self._db.value.execute("SELECT * FROM users")
@@ -316,7 +316,7 @@ def lazy_inject(component_type: type[T], name: str | None = None) -> Lazy[T]:
         ...                  cache: Lazy[Cache] = None):  # Optional lazy dependency
         ...         self.db = db
         ...         self.cache = cache or lazy_inject(Cache)
-        ...     
+        ...
         ...     def get_cached(self, key: str):
         ...         # Cache is only initialized when first accessed
         ...         return self.cache.value.get(key)

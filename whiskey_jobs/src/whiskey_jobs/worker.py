@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class JobWorker:
     """Process jobs from queues with concurrency control.
-    
+
     Workers pull jobs from assigned queues and execute them with
     dependency injection, managing concurrency and tracking results.
     """

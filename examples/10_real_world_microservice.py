@@ -23,12 +23,12 @@ from datetime import datetime
 from typing import Annotated, Protocol
 
 from whiskey import (
-    Whiskey,
-    WhiskeyConfig,
     Container,
     Disposable,
     Initializable,
     Inject,
+    Whiskey,
+    WhiskeyConfig,
     provide,
     singleton,
 )
@@ -615,33 +615,33 @@ async def create_order_processing_microservice(scenario: str) -> Whiskey:
 
     # Check what got registered
     try:
-        db_primary = await app.container.resolve(PostgresDatabase, name="primary")
+        await app.container.resolve(PostgresDatabase, name="primary")
         registered_services.append("PostgresDatabase (primary)")
     except KeyError:
         try:
-            db_primary = await app.container.resolve(SQLiteDatabase, name="primary")
+            await app.container.resolve(SQLiteDatabase, name="primary")
             registered_services.append("SQLiteDatabase (primary)")
         except KeyError:
             pass
 
     try:
-        cache_redis = await app.container.resolve(RedisCache, name="redis")
+        await app.container.resolve(RedisCache, name="redis")
         registered_services.append("RedisCache")
     except KeyError:
         pass
 
     try:
-        cache_memory = await app.container.resolve(MemoryCache, name="memory")
+        await app.container.resolve(MemoryCache, name="memory")
         registered_services.append("MemoryCache")
     except KeyError:
         pass
 
     try:
-        mq = await app.container.resolve(RabbitMQMessageQueue)
+        await app.container.resolve(RabbitMQMessageQueue)
         registered_services.append("RabbitMQMessageQueue")
     except KeyError:
         try:
-            mq = await app.container.resolve(NoOpMessageQueue)
+            await app.container.resolve(NoOpMessageQueue)
             registered_services.append("NoOpMessageQueue")
         except KeyError:
             pass
