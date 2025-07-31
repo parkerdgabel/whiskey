@@ -29,7 +29,7 @@ from typing import Any, Callable, Protocol, TypeVar, runtime_checkable
 from weakref import WeakKeyDictionary
 
 from .analyzer import InjectDecision, InjectResult, TypeAnalyzer
-from .errors import CircularDependencyError, ResolutionError
+from .errors import CircularDependencyError, ResolutionError, ScopeError
 from .generic_resolution import GenericTypeResolver
 from .registry import ComponentDescriptor, ComponentRegistry, Scope
 
@@ -109,7 +109,30 @@ class TypeResolver:
     
     def can_auto_create(self, cls: type) -> bool:
         """Check if a class can be auto-created."""
-        return self._type_analyzer.can_auto_create(cls)
+        if not self._type_analyzer.can_auto_create(cls):
+            return False
+        
+        # Additional restriction: only auto-create if the class has dependencies
+        # that can be injected (not just an empty constructor)
+        try:
+            sig = inspect.signature(cls.__init__)
+        except (ValueError, TypeError):
+            return False
+        
+        has_injectable_params = False
+        for param_name, param in sig.parameters.items():
+            if param_name == "self":
+                continue
+            
+            # If parameter has no default, check if it can be injected
+            if param.default == inspect.Parameter.empty:
+                result = self._type_analyzer.should_inject(param)
+                if result.decision == InjectDecision.YES:
+                    has_injectable_params = True
+                    break
+        
+        # Only auto-create classes that have injectable dependencies
+        return has_injectable_params
 
 
 class DependencyResolver:
@@ -331,13 +354,15 @@ class UnifiedResolver:
         finally:
             self._clear_resolving(context, descriptor)
     
-    def _get_descriptor(self, context: ResolutionContext) -> ComponentDescriptor:
+    def _get_descriptor(self, context: ResolutionContext, allow_auto_create: bool = True) -> ComponentDescriptor:
         """Get component descriptor, with auto-creation fallback."""
         try:
             return self.registry.get(context.key, context.name)
         except KeyError:
-            # Try auto-creation for unregistered types
-            if isinstance(context.key, type) and self.type_resolver.can_auto_create(context.key):
+            # Try auto-creation for unregistered types only if allowed
+            if (allow_auto_create and 
+                isinstance(context.key, type) and 
+                self.type_resolver.can_auto_create(context.key)):
                 # Register temporarily for auto-creation
                 descriptor = ComponentDescriptor(
                     key=str(context.key),
@@ -381,14 +406,34 @@ class UnifiedResolver:
     async def _resolve_by_scope_async(self, descriptor: ComponentDescriptor, context: ResolutionContext) -> Any:
         """Resolve based on component scope (async)."""
         if descriptor.scope == Scope.SINGLETON:
-            # Use sync singleton resolution in executor for thread safety
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(
-                None,
-                self.scope_resolver.resolve_singleton,
-                descriptor.key,
-                lambda: self._create_instance_sync(descriptor, context)
-            )
+            # For async factories, we need special handling
+            if (callable(descriptor.provider) and 
+                asyncio.iscoroutinefunction(descriptor.provider)):
+                # Async singleton factory - needs async resolution
+                async def async_factory():
+                    return await self._create_instance_async(descriptor, context)
+                
+                # Check if already cached
+                if descriptor.key in self.scope_resolver._singleton_cache:
+                    return self.scope_resolver._singleton_cache[descriptor.key]
+                
+                # Create with async factory
+                with self.scope_resolver._singleton_lock:
+                    if descriptor.key in self.scope_resolver._singleton_cache:
+                        return self.scope_resolver._singleton_cache[descriptor.key]
+                    
+                    instance = await async_factory()
+                    self.scope_resolver._singleton_cache[descriptor.key] = instance
+                    return instance
+            else:
+                # Sync singleton - use executor for thread safety
+                loop = asyncio.get_running_loop()
+                return await loop.run_in_executor(
+                    None,
+                    self.scope_resolver.resolve_singleton,
+                    descriptor.key,
+                    lambda: self._create_instance_sync(descriptor, context)
+                )
         elif descriptor.scope == Scope.SCOPED:
             scope_name = descriptor.metadata.get("scope_name", "default")
             # For now, use sync version
@@ -410,11 +455,23 @@ class UnifiedResolver:
             # Direct instance
             return provider
         
-        # Get dependency map
-        dep_map = self.dependency_resolver.resolve_dependencies(
-            provider if isinstance(provider, type) else type(provider),
-            context.overrides
-        )
+        # Get dependency map - analyze the provider (class or function)
+        if isinstance(provider, type):
+            # Class constructor
+            dep_map = self.dependency_resolver.resolve_dependencies(provider, context.overrides)
+        elif callable(provider):
+            # Factory function - analyze the function directly
+            analysis = self.type_resolver.analyze_callable(provider)
+            dep_map = {}
+            for param_name, inject_result in analysis.items():
+                if param_name in context.overrides:
+                    dep_map[param_name] = context.overrides[param_name]
+                elif inject_result.decision == InjectDecision.YES:
+                    dep_map[param_name] = inject_result.type_hint
+                elif inject_result.decision == InjectDecision.OPTIONAL:
+                    dep_map[param_name] = (inject_result.inner_type, True)
+        else:
+            dep_map = {}
         
         # Resolve each dependency
         resolved = {}
@@ -422,7 +479,15 @@ class UnifiedResolver:
             if isinstance(dep_spec, tuple):  # Optional dependency
                 dep_type, is_optional = dep_spec
                 try:
-                    resolved[param_name] = self._resolve_sync(dep_type)
+                    # For optional dependencies, don't allow auto-creation
+                    opt_context = ResolutionContext(
+                        key=dep_type,
+                        overrides=context.overrides,
+                        scope_context=context.scope_context,
+                        is_async=context.is_async
+                    )
+                    opt_descriptor = self._get_descriptor(opt_context, allow_auto_create=False)
+                    resolved[param_name] = self._resolve_by_scope_sync(opt_descriptor, opt_context)
                 except ResolutionError:
                     if is_optional:
                         resolved[param_name] = None
@@ -446,9 +511,37 @@ class UnifiedResolver:
             # Direct instance
             return provider
         
-        # For now, delegate to sync version
-        # TODO: Implement proper async dependency resolution
-        return self._create_instance_sync(descriptor, context)
+        # Handle async factories
+        if callable(provider) and asyncio.iscoroutinefunction(provider):
+            # Async factory function
+            sig = inspect.signature(provider)
+            kwargs = {}
+            
+            # Resolve dependencies for async factory
+            for param_name, param in sig.parameters.items():
+                if param_name in context.overrides:
+                    kwargs[param_name] = context.overrides[param_name]
+                elif param.annotation != inspect.Parameter.empty:
+                    analysis = self.type_resolver.analyze_type(param.annotation)
+                    if analysis.decision == InjectDecision.YES:
+                        kwargs[param_name] = await self._resolve_async(param.annotation)
+                    elif analysis.decision == InjectDecision.OPTIONAL:
+                        try:
+                            opt_context = ResolutionContext(
+                                key=analysis.inner_type,
+                                overrides=context.overrides,
+                                scope_context=context.scope_context,
+                                is_async=True
+                            )
+                            opt_descriptor = self._get_descriptor(opt_context, allow_auto_create=False)
+                            kwargs[param_name] = await self._resolve_by_scope_async(opt_descriptor, opt_context)
+                        except ResolutionError:
+                            kwargs[param_name] = None
+            
+            return await provider(**kwargs)
+        else:
+            # For sync providers, use sync version
+            return self._create_instance_sync(descriptor, context)
 
 
 # Public API functions

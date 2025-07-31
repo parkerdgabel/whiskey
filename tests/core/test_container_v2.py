@@ -5,7 +5,7 @@ from typing import Optional
 
 import pytest
 
-from whiskey.core.container_v2 import Container, get_current_container, set_current_container
+from whiskey.core.container import Container, get_current_container, set_current_container
 from whiskey.core.errors import ResolutionError
 
 

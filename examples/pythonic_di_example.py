@@ -2,7 +2,8 @@
 
 import asyncio
 
-from whiskey.core.container_v2 import Container, inject, provide, singleton
+from whiskey.core.container import Container
+from whiskey.core.decorators import inject, singleton
 
 
 # Simple services without decorators
