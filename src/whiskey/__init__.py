@@ -78,6 +78,7 @@ from whiskey.core.lazy import Lazy, lazy_inject
 from whiskey.core.registry import Scope
 from whiskey.core.scopes import ContextVarScope, ScopeType
 from whiskey.core.types import Disposable, Initializable, Inject
+from whiskey.core.generic_resolution import GenericTypeResolver, TypeParameterBinder
 
 # Application class has been renamed to Whiskey
 
@@ -103,6 +104,9 @@ __all__ = [
     "Inject",
     "Initializable",
     "Disposable",
+    # Generic Resolution
+    "GenericTypeResolver",
+    "TypeParameterBinder",
     # Lifecycle
     "on_startup",
     "on_shutdown",

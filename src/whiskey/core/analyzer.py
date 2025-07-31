@@ -59,6 +59,7 @@ from enum import Enum
 from typing import Any, Callable, ClassVar, Union, get_args, get_origin
 
 from .errors import TypeAnalysisError
+from .generic_resolution import GenericTypeResolver
 
 # Handle Python version differences
 try:
@@ -240,6 +241,8 @@ class TypeAnalyzer:
         """
         self.registry = registry
         self._analysis_cache: dict[Any, InjectResult] = {}
+        self._callable_cache: dict[Any, dict[str, InjectResult]] = {}  # Cache for entire callable analysis
+        self._generic_resolver = GenericTypeResolver(registry)
 
     def should_inject(self, param: inspect.Parameter, type_hint: Any = None) -> InjectResult:
         """Determine if a parameter should be auto-injected.
@@ -255,30 +258,57 @@ class TypeAnalyzer:
         if type_hint is None:
             type_hint = param.annotation
 
-        # Rule 1: Never inject if has non-None default
-        if param.default not in (inspect.Parameter.empty, None):
-            return InjectResult(InjectDecision.NO, type_hint, "Has default value")
+        # Rule 1: Never inject if has any default value (except for Optional[T] = None)
+        if param.default is not inspect.Parameter.empty:
+            # Special case: Optional[T] = None should still be considered for injection
+            if param.default is None and self._is_optional(type_hint):
+                # Continue analysis - Optional with None default can still be injected
+                pass
+            else:
+                return InjectResult(InjectDecision.NO, type_hint, "Has default value")
 
         # Handle missing annotations
         if type_hint == inspect.Parameter.empty or type_hint is None:
             return InjectResult(InjectDecision.NO, type_hint, "No type annotation")
 
-        # Use cached result if available
-        cache_key = (type_hint, param.name)
+        # Create efficient cache key - only type hint matters for analysis
+        # Use id() for better performance with complex types
+        cache_key = self._create_cache_key(type_hint)
         if cache_key in self._analysis_cache:
             return self._analysis_cache[cache_key]
 
         # Analyze the type hint
         result = self._analyze_type_hint(type_hint)
 
-        # Cache the result
-        self._analysis_cache[cache_key] = result
+        # Cache the result with size limit to prevent unbounded growth
+        self._cache_result(cache_key, result)
 
         return result
 
     def _analyze_type_hint(self, type_hint: Any) -> InjectResult:
         """Analyze a specific type hint for injection rules.
 
+        Args:
+            type_hint: The type hint to analyze
+
+        Returns:
+            InjectResult with decision and context
+        """
+        # Check if we've already analyzed this exact type hint
+        type_cache_key = self._create_cache_key(type_hint)
+        if type_cache_key in self._analysis_cache:
+            return self._analysis_cache[type_cache_key]
+        
+        # Perform the actual analysis
+        result = self._analyze_type_hint_uncached(type_hint)
+        
+        # Cache the result
+        self._cache_result(type_cache_key, result)
+        return result
+    
+    def _analyze_type_hint_uncached(self, type_hint: Any) -> InjectResult:
+        """Perform the actual type hint analysis without caching.
+        
         Args:
             type_hint: The type hint to analyze
 
@@ -384,13 +414,28 @@ class TypeAnalyzer:
             # This is Optional[T]
             inner_type = args[0] if args[1] is type(None) else args[1]
 
-            # Rule 4: Inject Optional[T] only if T is registered
-            return InjectResult(
-                InjectDecision.OPTIONAL,
-                type_hint,
-                f"Optional type - inject {inner_type} if available",
-                inner_type=inner_type,
-            )
+            # Rule 4: Check if T is something that should never be injected
+            inner_result = self._analyze_type_hint(inner_type)
+            if inner_result.decision == InjectDecision.NO and (
+                "generic type" in inner_result.reason.lower() or
+                "built-in type" in inner_result.reason.lower() or
+                "standard library type" in inner_result.reason.lower()
+            ):
+                # If T is a built-in, generic, or stdlib type, Optional[T] should not be injected either
+                return InjectResult(
+                    InjectDecision.NO,
+                    type_hint,
+                    f"Optional type with non-injectable inner type: {inner_result.reason}",
+                    inner_type=inner_type,
+                )
+            else:
+                # For user types (registered or not), Optional[T] can be injected if available
+                return InjectResult(
+                    InjectDecision.OPTIONAL,
+                    type_hint,
+                    f"Optional type - inject {inner_type} if available",
+                    inner_type=inner_type,
+                )
 
         # Rule 5: For other Union types, only inject if exactly one member is registered
         if self.registry:
@@ -437,12 +482,51 @@ class TypeAnalyzer:
                 f"Forward reference '{type_str}' found in registry"
             )
         
-        # If not in registry, we can't inject it
+        # Try to resolve the string to an actual type in common namespaces
+        # This handles cases where a class is defined but not registered
+        resolved_type = self._try_resolve_string_annotation(type_str)
+        if resolved_type is not None:
+            # Recursively analyze the resolved type
+            return self._analyze_type_hint(resolved_type)
+        
+        # If not in registry and can't resolve, we can't inject it
         return InjectResult(
             InjectDecision.NO,
             type_str,
             f"Forward reference '{type_str}' not found in registry"
         )
+
+    def _try_resolve_string_annotation(self, type_str: str) -> type | None:
+        """Try to resolve a string annotation to an actual type.
+        
+        Args:
+            type_str: The string type annotation
+            
+        Returns:
+            The resolved type or None if it can't be resolved
+        """
+        # Try to find the type in the calling frame's globals
+        import inspect
+        
+        try:
+            # Get the calling frame (skipping internal analyzer frames)
+            frame = inspect.currentframe()
+            while frame:
+                if frame.f_globals.get('__name__') != __name__:
+                    # Found a frame outside the analyzer
+                    globals_dict = frame.f_globals
+                    if type_str in globals_dict:
+                        potential_type = globals_dict[type_str]
+                        if inspect.isclass(potential_type):
+                            return potential_type
+                    break
+                frame = frame.f_back
+                
+        except Exception:
+            # If frame inspection fails, fall back to safe methods
+            pass
+        
+        return None
 
     def _is_stdlib_type(self, type_hint: Any) -> bool:
         """Check if a type is from the standard library.
@@ -611,23 +695,53 @@ class TypeAnalyzer:
         Returns:
             InjectResult with decision
         """
-        # For generic component types, we try to resolve the origin type
-        # The container might have a factory that handles the generic parameters
+        # First check if the exact generic type is registered
+        if self.registry and self.registry.has(type_hint):
+            return InjectResult(InjectDecision.YES, type_hint, "Full generic type registered")
 
+        # Use the generic resolver to find concrete implementations  
+        concrete_type = self._generic_resolver.resolve_generic(type_hint)
+        if concrete_type:
+            return InjectResult(
+                InjectDecision.YES,
+                type_hint,
+                f"Generic type resolved to concrete implementation: {concrete_type}",
+                inner_type=concrete_type,
+            )
+
+        # Check if the origin type is registered (fallback)
         if self.registry and self.registry.has(origin):
             return InjectResult(
                 InjectDecision.YES,
                 type_hint,
-                f"Generic component type registered: {origin} with args {args}",
+                f"Generic origin type registered: {origin} with args {args}",
                 inner_type=origin,
             )
 
-        # Also check if the full generic type is registered
-        if self.registry and self.registry.has(type_hint):
-            return InjectResult(InjectDecision.YES, type_hint, "Full generic type registered")
+        # Analyze the generic type for additional information
+        analysis = self._generic_resolver.analyze_generic_type(type_hint)
+        
+        if analysis['is_protocol'] and analysis['concrete_implementations']:
+            # Protocol with registered implementations
+            if len(analysis['concrete_implementations']) == 1:
+                return InjectResult(
+                    InjectDecision.YES,
+                    type_hint,
+                    f"Protocol with single implementation: {analysis['concrete_implementations'][0]}",
+                    inner_type=analysis['concrete_implementations'][0],
+                )
+            else:
+                return InjectResult(
+                    InjectDecision.ERROR,
+                    type_hint,
+                    f"Ambiguous protocol - multiple implementations: {analysis['concrete_implementations']}",
+                    candidates=analysis['concrete_implementations'],
+                )
 
         return InjectResult(
-            InjectDecision.NO, type_hint, f"Generic type not registered: {origin}[{args}]"
+            InjectDecision.NO, 
+            type_hint, 
+            f"Generic type not resolvable: {origin}[{args}] - no concrete implementations found"
         )
 
     def analyze_callable(self, func: callable) -> dict[str, InjectResult]:
@@ -639,6 +753,11 @@ class TypeAnalyzer:
         Returns:
             Dict mapping parameter names to InjectResults
         """
+        # Check callable cache first
+        func_cache_key = self._create_callable_cache_key(func)
+        if func_cache_key in self._callable_cache:
+            return self._callable_cache[func_cache_key].copy()  # Return copy to prevent mutation
+        
         try:
             sig = inspect.signature(func)
         except (TypeError, ValueError) as e:
@@ -663,7 +782,42 @@ class TypeAnalyzer:
             result = self.should_inject(param, type_hint)
             results[param_name] = result
 
+        # Cache the results
+        self._cache_callable_result(func_cache_key, results)
         return results
+    
+    def _create_callable_cache_key(self, func: callable) -> tuple:
+        """Create a cache key for callable analysis.
+        
+        Args:
+            func: The callable to create a key for
+            
+        Returns:
+            Tuple that can be used as a cache key
+        """
+        try:
+            # Use the function object directly if possible
+            return (func,)
+        except TypeError:
+            # If not hashable, use id and qualname
+            return (id(func), getattr(func, '__qualname__', str(func)))
+    
+    def _cache_callable_result(self, cache_key: tuple, results: dict[str, InjectResult]) -> None:
+        """Cache callable analysis results with size management.
+        
+        Args:
+            cache_key: The cache key
+            results: The analysis results to cache
+        """
+        max_callable_cache_size = 500  # Reasonable limit for callable cache
+        
+        if len(self._callable_cache) >= max_callable_cache_size:
+            # Remove oldest entries (simple FIFO for performance)
+            oldest_keys = list(self._callable_cache.keys())[:50]  # Remove 10% of entries
+            for old_key in oldest_keys:
+                del self._callable_cache[old_key]
+        
+        self._callable_cache[cache_key] = results
 
     def can_auto_create(self, cls: type) -> bool:
         """Check if a class can be auto-created (all params injectable).
@@ -846,9 +1000,78 @@ class TypeAnalyzer:
         _analyze_type(root_type)
         return dependency_tree
 
+    def _create_cache_key(self, type_hint: Any) -> tuple:
+        """Create an efficient cache key for type hints.
+        
+        Args:
+            type_hint: The type hint to create a key for
+            
+        Returns:
+            Tuple that can be used as a cache key
+        """
+        # For basic types, use the type itself
+        if isinstance(type_hint, type):
+            return (type_hint,)
+        
+        # For string annotations, use the string directly
+        if isinstance(type_hint, str):
+            return (type_hint,)
+        
+        # For complex types (generics, unions), use a combination of id and repr
+        # This handles cases like Optional[List[str]] efficiently
+        try:
+            # Try to use the type hint directly if it's hashable
+            return (type_hint,)
+        except TypeError:
+            # If not hashable, use id and repr as fallback
+            return (id(type_hint), repr(type_hint))
+    
+    def _cache_result(self, cache_key: tuple, result: InjectResult) -> None:
+        """Cache an analysis result with size management.
+        
+        Args:
+            cache_key: The cache key
+            result: The analysis result to cache
+        """
+        # Implement LRU-like behavior with size limit
+        max_cache_size = 1000  # Reasonable limit for type analysis cache
+        
+        if len(self._analysis_cache) >= max_cache_size:
+            # Remove oldest entries (simple FIFO for performance)
+            # In a production system, you might want a proper LRU cache
+            oldest_keys = list(self._analysis_cache.keys())[:100]  # Remove 10% of entries
+            for old_key in oldest_keys:
+                del self._analysis_cache[old_key]
+        
+        self._analysis_cache[cache_key] = result
+
     def clear_cache(self) -> None:
-        """Clear the analysis cache."""
+        """Clear all analysis caches."""
         self._analysis_cache.clear()
+        self._callable_cache.clear()
+        self._generic_resolver.clear_cache()
+
+    def register_generic_implementation(self, generic_type: Any, concrete_type: type) -> None:
+        """Register a concrete implementation for a generic type.
+        
+        Args:
+            generic_type: The generic type (e.g., Repository[User])
+            concrete_type: The concrete implementation class
+            
+        Example:
+            >>> analyzer.register_generic_implementation(Repository[User], UserRepository)
+        """
+        self._generic_resolver.register_concrete(generic_type, concrete_type)
+        # Clear cache since new implementations might change resolution decisions
+        self.clear_cache()
+
+    def get_generic_resolver(self) -> GenericTypeResolver:
+        """Get the generic type resolver for advanced configuration.
+        
+        Returns:
+            The GenericTypeResolver instance
+        """
+        return self._generic_resolver
 
 
 def get_type_hints_safe(func: callable) -> dict[str, Any]:

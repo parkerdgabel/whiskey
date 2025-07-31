@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import threading
 from contextvars import ContextVar
 from functools import wraps
 from typing import Any, Callable, TypeVar
@@ -116,14 +117,22 @@ class Container(SmartResolver, SmartDictAccess, SmartCalling):
     def __init__(self):
         """Initialize a new Container."""
         self.registry = ComponentRegistry()
-        self.analyzer = TypeAnalyzer(self.registry)
+        self.analyzer = TypeAnalyzer(self.registry)  # Includes generic resolution support
 
         # Instance caches for different scopes
         self._singleton_cache: dict[str, Any] = {}
         self._scoped_caches: dict[str, dict[str, Any]] = {}
 
-        # Track resolution in progress to detect circular dependencies
-        self._resolving: set[str] = set()
+        # Thread-safety locks
+        self._singleton_lock = threading.RLock()  # Reentrant lock for singleton creation
+        self._resolving_lock = threading.RLock()  # Lock for resolving set access
+        
+        # For async singleton coordination, we'll create the async lock lazily
+        self._async_singleton_lock = None
+
+        # Track resolution in progress to detect circular dependencies (thread-local)
+        self._resolving_local = threading.local()  # Thread-local resolution tracking
+        self._resolving: set[str] = set()  # Keep for backward compatibility
 
         # Cache for expensive operations
         self._injection_cache: WeakKeyDictionary = WeakKeyDictionary()
@@ -133,12 +142,33 @@ class Container(SmartResolver, SmartDictAccess, SmartCalling):
 
         # Performance optimizations
         self._weak_cache = WeakValueCache()
-        self._resolution_depth = 0
+        self._resolution_local = threading.local()  # Thread-local resolution depth
         
         # Scope validation and registry
         self._valid_scopes: set[str] = {"singleton", "transient", "request", "session", "default"}
         # Hierarchy from longest-lived to shortest-lived
         self._scope_hierarchy: list[str] = ["singleton", "session", "request", "default", "transient"]
+
+    # Thread-local helpers for circular dependency detection
+    
+    def _get_resolving_set(self) -> set[str]:
+        """Get the thread-local resolving set."""
+        if not hasattr(self._resolving_local, 'resolving'):
+            self._resolving_local.resolving = set()
+        return self._resolving_local.resolving
+    
+    def _get_resolution_depth(self) -> int:
+        """Get the thread-local resolution depth."""
+        if not hasattr(self._resolution_local, 'depth'):
+            self._resolution_local.depth = 0
+        return self._resolution_local.depth
+    
+    def _set_resolution_depth(self, depth: int) -> None:
+        """Set the thread-local resolution depth."""
+        if not hasattr(self._resolution_local, 'depth'):
+            self._resolution_local.depth = 0
+        self._resolution_local.depth = depth
+    
 
     # Dict-like interface
 
@@ -353,19 +383,22 @@ class Container(SmartResolver, SmartDictAccess, SmartCalling):
         # Normalize the key
         string_key = self.registry._normalize_key(key, name)
 
-        # Check for circular dependency
-        if string_key in self._resolving:
+        # Check for circular dependency (thread-local)
+        resolving = self._get_resolving_set()
+        if string_key in resolving:
             if is_performance_monitoring_enabled():
                 record_error("circular_dependency")
             raise CircularDependencyError(self._get_resolution_cycle(string_key))
 
         try:
-            self._resolving.add(string_key)
-            self._resolution_depth += 1
+            resolving.add(string_key)
+            current_depth = self._get_resolution_depth()
+            self._set_resolution_depth(current_depth + 1)
             return await self._do_resolve(key, name, context)
         finally:
-            self._resolving.discard(string_key)
-            self._resolution_depth -= 1
+            resolving.discard(string_key)
+            current_depth = self._get_resolution_depth()
+            self._set_resolution_depth(current_depth - 1)
 
     # resolve_sync is now handled by SmartResolver mixin
 
@@ -374,17 +407,20 @@ class Container(SmartResolver, SmartDictAccess, SmartCalling):
         # Normalize the key
         string_key = self.registry._normalize_key(key, name)
 
-        # Check for circular dependency
-        if string_key in self._resolving:
+        # Check for circular dependency (thread-local)
+        resolving = self._get_resolving_set()
+        if string_key in resolving:
             raise CircularDependencyError(self._get_resolution_cycle(string_key))
 
         try:
-            self._resolving.add(string_key)
-            self._resolution_depth += 1
+            resolving.add(string_key)
+            current_depth = self._get_resolution_depth()
+            self._set_resolution_depth(current_depth + 1)
             return self._do_resolve_sync(key, name, context)
         finally:
-            self._resolving.discard(string_key)
-            self._resolution_depth -= 1
+            resolving.discard(string_key)
+            current_depth = self._get_resolution_depth()
+            self._set_resolution_depth(current_depth - 1)
 
     def _do_resolve_sync(self, key: str | type, name: str | None = None, context: dict | None = None) -> Any:
         """Synchronous version of _do_resolve."""
@@ -411,11 +447,21 @@ class Container(SmartResolver, SmartDictAccess, SmartCalling):
             return self._create_instance_sync(descriptor, context)
 
     def _resolve_singleton_sync(self, descriptor: ComponentDescriptor, context: dict | None = None) -> Any:
-        """Synchronous singleton resolution."""
-        if descriptor.key not in self._singleton_cache:
+        """Thread-safe synchronous singleton resolution."""
+        # First check without lock for performance (double-checked locking pattern)
+        if descriptor.key in self._singleton_cache:
+            return self._singleton_cache[descriptor.key]
+        
+        # Use the same lock for both sync and async coordination
+        with self._singleton_lock:
+            # Double-check pattern: another thread might have created it while we waited
+            if descriptor.key in self._singleton_cache:
+                return self._singleton_cache[descriptor.key]
+            
+            # Create the instance while holding the lock
             instance = self._create_instance_sync(descriptor, context)
             self._singleton_cache[descriptor.key] = instance
-        return self._singleton_cache[descriptor.key]
+            return instance
 
     def _resolve_scoped_sync(self, descriptor: ComponentDescriptor, context: dict) -> Any:
         """Synchronous scoped resolution."""
@@ -725,7 +771,7 @@ class Container(SmartResolver, SmartDictAccess, SmartCalling):
             return await self._create_instance(descriptor, context)
 
     async def _resolve_singleton(self, descriptor: ComponentDescriptor, context: dict | None = None) -> Any:
-        """Resolve a singleton component.
+        """Thread-safe async singleton resolution.
 
         Args:
             descriptor: The component descriptor
@@ -734,11 +780,28 @@ class Container(SmartResolver, SmartDictAccess, SmartCalling):
         Returns:
             The singleton instance
         """
-        if descriptor.key not in self._singleton_cache:
-            instance = await self._create_instance(descriptor, context)
-            self._singleton_cache[descriptor.key] = instance
-
-        return self._singleton_cache[descriptor.key]
+        # First check without lock for performance
+        if descriptor.key in self._singleton_cache:
+            return self._singleton_cache[descriptor.key]
+        
+        # For sync/async coordination, run singleton creation in executor with sync lock
+        # This ensures sync and async code use the same locking mechanism
+        loop = asyncio.get_running_loop()
+        
+        def _create_with_sync_lock():
+            with self._singleton_lock:
+                # Double-check pattern within lock
+                if descriptor.key in self._singleton_cache:
+                    return self._singleton_cache[descriptor.key]
+                
+                # Create instance synchronously for thread safety
+                # This is a trade-off: we lose async creation but gain thread safety
+                instance = self._create_instance_sync(descriptor, context)
+                self._singleton_cache[descriptor.key] = instance
+                return instance
+        
+        # Run the creation with sync lock in thread executor
+        return await loop.run_in_executor(None, _create_with_sync_lock)
 
     async def _resolve_scoped(self, descriptor: ComponentDescriptor, context: dict) -> Any:
         """Resolve a scoped component.
@@ -1224,6 +1287,30 @@ class Container(SmartResolver, SmartDictAccess, SmartCalling):
         # Ensure all hierarchy scopes are registered as valid
         for scope in hierarchy:
             self._valid_scopes.add(scope)
+
+    def register_generic_implementation(self, generic_type: Any, concrete_type: type) -> None:
+        """Register a concrete implementation for a generic type.
+        
+        This enables automatic resolution of generic types like Repository[User]
+        to concrete implementations like UserRepository.
+        
+        Args:
+            generic_type: The generic type (e.g., Repository[User])
+            concrete_type: The concrete implementation class
+            
+        Example:
+            >>> container.register_generic_implementation(Repository[User], UserRepository)
+            >>> container.register_generic_implementation(Service[Product], ProductService)
+        """
+        self.analyzer.register_generic_implementation(generic_type, concrete_type)
+
+    def get_generic_resolver(self):
+        """Get the generic type resolver for advanced configuration.
+        
+        Returns:
+            The GenericTypeResolver instance from the analyzer
+        """
+        return self.analyzer.get_generic_resolver()
     
     def _validate_scope_name(self, scope_name: str) -> None:
         """Validate that a scope name is registered.
