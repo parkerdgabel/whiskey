@@ -59,7 +59,7 @@ from enum import Enum
 from typing import Any, Callable, ClassVar, Union, get_args, get_origin
 
 from .errors import TypeAnalysisError
-from .generic_resolution import GenericTypeResolver
+from .generic import GenericTypeResolver
 
 # Handle Python version differences
 try:

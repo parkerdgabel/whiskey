@@ -74,7 +74,7 @@ from whiskey.core.decorators import (
     when_production,
     wrap_function,
 )
-from whiskey.core.generic_resolution import GenericTypeResolver, TypeParameterBinder
+from whiskey.core.generic import GenericTypeResolver, TypeParameterBinder
 from whiskey.core.lazy import Lazy, lazy_inject
 from whiskey.core.registry import Scope
 from whiskey.core.scopes import ContextVarScope, ScopeType

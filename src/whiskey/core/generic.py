@@ -1,4 +1,4 @@
-"""Enhanced generic type resolution for dependency injection.
+"""Generic type resolution for dependency injection.
 
 This module provides advanced support for resolving generic types in dependency
 injection scenarios. It handles complex cases like Generic[T], Repository[User],
@@ -7,7 +7,6 @@ Service[T], and other parameterized types that require sophisticated resolution.
 Classes:
     GenericTypeResolver: Core resolver for generic types
     TypeParameterBinder: Binds type parameters to actual types
-    GenericRegistry: Registry for generic type mappings
 
 Features:
     - Generic type variance analysis (covariant, contravariant, invariant)
@@ -15,28 +14,6 @@ Features:
     - Generic constraint validation
     - Automatic concrete type discovery
     - Protocol and ABC generic support
-
-Example:
-    >>> from whiskey.core.generic_resolution import GenericTypeResolver
-    >>> from typing import Generic, TypeVar
-    >>>
-    >>> T = TypeVar('T')
-    >>> class Repository(Generic[T]):
-    ...     def __init__(self):
-    ...         self.items: list[T] = []
-    >>>
-    >>> resolver = GenericTypeResolver()
-    >>> # Register concrete implementations
-    >>> resolver.register_concrete(Repository[User], UserRepository)
-    >>> resolver.register_concrete(Repository[Product], ProductRepository)
-    >>>
-    >>> # Resolve generic types
-    >>> user_repo_type = resolver.resolve(Repository[User])
-    >>> # Returns UserRepository class
-
-See Also:
-    - whiskey.core.analyzer: Uses this for enhanced type analysis
-    - whiskey.core.container: Container integration for generic resolution
 """
 
 from __future__ import annotations

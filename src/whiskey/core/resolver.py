@@ -30,7 +30,7 @@ from weakref import WeakKeyDictionary
 
 from .analyzer import InjectDecision, InjectResult, TypeAnalyzer
 from .errors import CircularDependencyError, ResolutionError, ScopeError
-from .generic_resolution import GenericTypeResolver
+from .generic import GenericTypeResolver
 from .registry import ComponentDescriptor, ComponentRegistry, Scope
 
 T = TypeVar("T")

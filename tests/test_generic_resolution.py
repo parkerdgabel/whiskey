@@ -15,7 +15,7 @@ import pytest
 
 from whiskey import Whiskey
 from whiskey.core.errors import ResolutionError, TypeAnalysisError
-from whiskey.core.generic_resolution import GenericTypeResolver, TypeParameterBinder
+from whiskey.core.generic import GenericTypeResolver, TypeParameterBinder
 
 # Test type parameters
 T = TypeVar("T")
