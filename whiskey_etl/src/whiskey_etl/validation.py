@@ -37,21 +37,21 @@ class ValidationResult:
     """Result of a validation check."""
 
     valid: bool
-    errors: list[ValidationError] = field(default_factory=list)
-    warnings: list[ValidationError] = field(default_factory=list)
+    errors: list[ValidationErrorDetail] = field(default_factory=list)
+    warnings: list[ValidationErrorDetail] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_error(self, field: str, message: str, value: Any = None) -> None:
         """Add validation error."""
         self.errors.append(
-            ValidationError(field=field, message=message, value=value, severity=Severity.ERROR)
+            ValidationErrorDetail(field=field, message=message, value=value, severity=Severity.ERROR)
         )
         self.valid = False
 
     def add_warning(self, field: str, message: str, value: Any = None) -> None:
         """Add validation warning."""
         self.warnings.append(
-            ValidationError(field=field, message=message, value=value, severity=Severity.WARNING)
+            ValidationErrorDetail(field=field, message=message, value=value, severity=Severity.WARNING)
         )
 
     def merge(self, other: ValidationResult) -> None:
@@ -63,7 +63,7 @@ class ValidationResult:
 
 
 @dataclass
-class ValidationError:
+class ValidationErrorDetail:
     """Individual validation error."""
 
     field: str
@@ -496,21 +496,21 @@ class RecordValidator:
         result = ValidationResult(valid=True)
 
         # Field-level validation
-        for field, validators in self.field_validators.items():
+        for field_name, validators in self.field_validators.items():
             if not isinstance(validators, list):
                 validators = [validators]
 
-            value = record.get(field)
+            value = record.get(field_name)
 
             for validator in validators:
-                validator.field = validator.field or field
+                validator.field = validator.field or field_name
                 field_result = await validator.validate(value, record)
                 result.merge(field_result)
 
                 # Update stats
                 if self.collect_stats:
                     for error in field_result.errors:
-                        self.stats["errors_by_field"][field] += 1
+                        self.stats["errors_by_field"][field_name] += 1
                         if error.rule:
                             self.stats["errors_by_type"][error.rule] += 1
 

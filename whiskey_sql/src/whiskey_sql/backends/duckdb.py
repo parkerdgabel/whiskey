@@ -38,11 +38,7 @@ async def create_pool(**config) -> DuckDBDatabase:
     read_only = config.get("read_only", False)
 
     # Parse DuckDB URL formats
-    if url.startswith("duckdb://"):
-        # Remove protocol prefix
-        db_path = url[9:]
-    else:
-        db_path = url
+    db_path = url[9:] if url.startswith("duckdb://") else url
 
     # Special handling for in-memory databases
     if db_path in (":memory:", ""):

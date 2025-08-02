@@ -327,8 +327,6 @@ class TestExtensionIntegration:
             await context.log_metrics({"val_loss": 0.4}, prefix="validation")
 
         # Run the test
-        import asyncio
-
         asyncio.run(test_logging())
 
 

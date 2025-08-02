@@ -32,7 +32,7 @@ from whiskey import (
 class Repository(Protocol):
     """Base repository interface."""
 
-    async def find(self, id: int) -> dict | None: ...
+    async def find(self, item_id: int) -> dict | None: ...
     async def save(self, entity: dict) -> dict: ...
 
 
@@ -82,8 +82,8 @@ class UserRepository:
         self.db = db
         print("👤 UserRepository created")
 
-    async def find(self, id: int) -> dict | None:
-        results = await self.db.execute(f"SELECT * FROM users WHERE id = {id}")
+    async def find(self, item_id: int) -> dict | None:
+        results = await self.db.execute(f"SELECT * FROM users WHERE id = {item_id}")
         return results[0] if results else None
 
     async def save(self, entity: dict) -> dict:
@@ -102,8 +102,8 @@ class ProductRepository:
         self.db = db
         print("📦 ProductRepository created")
 
-    async def find(self, id: int) -> dict | None:
-        results = await self.db.execute(f"SELECT * FROM products WHERE id = {id}")
+    async def find(self, item_id: int) -> dict | None:
+        results = await self.db.execute(f"SELECT * FROM products WHERE id = {item_id}")
         return results[0] if results else None
 
     async def save(self, entity: dict) -> dict:
@@ -121,8 +121,8 @@ class OrderRepository:
         self.db = db
         print("🛒 OrderRepository created")
 
-    async def find(self, id: int) -> dict | None:
-        results = await self.db.execute(f"SELECT * FROM orders WHERE id = {id}")
+    async def find(self, item_id: int) -> dict | None:
+        results = await self.db.execute(f"SELECT * FROM orders WHERE id = {item_id}")
         return results[0] if results else None
 
 

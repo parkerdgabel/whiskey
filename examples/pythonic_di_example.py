@@ -3,7 +3,7 @@
 import asyncio
 
 from whiskey.core.container import Container
-from whiskey.core.decorators import inject, singleton
+from whiskey.core.decorators import inject, singleton, provide
 
 
 # Simple services without decorators

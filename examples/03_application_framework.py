@@ -127,10 +127,10 @@ class NotificationService:
         self.sent_count = 0
         print("📧 NotificationService initialized")
 
-    async def send(self, recipient: str, message: str, type: str = "info") -> None:
+    async def send(self, recipient: str, message: str, msg_type: str = "info") -> None:
         """Send a notification."""
         self.sent_count += 1
-        emoji = {"info": "📋", "warning": "⚠️", "error": "❌", "success": "✅"}.get(type, "📧")
+        emoji = {"info": "📋", "warning": "⚠️", "error": "❌", "success": "✅"}.get(msg_type, "📧")
         print(f"{emoji} Notification to {recipient}: {message}")
         await asyncio.sleep(0.05)  # Simulate sending
 

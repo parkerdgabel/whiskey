@@ -219,8 +219,8 @@ class NoOpMessageQueue:
 class Customer:
     """Customer entity."""
 
-    def __init__(self, id: int, name: str, email: str, tier: str = "standard"):
-        self.id = id
+    def __init__(self, customer_id: int, name: str, email: str, tier: str = "standard"):
+        self.id = customer_id
         self.name = name
         self.email = email
         self.tier = tier
@@ -232,8 +232,8 @@ class Customer:
 class Product:
     """Product entity."""
 
-    def __init__(self, id: int, name: str, price: float, stock: int):
-        self.id = id
+    def __init__(self, product_id: int, name: str, price: float, stock: int):
+        self.id = product_id
         self.name = name
         self.price = price
         self.stock = stock
@@ -245,8 +245,8 @@ class Product:
 class Order:
     """Order entity."""
 
-    def __init__(self, id: int, customer_id: int, items: list, total: float):
-        self.id = id
+    def __init__(self, order_id: int, customer_id: int, items: list, total: float):
+        self.id = order_id
         self.customer_id = customer_id
         self.items = items
         self.total = total

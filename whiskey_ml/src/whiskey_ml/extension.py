@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import contextlib
 from typing import Any
 
 from whiskey import Whiskey
@@ -231,23 +232,17 @@ async def _on_shutdown() -> None:
 async def _initialize_framework_adapters() -> None:
     """Initialize ML framework adapters."""
     # Try to import and register PyTorch adapter
-    try:
+    with contextlib.suppress(ImportError):
         from whiskey_ml.frameworks.pytorch import register_pytorch_adapter  # noqa: F401
         # Note: Will need to pass app/context when implementing
         # register_pytorch_adapter(app)
-    except ImportError:
-        pass
 
     # Try to import and register TensorFlow adapter
-    try:
+    with contextlib.suppress(ImportError):
         from whiskey_ml.frameworks.tensorflow import register_tensorflow_adapter  # noqa: F401
         # register_tensorflow_adapter(app)
-    except ImportError:
-        pass
 
     # Try to import and register JAX adapter
-    try:
+    with contextlib.suppress(ImportError):
         from whiskey_ml.frameworks.jax import register_jax_adapter  # noqa: F401
         # register_jax_adapter(app)
-    except ImportError:
-        pass

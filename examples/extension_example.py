@@ -42,7 +42,7 @@ def cache_extension(app: Whiskey) -> None:
 
     @app.service
     class CacheService:
-        def __init__(self, redis: "RedisClient"):
+        def __init__(self, redis: RedisClient):
             self.redis = redis
             self._local_cache = {}
 
@@ -130,7 +130,7 @@ async def main():
     async with app2.lifespan():
         # Services are available via DI
         @inject
-        async def demo(cache: "CacheService", metrics: "MetricsCollector"):
+        async def demo(cache: CacheService, metrics: MetricsCollector):
             # Use cache
             await cache.set("user:123", "John Doe")
             user = await cache.get("user:123")

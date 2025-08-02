@@ -7,7 +7,7 @@ from contextvars import ContextVar
 from whiskey import Container, Scope
 from whiskey.core.application import Whiskey
 from whiskey.core.registry import Scope as RegistryScope
-from whiskey.core.scopes import ContextVarScope, Scope, ScopeManager, ScopeType
+from whiskey.core.scopes import ContextVarScope, ScopeManager, ScopeType
 
 
 # Test services

@@ -31,7 +31,7 @@ from whiskey import (
 class Repository(Protocol):
     """Base protocol for repositories."""
 
-    async def find(self, id: int) -> dict | None: ...
+    async def find(self, item_id: int) -> dict | None: ...
     async def save(self, entity: dict) -> dict: ...
 
 
@@ -60,9 +60,9 @@ class UserRepository:
         self.db = db
         print("👤 UserRepository created")
 
-    async def find(self, id: int) -> dict | None:
+    async def find(self, item_id: int) -> dict | None:
         if self.db.connected:
-            return {"id": id, "name": f"User {id}"}
+            return {"id": item_id, "name": f"User {item_id}"}
         return None
 
     async def save(self, entity: dict) -> dict:
@@ -79,9 +79,9 @@ class ProductRepository:
         self.db = db
         print("📦 ProductRepository created")
 
-    async def find(self, id: int) -> dict | None:
+    async def find(self, item_id: int) -> dict | None:
         if self.db.connected:
-            return {"id": id, "name": f"Product {id}", "price": id * 10.0}
+            return {"id": item_id, "name": f"Product {item_id}", "price": item_id * 10.0}
         return None
 
 

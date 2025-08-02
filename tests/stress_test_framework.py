@@ -325,7 +325,7 @@ async def stress_test():
     len(gc.get_objects())
 
     # Create many transient instances
-    for i in range(100):
+    for _i in range(100):
         LeakyService()
         circular = CircularRefService()
         circular.add_child(CircularRefService())

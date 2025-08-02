@@ -448,7 +448,7 @@ async def main():
             all_results.append(("ERROR", f"{test_func.__name__} crashed: {e}"))
 
     # Count results
-    for result_type, message in all_results:
+    for result_type, _message in all_results:
         if result_type == "PASS":
             passed += 1
         elif result_type == "FAIL":
@@ -481,7 +481,7 @@ async def main():
     print("DETAILED RESULTS")
     print("=" * 60)
 
-    for result_type, message in all_results:
+    for result_type, _message in all_results:
         if result_type == "PASS":
             print(f"✓ [PASS] {message}")
         elif result_type == "FAIL":

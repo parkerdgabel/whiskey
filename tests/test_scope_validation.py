@@ -321,13 +321,12 @@ class TestScopeRegistry:
         # These should be valid scope names
         valid_scopes = ["singleton", "transient", "request", "session"]
 
+        import contextlib
+        
         for scope_name in valid_scopes:
             # Should not raise error (we'll implement this)
-            try:
+            with contextlib.suppress(AttributeError):
                 container._validate_scope_name(scope_name)
-            except AttributeError:
-                # Method doesn't exist yet - that's fine for now
-                pass
 
     def test_custom_scope_registration(self):
         """Should be able to register custom scopes."""

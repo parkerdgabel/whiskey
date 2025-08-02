@@ -232,10 +232,7 @@ class F1Score(Metric):
             self.false_negatives += np.sum((pred_labels == 0) & (targets == 1))
         else:
             # Multi-class - store for later computation
-            if predictions.ndim == 1:
-                pred_labels = predictions
-            else:
-                pred_labels = np.argmax(predictions, axis=1)
+            pred_labels = predictions if predictions.ndim == 1 else np.argmax(predictions, axis=1)
 
             for i in range(len(targets)):
                 key = (pred_labels[i], targets[i])

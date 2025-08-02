@@ -185,8 +185,10 @@ class ParameterResolutionError(ResolutionError):
 
         # Add helpful suggestions
         if "not registered" in reason.lower():
-            message += f"\n\nHint: Register {type_name} using @component, @singleton, or container.register()"
+            message += (f"\n\nHint: Register {type_name} using @component, "
+                       f"@singleton, or container.register()")
         elif "built-in type" in reason.lower():
-            message += f"\n\nHint: Built-in types like {type_name} cannot be auto-injected. Provide a value when calling."
+            message += (f"\n\nHint: Built-in types like {type_name} cannot be "
+                       f"auto-injected. Provide a value when calling.")
 
         super().__init__(message, service_key=class_name)

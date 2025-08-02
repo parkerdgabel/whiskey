@@ -90,11 +90,15 @@ class Container:
             raise RuntimeError(
                 f"Cannot use resolve_sync() in async context. Use 'await resolve()' instead."
             )
-        return self.resolver._resolve_sync(key, name=name, scope_context=_active_scopes.get(), **context)
+        return self.resolver._resolve_sync(
+            key, name=name, scope_context=_active_scopes.get(), **context
+        )
     
     async def resolve_async(self, key: str | type, *, name: str | None = None, **context) -> T:
         """Explicitly asynchronous resolution."""
-        return await self.resolver._resolve_async(key, name=name, scope_context=_active_scopes.get(), **context)
+        return await self.resolver._resolve_async(
+            key, name=name, scope_context=_active_scopes.get(), **context
+        )
     
     # Function calling with injection
     
@@ -117,7 +121,7 @@ class Container:
         sig = inspect.signature(func)
         final_kwargs = {}
         
-        for i, (param_name, param) in enumerate(sig.parameters.items()):
+        for i, (param_name, _param) in enumerate(sig.parameters.items()):
             if i < len(args):
                 continue  # Provided via args
             
@@ -144,7 +148,7 @@ class Container:
         sig = inspect.signature(func)
         final_kwargs = {}
         
-        for i, (param_name, param) in enumerate(sig.parameters.items()):
+        for i, (param_name, _param) in enumerate(sig.parameters.items()):
             if i < len(args):
                 continue  # Provided via args
             
@@ -156,7 +160,9 @@ class Container:
                     final_kwargs[param_name] = await self.resolve_async(inject_result.type_hint)
                 elif inject_result.decision.value == "optional":
                     try:
-                        final_kwargs[param_name] = await self.resolve_async(inject_result.inner_type)
+                        final_kwargs[param_name] = await self.resolve_async(
+                            inject_result.inner_type
+                        )
                     except ResolutionError:
                         final_kwargs[param_name] = None
         

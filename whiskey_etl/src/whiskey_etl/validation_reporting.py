@@ -149,8 +149,8 @@ class ValidationReport:
                 <tr><th>Field</th><th>Error Count</th></tr>
         """
 
-        for field, count in summary["top_field_errors"].items():
-            html += f"<tr><td>{field}</td><td>{count}</td></tr>"
+        for field_name, count in summary["top_field_errors"].items():
+            html += f"<tr><td>{field_name}</td><td>{count}</td></tr>"
 
         html += """
             </table>
@@ -246,8 +246,8 @@ class ValidationReporter:
         # Aggregate field errors
         field_errors = defaultdict(int)
         for report in reports:
-            for field, count in report.errors_by_field.items():
-                field_errors[field] += count
+            for field_name, count in report.errors_by_field.items():
+                field_errors[field_name] += count
 
         return {
             "run_count": len(reports),

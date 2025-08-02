@@ -403,20 +403,18 @@ class TestCLIExtension:
             """Test command in loop."""
             print("Loop test")
 
+        import contextlib
+        
         async def test_in_loop():
             # This should handle being called from within an event loop
-            try:
+            with contextlib.suppress(SystemExit):
                 app.run_cli(["test-loop"])
-            except SystemExit:
-                pass  # Expected
 
         # Run the test
         import asyncio
 
-        try:
+        with contextlib.suppress(Exception):
             asyncio.run(test_in_loop())
-        except Exception:
-            pass  # Expected due to Click's standalone mode
 
     def test_group_creation(self):
         """Test creating command groups."""
@@ -686,12 +684,12 @@ class TestCLIExtension:
 
         group = LazyClickGroup(mock_manager)
 
+        import contextlib
+        
         # Test main with help args (should not crash)
-        try:
+        with contextlib.suppress(SystemExit):
             group.main(["--help"], standalone_mode=False)
             # Should handle gracefully even without finalize_pending
-        except SystemExit:
-            pass  # Expected for help
 
     def test_app_info_with_many_services(self):
         """Test app-info command with many registered services."""

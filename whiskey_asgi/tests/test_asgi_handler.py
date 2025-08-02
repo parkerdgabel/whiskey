@@ -340,7 +340,7 @@ class TestASGIHandler:
             ),
         ]
 
-        for path, func, expected_body, expected_content_type, expected_status in test_cases:
+        for path, func, _, _, _ in test_cases:
             route = RouteMetadata(func=func, path=path, methods=["GET"], name=path)
             manager.add_route(route)
 

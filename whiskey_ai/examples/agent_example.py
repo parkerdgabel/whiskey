@@ -3,7 +3,7 @@
 from typing import Optional
 
 from whiskey import Whiskey, inject
-from whiskey_ai import LLMClient, MockLLMClient, ai_extension
+from whiskey_ai import LLMClient, MockLLMClient, ai_extension, ToolManager, AgentManager
 from whiskey_ai.agents import AnalysisAgent, CodingAgent, ResearchAgent
 from whiskey_ai.tools import calculate, get_current_time, web_search
 from whiskey_asgi import Request, asgi_extension
@@ -64,7 +64,7 @@ class Analyst(AnalysisAgent):
 class GeneralAssistant:
     """General purpose assistant agent."""
 
-    def __init__(self, client: LLMClient, tools: "ToolManager", agents: "AgentManager"):
+    def __init__(self, client: LLMClient, tools: ToolManager, agents: AgentManager):
         from whiskey_ai.agents import LLMAgent
 
         self.agent = LLMAgent(
@@ -114,7 +114,7 @@ async def setup():
 # Agent endpoints
 @app.post("/agent/{agent_name}")
 @inject
-async def run_agent(agent_name: str, request: Request, agents: "AgentManager"):
+async def run_agent(agent_name: str, request: Request, agents: AgentManager):
     """Run a specific agent."""
     data = await request.json()
     task = data.get("task", "")
@@ -132,7 +132,7 @@ async def run_agent(agent_name: str, request: Request, agents: "AgentManager"):
 
 @app.get("/agents")
 @inject
-async def list_agents(agents: "AgentManager"):
+async def list_agents(agents: AgentManager):
     """List available agents."""
     return {
         "agents": [
@@ -162,7 +162,7 @@ async def chat_with_agent(request: Request, assistant: GeneralAssistant):
 # Tool execution endpoint
 @app.post("/tools/{tool_name}")
 @inject
-async def execute_tool(tool_name: str, request: Request, tools: "ToolManager"):
+async def execute_tool(tool_name: str, request: Request, tools: ToolManager):
     """Execute a specific tool."""
     data = await request.json()
 
@@ -185,7 +185,7 @@ async def execute_tool(tool_name: str, request: Request, tools: "ToolManager"):
 
 @app.get("/tools")
 @inject
-async def list_tools(tools: "ToolManager"):
+async def list_tools(tools: ToolManager):
     """List available tools."""
     return {
         "tools": [

@@ -384,7 +384,7 @@ class TestProcessors:
 
         # Invalid JSON
         with pytest.raises(SourceError):
-            async for record in json_processor("test.json", b"invalid json"):
+            async for _record in json_processor("test.json", b"invalid json"):
                 pass
 
     async def test_jsonl_processor(self):
@@ -401,7 +401,7 @@ class TestProcessors:
         # Invalid line
         with pytest.raises(SourceError) as exc_info:
             content = b'{"id": 1}\ninvalid\n{"id": 3}'
-            async for record in jsonl_processor("test.jsonl", content):
+            async for _record in jsonl_processor("test.jsonl", content):
                 pass
 
         assert "line 2" in str(exc_info.value)

@@ -423,7 +423,8 @@ class TypeAnalyzer:
                 or "built-in type" in inner_result.reason.lower()
                 or "standard library type" in inner_result.reason.lower()
             ):
-                # If T is a built-in, generic, or stdlib type, Optional[T] should not be injected either
+                # If T is a built-in, generic, or stdlib type,
+                # Optional[T] should not be injected either
                 return InjectResult(
                     InjectDecision.NO,
                     type_hint,
@@ -725,14 +726,16 @@ class TypeAnalyzer:
                 return InjectResult(
                     InjectDecision.YES,
                     type_hint,
-                    f"Protocol with single implementation: {analysis['concrete_implementations'][0]}",
+                    (f"Protocol with single implementation: "
+                     f"{analysis['concrete_implementations'][0]}"),
                     inner_type=analysis["concrete_implementations"][0],
                 )
             else:
                 return InjectResult(
                     InjectDecision.ERROR,
                     type_hint,
-                    f"Ambiguous protocol - multiple implementations: {analysis['concrete_implementations']}",
+                    (f"Ambiguous protocol - multiple implementations: "
+                     f"{analysis['concrete_implementations']}"),
                     candidates=analysis["concrete_implementations"],
                 )
 

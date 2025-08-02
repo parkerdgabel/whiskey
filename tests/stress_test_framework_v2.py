@@ -397,18 +397,18 @@ async def test_edge_cases():
 
     # Multiple registrations
     @app.component(name="impl1")
-    class Service:
+    class ServiceImpl1:
         def __init__(self):
             self.name = "impl1"
 
     @app.component(name="impl2")
-    class Service:
+    class ServiceImpl2:
         def __init__(self):
             self.name = "impl2"
 
     # Resolve by name
-    impl1 = await app.resolve(Service, name="impl1")
-    impl2 = await app.resolve(Service, name="impl2")
+    impl1 = await app.resolve(ServiceImpl1, name="impl1")
+    impl2 = await app.resolve(ServiceImpl2, name="impl2")
 
     if impl1.name == "impl1" and impl2.name == "impl2":
         results.append(("PASS", "Named resolution works"))

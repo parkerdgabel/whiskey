@@ -199,7 +199,7 @@ class TestDuckDBTransactions:
 
     async def test_transaction_auto_rollback(self, db):
         """Test automatic rollback on exception."""
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Test error"):
             async with db.transaction() as tx:
                 await tx.execute(
                     SQL(
